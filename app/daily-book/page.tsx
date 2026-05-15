@@ -1,0 +1,627 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { format, addDays, parseISO, isSameDay } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { AddCustomerDialog } from '@/components/add-customer-dialog';
+import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+interface Customer {
+    id: string;
+    name: string;
+    customer_code: string;
+    gender?: string;
+    phone?: string;
+    avatar_url?: string;
+}
+
+interface DailyBookItem {
+    customer_id: string;
+    kg: number;
+    customer?: {
+        id: string;
+        name: string;
+        customer_code: string;
+        gender?: string;
+    };
+}
+
+interface SavedEntry {
+    date: string;
+    totalKg: number;
+    items: DailyBookItem[];
+}
+
+export default function DailyBookPage() {
+    const [date, setDate] = useState<Date>(new Date());
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [entries, setEntries] = useState<{ [key: string]: number }>({});
+    const [saving, setSaving] = useState(false);
+    const [savedEntries, setSavedEntries] = useState<SavedEntry[]>([]);
+    const [viewMode, setViewMode] = useState<'edit' | 'details'>('edit');
+    const [editingDate, setEditingDate] = useState<string | null>(null);
+    const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+    const [searchDate, setSearchDate] = useState<Date | undefined>(undefined);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [latestSavedDateStr, setLatestSavedDateStr] = useState<string | null>(null);
+
+    const loadCustomers = async () => {
+        try {
+            const res = await fetch('/api/customers');
+            const data = await res.json();
+
+            if (!res.ok) {
+                console.error('Failed to load customers:', data.error);
+                return;
+            }
+
+            if (Array.isArray(data)) {
+                setCustomers(data);
+            }
+        } catch (e) {
+            console.error('Failed to load customers:', e);
+        }
+    };
+
+    const loadDailyBook = async (selectedDate: Date) => {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        try {
+            const res = await fetch(`/api/daily-book?date=${dateStr}`);
+            const data = await res.json();
+
+            if (data && data.items) {
+                const loadedEntries: { [key: string]: number } = {};
+                data.items.forEach((item: DailyBookItem) => {
+                    loadedEntries[item.customer_id] = item.kg;
+                });
+                setEntries(loadedEntries);
+            } else {
+                setEntries({});
+            }
+        } catch (e) {
+            console.error('Failed to load daily book');
+            setEntries({});
+        }
+    };
+
+    const fetchLatestDate = async () => {
+        try {
+            const res = await fetch('/api/daily-book-dates');
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+                const latest = data[0].date;
+                setLatestSavedDateStr(latest);
+                // IF NOT EDITING: Default to next allowed date
+                if (!editingDate) {
+                    const nextDate = addDays(parseISO(latest), 1);
+                    setDate(nextDate);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch latest date', err);
+        }
+    };
+
+    useEffect(() => {
+        loadCustomers();
+        loadSavedEntries();
+        fetchLatestDate();
+    }, []);
+
+    useEffect(() => {
+        loadDailyBook(date);
+    }, [date]);
+
+    const loadSavedEntries = () => {
+        const saved = localStorage.getItem('dailyBookEntries');
+        if (saved) {
+            setSavedEntries(JSON.parse(saved));
+        }
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        const dateStr = format(date, 'yyyy-MM-dd');
+
+        const items = Object.entries(entries)
+            .filter(([_, kg]) => kg > 0)
+            .map(([customer_id, kg]) => ({
+                customer_id,
+                kg,
+                customer: customers.find(c => c.id === customer_id)
+            }));
+
+        try {
+            const res = await fetch('/api/daily-book', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: dateStr, items })
+            });
+
+            if (res.ok) {
+                const newEntry: SavedEntry = {
+                    date: dateStr,
+                    totalKg: totalKg,
+                    items: items
+                };
+
+                const updated = [...savedEntries.filter(e => e.date !== dateStr), newEntry];
+                setSavedEntries(updated);
+                localStorage.setItem('dailyBookEntries', JSON.stringify(updated));
+
+                toast.success(`Entry saved for ${format(date, 'MMMM dd, yyyy')}`);
+                setEntries({});
+                setEditingDate(null);
+                setViewMode('details');
+            } else {
+                toast.error('Failed to save entry');
+            }
+        } catch (e) {
+            toast.error('Network error');
+        } finally {
+            setSaving(false);
+            fetchLatestDate(); // Refresh sequence after save
+        }
+    };
+
+    const handleEditEntry = (entry: SavedEntry) => {
+        const selectedDate = parseISO(entry.date);
+        setDate(selectedDate);
+        const loadedEntries: { [key: string]: number } = {};
+        entry.items.forEach(item => {
+            loadedEntries[item.customer_id] = item.kg;
+        });
+        setEntries(loadedEntries);
+        setEditingDate(entry.date);
+        setViewMode('edit');
+    };
+
+    const handleDateChange = (newDate: Date) => {
+        // Mode bypass
+        if (editingDate) {
+            setDate(newDate);
+            return;
+        }
+
+        if (latestSavedDateStr) {
+            const nextRequired = addDays(parseISO(latestSavedDateStr), 1);
+            if (!isSameDay(newDate, nextRequired)) {
+                toast.error(`Real-life sequence required! The next date must be ${format(nextRequired, 'MMMM dd, yyyy')} because ${format(parseISO(latestSavedDateStr), 'MMMM dd')} was the last entry.`);
+                return;
+            }
+        }
+        setDate(newDate);
+    };
+
+    const totalKg = Object.values(entries).reduce((sum, kg) => sum + (parseFloat(String(kg)) || 0), 0);
+
+    const filteredEntries = searchDate
+        ? savedEntries.filter(e => e.date === format(searchDate, 'yyyy-MM-dd'))
+        : savedEntries;
+
+    const sortedEntries = [...filteredEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const sortedCustomers = customers
+        .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.customer_code.toLowerCase().includes(searchTerm.toLowerCase()))
+        .sort((a, b) => {
+            const codeA = parseInt(a.customer_code.replace(/\D/g, '')) || 0;
+            const codeB = parseInt(b.customer_code.replace(/\D/g, '')) || 0;
+            return codeA - codeB;
+        });
+
+    const handleKeyPress = (e: React.KeyboardEvent, index: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            // Find all number inputs in the ledger box
+            const ledgerBox = e.currentTarget.closest('[role="region"]'); // Using container if needed or just global
+            const inputs = document.querySelectorAll('.ledger-input');
+            const nextInput = inputs[index + 1] as HTMLInputElement;
+            if (nextInput) {
+                nextInput.focus();
+                nextInput.select();
+                nextInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    };
+
+    return (
+        <div className="space-y-6 max-w-4xl mx-auto px-1 md:px-0">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-yellow-200 bg-clip-text text-transparent">
+                        Daily Book
+                    </h2>
+                    <p className="text-muted-foreground text-sm mt-1">Record and manage daily product entries</p>
+                </div>
+                <div className="flex gap-2">
+                    <Button
+                        variant={viewMode === 'edit' ? 'default' : 'outline'}
+                        onClick={() => setViewMode('edit')}
+                        className={viewMode === 'edit' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90' : 'border-border text-primary hover:bg-accent hover:text-accent-foreground'}
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Entry
+                    </Button>
+                    <Button
+                        variant={viewMode === 'details' ? 'default' : 'outline'}
+                        onClick={() => setViewMode('details')}
+                        className={viewMode === 'details' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90' : 'border-border text-primary hover:bg-accent hover:text-accent-foreground'}
+                    >
+                        <FileText className="w-4 h-4 mr-2" />
+                        History ({savedEntries.length})
+                    </Button>
+                </div>
+            </div>
+
+            {viewMode === 'edit' ? (
+                <Card className="glass-card">
+                    <CardHeader className="border-b border-border bg-muted/20">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <CardTitle className="text-foreground flex items-center gap-2">
+                                    <BookOpen className="w-5 h-5 text-primary" />
+                                    {editingDate ? 'Updating' : 'New'} Entry
+                                </CardTitle>
+                                <CardDescription className="text-muted-foreground">
+                                    {format(date, 'MMMM dd, yyyy')}
+                                </CardDescription>
+                            </div>
+                            <div className="flex gap-2">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="border-border text-foreground hover:bg-accent hover:text-accent-foreground">
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            Select Date
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 bg-popover border-border shadow-xl">
+                                        <Calendar
+                                            mode="single"
+                                            selected={date}
+                                            onSelect={(newDate) => newDate && handleDateChange(newDate)}
+                                            className="rounded-md border-0"
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <AddCustomerDialog
+                                    onSuccess={loadCustomers}
+                                    nextId={(Math.max(...customers.map(c => parseInt(c.customer_code.replace(/\D/g, '')) || 0), 0) + 1).toString()}
+                                />
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {/* 1. COMPACT Search bar */}
+                        <div className="p-3 border-b border-border bg-card/50">
+                            <div className="relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search customers..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-9 h-11 bg-background border-input focus:border-primary"
+                                />
+                            </div>
+                        </div>
+
+                        {customers.length === 0 ? (
+                            <div className="text-center py-12 text-muted-foreground">
+                                <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <BookOpen className="w-8 h-8 text-primary" />
+                                </div>
+                                <p className="font-medium">No customers found</p>
+                                <p className="text-sm mt-1">Add a new customer to start recording entries</p>
+                            </div>
+                        ) : (
+                            <div className="bg-[#fcf8f1] dark:bg-slate-900 relative overflow-hidden rounded-sm border border-slate-300 dark:border-slate-800 shadow-inner h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                                {/* Vertical Ledger Margin Line */}
+                                <div className="absolute left-[50px] md:left-[70px] top-0 bottom-0 w-[1px] bg-red-400 dark:bg-red-900/50 pointer-events-none z-20" />
+
+                                {/* Sticky Header */}
+                                <div className="sticky top-0 z-30 grid grid-cols-12 px-2 md:px-4 py-2 bg-[#f4ece0] dark:bg-slate-950 border-b-2 border-slate-300 dark:border-slate-700 shadow-sm">
+                                    <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">ID</div>
+                                    <div className="col-span-7 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter pl-4">Customer Name</div>
+                                    <div className="col-span-3 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-right">KG</div>
+                                </div>
+
+                                {/* Ledger Rows */}
+                                <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
+                                    {sortedCustomers.map((customer, index) => (
+                                        <div key={customer.id} className="grid grid-cols-12 items-center px-2 md:px-4 py-1 transition-colors hover:bg-blue-100/20 dark:hover:bg-slate-800/30 group border-b border-blue-50/50 dark:border-slate-800/30 last:border-0 relative">
+                                            {/* ID Tag */}
+                                            <div className="col-span-2 flex items-center justify-start">
+                                                <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">#{customer.customer_code}</span>
+                                            </div>
+
+                                            {/* Customer Name - With Short Underline */}
+                                            <div className="col-span-7 flex flex-col justify-center pl-4 border-l border-red-200/50 dark:border-red-900/30">
+                                                <div className="relative inline-block w-fit">
+                                                    <span className="font-bold text-[11px] md:text-sm text-slate-700 dark:text-slate-300 uppercase truncate pr-4">{customer.name}</span>
+                                                    <div className="absolute -bottom-0.5 left-0 w-full h-[1px] bg-blue-200/50 dark:bg-slate-700 pointer-events-none" />
+                                                </div>
+                                            </div>
+
+                                            {/* Input Area */}
+                                            <div className="col-span-3 flex items-center justify-end gap-1">
+                                                <div className="relative inline-block">
+                                                    <Input
+                                                        type="number"
+                                                        step="1"
+                                                        placeholder="0"
+                                                        inputMode="decimal"
+                                                        value={entries[customer.id] || ''}
+                                                        onChange={(e) => setEntries({ ...entries, [customer.id]: parseInt(e.target.value, 10) || 0 })}
+                                                        onKeyDown={(e) => handleKeyPress(e, index)}
+                                                        className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id] > 0
+                                                            ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10'
+                                                            : 'text-slate-400 dark:text-slate-500'
+                                                            }`}
+                                                    />
+                                                </div>
+                                                {entries[customer.id] > 0 && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const newEntries = { ...entries };
+                                                            delete newEntries[customer.id];
+                                                            setEntries(newEntries);
+                                                        }}
+                                                        className="h-6 w-6 p-0 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-0"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 5. TIGHT Totals Section - COMPACT DESIGN */}
+                        <div className="mt-2 pt-2 border-t-[2px] border-double border-primary/20 bg-primary/5 dark:bg-primary/10 rounded-sm p-2 shadow-inner">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 bg-background dark:bg-slate-900 px-2 py-1.5 rounded-sm border border-primary/10 shadow-sm w-full md:w-auto">
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/10">
+                                        <Package className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground leading-none mb-0.5">Summary</p>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-xl font-black text-primary tracking-tighter tabular-nums">{Math.round(totalKg)}</span>
+                                            <span className="text-[9px] font-black text-primary uppercase opacity-60">Total KG</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 w-full md:w-auto">
+                                    {editingDate && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                setEntries({});
+                                                setEditingDate(null);
+                                                setDate(new Date());
+                                            }}
+                                            className="h-8 md:h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50"
+                                        >
+                                            Cancel
+                                        </Button>
+                                    )}
+                                    <Button
+                                        onClick={handleSave}
+                                        disabled={saving || totalKg === 0}
+                                        size="sm"
+                                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-tight text-[10px] h-8 md:h-10 flex-1 md:flex-none md:px-8 shadow-md shadow-primary/20 active:translate-y-0.5 transition-all"
+                                    >
+                                        {saving ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Save className="mr-2 h-3 w-3" />}
+                                        {editingDate ? 'Update' : 'Save Entry'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* WISER MOBILE: Sticky Save Bar for Daily Book */}
+                        {!saving && totalKg > 0 && viewMode === 'edit' && (
+                            <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border md:hidden z-50 animate-in slide-in-from-bottom duration-500">
+                                <Button
+                                    onClick={handleSave}
+                                    className="w-full h-16 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-xl shadow-primary/30"
+                                >
+                                    <div className="flex items-center justify-between w-full px-4">
+                                        <div className="text-left">
+                                            <p className="text-[10px] opacity-60 leading-none mb-1">Total Quantity</p>
+                                            <p className="text-2xl leading-none">{Math.round(totalKg)} KG</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl">
+                                            <Save className="w-5 h-5" />
+                                            <span>Save</span>
+                                        </div>
+                                    </div>
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            ) : (
+                <Card className="glass-card">
+                    <CardHeader className="border-b border-border">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-foreground flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-primary" />
+                                Saved Entries
+                            </CardTitle>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="border-border text-primary hover:bg-accent hover:text-accent-foreground">
+                                        <Search className="mr-2 h-4 w-4" />
+                                        {searchDate ? format(searchDate, 'MMM dd') : 'Filter Date'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 bg-popover border-border shadow-lg">
+                                    <Calendar
+                                        mode="single"
+                                        selected={searchDate}
+                                        onSelect={setSearchDate}
+                                    />
+                                    <div className="p-2 border-t border-border">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => setSearchDate(undefined)}
+                                            className="w-full text-muted-foreground hover:text-primary"
+                                        >
+                                            Clear Filter
+                                        </Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {sortedEntries.length === 0 ? (
+                            <div className="text-center py-16 bg-muted/20">
+                                <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
+                                <h3 className="text-lg font-medium text-foreground">No entries found</h3>
+                                <p className="text-muted-foreground text-sm mt-1">
+                                    {searchDate ? 'Try selecting a different date' : 'Your saved entries will appear here'}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-border">
+                                {sortedEntries.map((entry) => (
+                                    <div
+                                        key={entry.date}
+                                        className="group transition-all hover:bg-muted/30"
+                                    >
+                                        {/* Entry Header - Clickable */}
+                                        <div
+                                            onClick={() => setExpandedEntry(expandedEntry === entry.date ? null : entry.date)}
+                                            className="flex items-center justify-between p-4 cursor-pointer"
+                                        >
+                                            <div className="flex items-center gap-4 flex-1">
+                                                <div className={`p-2 rounded-lg transition-colors ${expandedEntry === entry.date ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-card'}`}>
+                                                    {expandedEntry === entry.date ? (
+                                                        <ChevronDown className="w-5 h-5" />
+                                                    ) : (
+                                                        <ChevronRight className="w-5 h-5" />
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-semibold text-foreground text-lg">
+                                                        {format(new Date(entry.date), 'MMMM dd, yyyy')}
+                                                    </h4>
+                                                    <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                                                        <span className="flex items-center gap-1">
+                                                            <BookOpen className="w-3 h-3" />
+                                                            {entry.items.length} customers
+                                                        </span>
+                                                        <span className="hidden md:inline">•</span>
+                                                        <span className="font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                                            {Math.round(entry.totalKg)} KG Total
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                                <Button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditEntry(entry);
+                                                    }}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-primary hover:bg-primary/10"
+                                                >
+                                                    <Edit className="w-4 h-4 mr-1" /> Edit
+                                                </Button>
+                                                <Button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (confirm('Delete this entry?')) {
+                                                            const updated = savedEntries.filter(e => e.date !== entry.date);
+                                                            setSavedEntries(updated);
+                                                            localStorage.setItem('dailyBookEntries', JSON.stringify(updated));
+                                                            toast.success('Entry deleted');
+                                                        }
+                                                    }}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
+                                                >
+                                                    <Trash2 className="w-4 h-4 mr-1" /> Delete
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Expanded Details */}
+                                        {expandedEntry === entry.date && (
+                                            <div className="bg-muted/10 p-4 border-t border-border animate-in slide-in-from-top-2 duration-200">
+                                                <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow className="bg-muted/50 border-b border-border">
+                                                                <TableHead className="pl-6 text-muted-foreground">Customer Code</TableHead>
+                                                                <TableHead className="text-muted-foreground">Customer Name</TableHead>
+                                                                <TableHead className="text-right pr-6 text-muted-foreground">Quantity</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {entry.items.map((item) => (
+                                                                <TableRow key={item.customer_id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                                                                    <TableCell className="pl-6 font-mono text-xs text-muted-foreground">
+                                                                        {item.customer?.customer_code || 'N/A'}
+                                                                    </TableCell>
+                                                                    <TableCell className="font-medium text-foreground">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <Avatar className="h-7 w-7 border border-border/50">
+                                                                                <AvatarImage src={item.customer?.avatar_url || ''} alt={item.customer?.name || 'Customer'} />
+                                                                                <AvatarFallback className={`${item.customer?.gender === 'Male' ? 'bg-blue-500/10 text-blue-500' :
+                                                                                    item.customer?.gender === 'Female' ? 'bg-pink-500/10 text-pink-500' :
+                                                                                        'bg-slate-500/10 text-slate-500'
+                                                                                    }`}>
+                                                                                    <User className="h-3.5 w-3.5" />
+                                                                                </AvatarFallback>
+                                                                            </Avatar>
+                                                                            {item.customer?.name || 'Unknown'}
+                                                                        </div>
+                                                                    </TableCell>
+                                                                    <TableCell className="text-right pr-6 font-bold text-primary">
+                                                                        {Math.round(item.kg)} KG
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            ))}
+                                                            <TableRow className="bg-primary/5">
+                                                                <TableCell colSpan={2} className="pl-6 font-bold text-right text-foreground">
+                                                                    Total Daily Quantity
+                                                                </TableCell>
+                                                                <TableCell className="text-right pr-6 font-extrabold text-primary text-lg">
+                                                                    {Math.round(entry.totalKg)} KG
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+    );
+}
+

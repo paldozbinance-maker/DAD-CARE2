@@ -1,0 +1,74 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+enum LedgerType {
+  PRODUCT
+  PAYMENT
+  ADJUSTMENT
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  username   String   @unique
+  name       String?
+  password   String   
+  role       Role     @default(CUSTOMER)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model Customer {
+  id            String          @id @default(uuid())
+  customer_code String          @unique
+  name          String
+  avatar_url    String?
+  created_at    DateTime        @default(now())
+  daily_items   DailyBookItem[]
+  ledger_items  Ledger[]
+}
+
+model DailyBook {
+  id         String          @id @default(uuid())
+  date       DateTime        @unique @db.Date
+  created_at DateTime        @default(now())
+  items      DailyBookItem[]
+}
+
+model DailyBookItem {
+  id            String    @id @default(uuid())
+  daily_book_id String
+  daily_book    DailyBook @relation(fields: [daily_book_id], references: [id])
+  customer_id   String
+  customer      Customer  @relation(fields: [customer_id], references: [id])
+  kg            Float
+}
+
+model Ledger {
+  id             String     @id @default(uuid())
+  customer_id    String
+  customer       Customer   @relation(fields: [customer_id], references: [id])
+  type           LedgerType
+  reference_date DateTime?  @db.Date
+  kg             Float?
+  price_per_kg   Float?
+  amount         Float
+  previous_debt  Float
+  new_debt       Float
+  note           String?
+  created_at     DateTime   @default(now())
+}

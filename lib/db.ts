@@ -1,0 +1,21 @@
+import { Pool } from 'pg';
+
+// Use the connection string (Transaction Mode is fine for general queries, 
+// using Session mode (DIRECT_URL) for prepared statements compatibility if needed, 
+// but usually Pooler works if prepared statements are disabled or named properly.
+// Safest for Supabase Transaction pooler is to NOT use prepared statements or use Session mode.)
+// Given we have DIRECT_URL configured, let's use that for stability with 'pg'.
+
+const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
+
+let pool: Pool;
+
+if (!global.pool) {
+    global.pool = new Pool({
+        connectionString,
+        ssl: { rejectUnauthorized: false }, // Required for Supabase in some envs
+    });
+}
+pool = global.pool;
+
+export default pool;
