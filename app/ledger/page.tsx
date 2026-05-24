@@ -425,25 +425,25 @@ export default function LedgerPage() {
 
                                             <div className="space-y-4">
 
-                                                {dateEntries.map((entry) => (
-                                                    <div key={entry.id} className="relative p-4 bg-muted/20 border border-border rounded-xl">
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase font-black text-muted-foreground">Date</Label>
+                                                    <div key={entry.id} className="relative p-4 md:p-5 bg-background shadow-sm border border-border/60 rounded-2xl group transition-all hover:shadow-md">
+                                                        <div className="flex flex-col md:grid md:grid-cols-3 gap-3 md:gap-4">
+                                                            {/* Date Picker - Full width on mobile, 1 col on desktop */}
+                                                            <div className="space-y-1.5 md:space-y-2">
+                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Date</Label>
                                                                 <Popover>
                                                                     <PopoverTrigger asChild>
                                                                         <Button
                                                                             variant={"outline"}
                                                                             className={cn(
-                                                                                "w-full h-10 justify-start text-left font-bold text-sm",
+                                                                                "w-full h-12 md:h-12 justify-start text-left font-bold text-sm md:text-base rounded-xl border-border/80 bg-muted/10 hover:bg-muted/30 transition-colors",
                                                                                 !entry.date && "text-muted-foreground"
                                                                             )}
                                                                         >
-                                                                            <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                                                                            <CalendarIcon className="mr-3 h-4 w-4 md:h-5 md:w-5 text-primary" />
                                                                             {entry.date ? format(parseISO(entry.date), "PPP") : <span>Pick a date</span>}
                                                                         </Button>
                                                                     </PopoverTrigger>
-                                                                    <PopoverContent className="w-auto p-0" align="start">
+                                                                    <PopoverContent className="w-auto p-0 rounded-xl shadow-xl border-border" align="start">
                                                                         <Calendar
                                                                             mode="single"
                                                                             selected={entry.date ? parseISO(entry.date) : undefined}
@@ -456,38 +456,43 @@ export default function LedgerPage() {
                                                                                 return !!(inHist || isProc || isFuture);
                                                                             }}
                                                                             initialFocus
+                                                                            className="rounded-xl"
                                                                         />
                                                                     </PopoverContent>
                                                                 </Popover>
                                                             </div>
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase font-black text-muted-foreground">KG (Kilos)</Label>
-                                                                <div className="relative">
-                                                                    <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="1"
-                                                                        value={entry.kg}
-                                                                        onChange={e => updateDateEntry(entry.id, 'kg', e.target.value)}
-                                                                        inputMode="decimal"
-                                                                        className="h-12 pl-9 text-base font-bold bg-background text-primary"
-                                                                        placeholder="0"
-                                                                    />
+                                                            
+                                                            {/* KG and Price Side-by-Side on Mobile */}
+                                                            <div className="grid grid-cols-2 md:col-span-2 gap-3 md:gap-4">
+                                                                <div className="space-y-1.5 md:space-y-2">
+                                                                    <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">KG</Label>
+                                                                    <div className="relative group/input">
+                                                                        <Scale className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary/70 group-focus-within/input:text-primary transition-colors" />
+                                                                        <Input
+                                                                            type="number"
+                                                                            step="1"
+                                                                            value={entry.kg}
+                                                                            onChange={e => updateDateEntry(entry.id, 'kg', e.target.value)}
+                                                                            inputMode="decimal"
+                                                                            className="h-12 pl-10 md:pl-12 text-base md:text-lg font-black bg-muted/10 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none"
+                                                                            placeholder="0"
+                                                                        />
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase font-black text-muted-foreground">Price per KG</Label>
-                                                                <div className="relative">
-                                                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="1"
-                                                                        value={entry.pricePerKg}
-                                                                        onChange={e => updateDateEntry(entry.id, 'pricePerKg', e.target.value)}
-                                                                        inputMode="decimal"
-                                                                        className="h-12 pl-9 text-base font-bold bg-background"
-                                                                        placeholder="35"
-                                                                    />
+                                                                <div className="space-y-1.5 md:space-y-2">
+                                                                    <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Price</Label>
+                                                                    <div className="relative group/input">
+                                                                        <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary/70 group-focus-within/input:text-primary transition-colors" />
+                                                                        <Input
+                                                                            type="number"
+                                                                            step="1"
+                                                                            value={entry.pricePerKg}
+                                                                            onChange={e => updateDateEntry(entry.id, 'pricePerKg', e.target.value)}
+                                                                            inputMode="decimal"
+                                                                            className="h-12 pl-10 md:pl-12 text-base md:text-lg font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
+                                                                            placeholder="35"
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -523,28 +528,30 @@ export default function LedgerPage() {
 
                                             <div className="space-y-4">
                                                 {paymentEntries.map((pay) => (
-                                                    <div key={pay.id} className="relative grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
-                                                        <div className="space-y-2">
-                                                            <Label className="text-[10px] uppercase font-black text-muted-foreground">Payment Date</Label>
-                                                            <Input
-                                                                type="date"
-                                                                value={pay.date}
-                                                                onChange={e => setPaymentEntries(entries => entries.map(entry => entry.id === pay.id ? { ...entry, date: e.target.value } : entry))}
-                                                                className="h-12 text-sm font-bold bg-background border-border"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-2">
-                                                            <Label className="text-[10px] uppercase font-black text-muted-foreground">Deposit Amount</Label>
-                                                            <div className="relative">
-                                                                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
+                                                    <div key={pay.id} className="relative p-4 md:p-5 bg-emerald-500/5 shadow-sm border border-emerald-500/20 rounded-2xl group transition-all hover:shadow-md">
+                                                        <div className="grid grid-cols-2 md:grid-cols-2 gap-3 md:gap-6 items-center">
+                                                            <div className="space-y-1.5 md:space-y-2 col-span-2 md:col-span-1">
+                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-emerald-700/70 tracking-wider ml-1">Payment Date</Label>
                                                                 <Input
-                                                                    type="number"
-                                                                    value={pay.amount}
-                                                                    onChange={e => setPaymentEntries(entries => entries.map(entry => entry.id === pay.id ? { ...entry, amount: e.target.value } : entry))}
-                                                                    inputMode="decimal"
-                                                                    className="h-14 pl-12 text-2xl font-black bg-background border-border text-emerald-600 focus:border-emerald-500"
-                                                                    placeholder="0"
+                                                                    type="date"
+                                                                    value={pay.date}
+                                                                    onChange={e => setPaymentEntries(entries => entries.map(entry => entry.id === pay.id ? { ...entry, date: e.target.value } : entry))}
+                                                                    className="h-12 md:h-14 text-sm md:text-base font-bold bg-background border-emerald-500/30 rounded-xl focus:border-emerald-500 shadow-none"
                                                                 />
+                                                            </div>
+                                                            <div className="space-y-1.5 md:space-y-2 col-span-2 md:col-span-1">
+                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-emerald-700/70 tracking-wider ml-1">Deposit Amount</Label>
+                                                                <div className="relative">
+                                                                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={pay.amount}
+                                                                        onChange={e => setPaymentEntries(entries => entries.map(entry => entry.id === pay.id ? { ...entry, amount: e.target.value } : entry))}
+                                                                        inputMode="decimal"
+                                                                        className="h-12 md:h-14 pl-11 md:pl-12 text-xl md:text-2xl font-black bg-background border-emerald-500/30 rounded-xl text-emerald-600 focus:border-emerald-500 shadow-none"
+                                                                        placeholder="0"
+                                                                    />
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         {paymentEntries.length > 1 && (
