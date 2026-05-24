@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dadcare-v2';
+const CACHE_NAME = 'dadcare-v3';
 const STATIC_ASSETS = [
   '/dashboard',
   '/daily-book',
