@@ -89,3 +89,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+export async function DELETE(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const dateStr = searchParams.get('date');
+    if (!dateStr) return NextResponse.json({ error: 'Date required' }, { status: 400 });
+
+    const supabase = await createClient();
+    try {
+        const { error } = await supabase.from('DailyBook').delete().eq('date', dateStr);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}

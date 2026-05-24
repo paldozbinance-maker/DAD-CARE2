@@ -123,10 +123,15 @@ export default function DailyBookPage() {
         loadDailyBook(date);
     }, [date]);
 
-    const loadSavedEntries = () => {
-        const saved = localStorage.getItem('dailyBookEntries');
-        if (saved) {
-            setSavedEntries(JSON.parse(saved));
+    const loadSavedEntries = async () => {
+        try {
+            const res = await fetch('/api/daily-book-history');
+            const data = await res.json();
+            if (res.ok && Array.isArray(data)) {
+                setSavedEntries(data);
+            }
+        } catch (e) {
+            console.error('Failed to load history', e);
         }
     };
 
@@ -160,7 +165,6 @@ export default function DailyBookPage() {
 
                 const updated = [...savedEntries.filter(e => e.date !== dateStr), newEntry];
                 setSavedEntries(updated);
-                localStorage.setItem('dailyBookEntries', JSON.stringify(updated));
 
                 toast.success(`Entry saved for ${format(date, 'MMMM dd, yyyy')}`);
                 setEntries({});
@@ -327,7 +331,7 @@ export default function DailyBookPage() {
                                 <p className="text-sm mt-1">Add a new customer to start recording entries</p>
                             </div>
                         ) : (
-                            <div className="bg-[#fcf8f1] dark:bg-slate-900 relative overflow-hidden rounded-sm border border-slate-300 dark:border-slate-800 shadow-inner h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                            <div className="bg-[#fcf8f1] dark:bg-slate-900 relative overflow-hidden rounded-sm border border-slate-300 dark:border-slate-800 shadow-inner h-[65vh] md:h-[500px] pb-24 md:pb-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
                                 {/* Vertical Ledger Margin Line */}
                                 <div className="absolute left-[50px] md:left-[70px] top-0 bottom-0 w-[1px] bg-red-400 dark:bg-red-900/50 pointer-events-none z-20" />
 
@@ -591,10 +595,13 @@ export default function DailyBookPage() {
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         if (confirm('Delete this entry?')) {
-                                                            const updated = savedEntries.filter(e => e.date !== entry.date);
-                                                            setSavedEntries(updated);
-                                                            localStorage.setItem('dailyBookEntries', JSON.stringify(updated));
-                                                            toast.success('Entry deleted');
+                                                            fetch(`/api/daily-book?date=${entry.date}`, { method: 'DELETE' })
+                                                                .then(() => {
+                                                                    const updated = savedEntries.filter(e => e.date !== entry.date);
+                                                                    setSavedEntries(updated);
+                                                                    toast.success('Entry deleted');
+                                                                })
+                                                                .catch(err => toast.error('Failed to delete'));
                                                         }
                                                     }}
                                                     variant="ghost"
