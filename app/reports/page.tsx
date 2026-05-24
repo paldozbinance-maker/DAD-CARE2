@@ -5,29 +5,36 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    BarChart3,
     TrendingUp,
     TrendingDown,
     Users,
     Download,
     Loader2,
-    ChevronRight
+    ChevronRight,
+    Award,
+    AlertTriangle,
+    Scale,
+    DollarSign
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
-interface CustomerDebt {
+interface CustomerStats {
     id: string;
     name: string;
     code: string;
-    debt: number;
-    totalKg: number;
     totalPaid: number;
+    totalProductAmount: number;
+    totalKg: number;
+    averageKg: number;
+    productTxnCount: number;
+    currentDebt: number;
+    performanceScore: number;
 }
 
 export default function ReportsPage() {
     const [loading, setLoading] = useState(true);
-    const [customers, setCustomers] = useState<CustomerDebt[]>([]);
+    const [customers, setCustomers] = useState<CustomerStats[]>([]);
     const [totalDebt, setTotalDebt] = useState(0);
     const [totalPaid, setTotalPaid] = useState(0);
     const [totalKg, setTotalKg] = useState(0);
@@ -35,47 +42,28 @@ export default function ReportsPage() {
     useEffect(() => {
         const fetchReports = async () => {
             try {
-                // Fetch all customers
-                const custRes = await fetch('/api/customers');
-                const custData = await custRes.json();
-                if (!Array.isArray(custData)) return;
+                const res = await fetch('/api/reports');
+                if (!res.ok) throw new Error('Failed to fetch reports');
+                
+                const data: CustomerStats[] = await res.json();
+                
+                let gDebt = 0;
+                let gPaid = 0;
+                let gKg = 0;
 
-                // Fetch ledger data for each customer
-                const customerDebts: CustomerDebt[] = [];
-                let grandTotalDebt = 0;
-                let grandTotalPaid = 0;
-                let grandTotalKg = 0;
+                data.forEach(c => {
+                    gDebt += c.currentDebt;
+                    gPaid += c.totalPaid;
+                    gKg += c.totalKg;
+                });
 
-                for (const cust of custData) {
-                    try {
-                        const ledgerRes = await fetch(`/api/ledger?customerId=${cust.id}&limit=1000&t=${Date.now()}`);
-                        const ledgerData = await ledgerRes.json();
-
-                        const summary = ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 };
-
-                        customerDebts.push({
-                            id: cust.id,
-                            name: cust.name,
-                            code: cust.customer_code,
-                            debt: summary.currentBalance,
-                            totalKg: summary.totalKg,
-                            totalPaid: summary.totalPaid
-                        });
-
-                        grandTotalDebt += summary.currentBalance;
-                        grandTotalPaid += summary.totalPaid;
-                        grandTotalKg += summary.totalKg;
-                    } catch {
-                        // Skip this customer on error
-                    }
-                }
-
-                setCustomers(customerDebts);
-                setTotalDebt(grandTotalDebt);
-                setTotalPaid(grandTotalPaid);
-                setTotalKg(grandTotalKg);
+                setCustomers(data);
+                setTotalDebt(gDebt);
+                setTotalPaid(gPaid);
+                setTotalKg(gKg);
             } catch (e) {
                 console.error('Reports fetch failed:', e);
+                toast.error('Failed to load reports');
             } finally {
                 setLoading(false);
             }
@@ -84,8 +72,20 @@ export default function ReportsPage() {
         fetchReports();
     }, []);
 
-    const topDebtors = [...customers].filter(c => c.debt > 0).sort((a, b) => b.debt - a.debt);
-    const lowestDebt = [...customers].filter(c => c.debt > 0).sort((a, b) => a.debt - b.debt);
+    // Derived lists
+    const debtors = [...customers].filter(c => c.currentDebt > 0);
+    const topDebtors = [...debtors].sort((a, b) => b.currentDebt - a.currentDebt);
+    const lowestDebt = [...debtors].sort((a, b) => a.currentDebt - b.currentDebt);
+    
+    const payers = [...customers].filter(c => c.totalPaid > 0);
+    const topPayers = [...payers].sort((a, b) => b.totalPaid - a.totalPaid);
+    const lowestPayers = [...payers].sort((a, b) => a.totalPaid - b.totalPaid);
+
+    const kgTakers = [...customers].filter(c => c.productTxnCount > 0);
+    const highestAvgKg = [...kgTakers].sort((a, b) => b.averageKg - a.averageKg);
+    const lowestAvgKg = [...kgTakers].sort((a, b) => a.averageKg - b.averageKg);
+
+    const performanceRanked = [...customers].sort((a, b) => b.performanceScore - a.performanceScore);
 
     const handleExport = () => {
         const exportData = {
@@ -94,9 +94,11 @@ export default function ReportsPage() {
             customers: customers.map(c => ({
                 name: c.name,
                 code: c.code,
-                currentDebt: c.debt,
+                currentDebt: c.currentDebt,
                 totalKg: c.totalKg,
-                totalPaid: c.totalPaid
+                averageDailyKg: Number(c.averageKg.toFixed(2)),
+                totalPaid: c.totalPaid,
+                performanceScore: Number(c.performanceScore.toFixed(2))
             }))
         };
 
@@ -104,10 +106,22 @@ export default function ReportsPage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `dadwork-report-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `dadwork-advanced-report-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        toast.success('Report exported successfully');
+        toast.success('Advanced Report exported successfully');
+    };
+
+    const getPerformanceColor = (score: number) => {
+        if (score >= 90) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+        if (score >= 50) return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
+        return 'text-red-500 bg-red-500/10 border-red-500/20';
+    };
+    
+    const getPerformanceLabel = (score: number) => {
+        if (score >= 90) return 'Excellent';
+        if (score >= 50) return 'Average';
+        return 'Poor';
     };
 
     if (loading) {
@@ -115,119 +129,137 @@ export default function ReportsPage() {
             <div className="flex items-center justify-center h-[60vh]">
                 <div className="flex flex-col items-center gap-4">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm text-muted-foreground font-medium">Generating reports...</p>
+                    <p className="text-sm text-muted-foreground font-medium">Generating advanced reports...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20 max-w-4xl mx-auto w-full px-1 md:px-0">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
-                        Reports
+                        Advanced Reports
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Analyze business performance
+                        Deep insights into customer behavior & performance
                     </p>
                 </div>
                 <Button
                     onClick={handleExport}
                     variant="outline"
-                    className="border-border hover:bg-muted"
+                    className="border-border hover:bg-muted shadow-sm transition-all hover:scale-105"
                 >
                     <Download className="w-4 h-4 mr-2" />
-                    Export Data
+                    Export Complete Data
                 </Button>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-3 md:gap-4">
-                <Card className="glass-card">
-                    <CardContent className="p-4">
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Debt</p>
-                        <p className="text-lg md:text-2xl font-bold text-red-500">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                <Card className="glass-card transform transition-all hover:scale-[1.02]">
+                    <CardContent className="p-5 flex flex-col justify-center items-center text-center">
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> Total Global Debt
+                        </p>
+                        <p className="text-3xl font-black text-red-500 tracking-tight">
                             ${totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </p>
                     </CardContent>
                 </Card>
-                <Card className="glass-card">
-                    <CardContent className="p-4">
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Paid</p>
-                        <p className="text-lg md:text-2xl font-bold text-emerald-500">
-                            ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <Card className="glass-card transform transition-all hover:scale-[1.02]">
+                    <CardContent className="p-5 flex flex-col justify-center items-center text-center">
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Total Global Paid
                         </p>
-                    </CardContent>
-                </Card>
-                <Card className="glass-card">
-                    <CardContent className="p-4">
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total KG</p>
-                        <p className="text-lg md:text-2xl font-bold text-primary">
-                            {totalKg.toLocaleString()}
+                        <p className="text-3xl font-black text-emerald-500 tracking-tight">
+                            ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Tabs */}
-            <Tabs defaultValue="top-debtors" className="w-full">
-                <TabsList className="bg-muted border border-border p-1 rounded-xl w-full grid grid-cols-2">
-                    <TabsTrigger
-                        value="top-debtors"
-                        className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg text-xs font-semibold"
-                    >
-                        <TrendingUp className="w-3.5 h-3.5 mr-1.5" />
-                        Top Debtors
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="lowest-debt"
-                        className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg text-xs font-semibold"
-                    >
-                        <TrendingDown className="w-3.5 h-3.5 mr-1.5" />
-                        Lowest Debt
-                    </TabsTrigger>
-                </TabsList>
+            {/* Advanced Tabs */}
+            <Tabs defaultValue="performance" className="w-full">
+                {/* Horizontal Scrollable Tabs List for Mobile */}
+                <div className="w-full overflow-x-auto pb-2 scrollbar-hide">
+                    <TabsList className="bg-muted/50 border border-border p-1.5 rounded-2xl inline-flex min-w-full md:min-w-0">
+                        <TabsTrigger
+                            value="performance"
+                            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-xs font-semibold px-4 py-2 transition-all whitespace-nowrap"
+                        >
+                            <Award className="w-3.5 h-3.5 mr-1.5" />
+                            Performance Matrix
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="payers"
+                            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-xs font-semibold px-4 py-2 transition-all whitespace-nowrap"
+                        >
+                            <DollarSign className="w-3.5 h-3.5 mr-1.5" />
+                            Top & Lowest Payers
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="volume"
+                            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-xs font-semibold px-4 py-2 transition-all whitespace-nowrap"
+                        >
+                            <Scale className="w-3.5 h-3.5 mr-1.5" />
+                            Daily Volume (KG)
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="debtors"
+                            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-xs font-semibold px-4 py-2 transition-all whitespace-nowrap"
+                        >
+                            <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
+                            Debtors
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
-                <TabsContent value="top-debtors">
-                    <Card className="glass-card overflow-hidden">
-                        <CardHeader className="pb-3 border-b border-border">
-                            <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                                <TrendingUp className="h-4 w-4 text-red-500" />
-                                Highest Lacagta Guud
+                {/* 1. PERFORMANCE MATRIX */}
+                <TabsContent value="performance" className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <Card className="glass-card overflow-hidden border-0 shadow-lg ring-1 ring-border/50">
+                        <CardHeader className="pb-4 border-b border-border bg-gradient-to-r from-background to-muted/20">
+                            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                                <Award className="h-5 w-5 text-primary" />
+                                Customer Reliability & Performance
                             </CardTitle>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Based on <strong>what they paid</strong> vs <strong>total products charged</strong> (excludes old initial debt setups).
+                            </p>
                         </CardHeader>
                         <CardContent className="p-0">
-                            {topDebtors.length === 0 ? (
-                                <div className="p-8 text-center text-muted-foreground text-sm">
-                                    No outstanding debts
-                                </div>
+                            {performanceRanked.length === 0 ? (
+                                <div className="p-8 text-center text-muted-foreground text-sm">No data available</div>
                             ) : (
                                 <div className="divide-y divide-border">
-                                    {topDebtors.map((customer, i) => (
+                                    {performanceRanked.map((customer, i) => (
                                         <Link
                                             key={customer.id}
                                             href={`/customers/${customer.id}`}
-                                            className="flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors"
+                                            className="flex items-center justify-between px-5 py-4 hover:bg-muted/40 transition-colors group"
                                         >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'
-                                                    }`}>
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center text-xs font-bold text-muted-foreground shadow-sm group-hover:scale-110 transition-transform">
                                                     {i + 1}
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-semibold text-foreground">{customer.name}</p>
-                                                    <p className="text-[11px] text-muted-foreground">
-                                                        {customer.totalKg.toLocaleString()} KG · Paid ${customer.totalPaid.toLocaleString()}
+                                                    <p className="text-sm font-bold text-foreground">{customer.name}</p>
+                                                    <p className="text-[11px] text-muted-foreground flex gap-3 mt-1">
+                                                        <span className="text-blue-400">Products: ${(customer.totalProductAmount || 0).toLocaleString()}</span>
+                                                        <span className="text-emerald-500">Paid: ${customer.totalPaid.toLocaleString()}</span>
+                                                        {customer.currentDebt > 0 && <span className="text-red-400">Debt: ${customer.currentDebt.toLocaleString()}</span>}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm font-bold text-red-500">
-                                                    ${customer.debt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                </span>
-                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                            <div className="flex items-center gap-3">
+                                                <div className={`px-2.5 py-1 rounded-full border text-[10px] font-bold flex items-center gap-1.5 ${getPerformanceColor(customer.performanceScore)}`}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+                                                    {customer.performanceScore.toFixed(0)}%
+                                                    <span className="opacity-60 font-normal">{getPerformanceLabel(customer.performanceScore)}</span>
+                                                </div>
+                                                <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
                                             </div>
                                         </Link>
                                     ))}
@@ -237,89 +269,153 @@ export default function ReportsPage() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="lowest-debt">
-                    <Card className="glass-card overflow-hidden">
-                        <CardHeader className="pb-3 border-b border-border">
-                            <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                                <TrendingDown className="h-4 w-4 text-emerald-500" />
-                                Lowest Lacagta Guud
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {lowestDebt.length === 0 ? (
-                                <div className="p-8 text-center text-muted-foreground text-sm">
-                                    No outstanding debts
-                                </div>
-                            ) : (
+                {/* 2. TOP & LOWEST PAYERS */}
+                <TabsContent value="payers" className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Card className="glass-card overflow-hidden">
+                            <CardHeader className="pb-3 border-b border-border bg-gradient-to-r from-emerald-500/5 to-transparent">
+                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    <TrendingUp className="h-4 w-4 text-emerald-500" />
+                                    Highest Total Paid
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
                                 <div className="divide-y divide-border">
-                                    {lowestDebt.map((customer, i) => (
-                                        <Link
-                                            key={customer.id}
-                                            href={`/customers/${customer.id}`}
-                                            className="flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors"
-                                        >
+                                    {topPayers.map((c, i) => (
+                                        <div key={c.id} className="flex items-center justify-between px-4 py-3">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-xs font-bold text-emerald-500">
-                                                    {i + 1}
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-foreground">{customer.name}</p>
-                                                    <p className="text-[11px] text-muted-foreground">
-                                                        {customer.totalKg.toLocaleString()} KG · Paid ${customer.totalPaid.toLocaleString()}
-                                                    </p>
-                                                </div>
+                                                <span className="text-xs font-black text-muted-foreground/50 w-4">{i + 1}.</span>
+                                                <span className="text-sm font-semibold">{c.name}</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm font-bold text-emerald-500">
-                                                    ${customer.debt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                </span>
-                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                            <span className="text-sm font-bold text-emerald-500">${c.totalPaid.toLocaleString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        
+                        <Card className="glass-card overflow-hidden">
+                            <CardHeader className="pb-3 border-b border-border bg-gradient-to-r from-red-500/5 to-transparent">
+                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    <TrendingDown className="h-4 w-4 text-red-400" />
+                                    Lowest Total Paid
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                                <div className="divide-y divide-border">
+                                    {lowestPayers.map((c, i) => (
+                                        <div key={c.id} className="flex items-center justify-between px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-black text-muted-foreground/50 w-4">{i + 1}.</span>
+                                                <span className="text-sm font-semibold">{c.name}</span>
                                             </div>
+                                            <span className="text-sm font-bold text-foreground">${c.totalPaid.toLocaleString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
+
+                {/* 3. DAILY VOLUME (KG) */}
+                <TabsContent value="volume" className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Card className="glass-card overflow-hidden">
+                            <CardHeader className="pb-3 border-b border-border bg-gradient-to-r from-primary/10 to-transparent">
+                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    <Scale className="h-4 w-4 text-primary" />
+                                    Repeatedly Highest KG (Average)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                                <div className="divide-y divide-border">
+                                    {highestAvgKg.map((c, i) => (
+                                        <div key={c.id} className="flex items-center justify-between px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-black text-primary/50 w-4">{i + 1}.</span>
+                                                <span className="text-sm font-semibold">{c.name}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-primary">{c.averageKg.toFixed(1)} KG</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        
+                        <Card className="glass-card overflow-hidden">
+                            <CardHeader className="pb-3 border-b border-border">
+                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    <Scale className="h-4 w-4 text-muted-foreground" />
+                                    Repeatedly Lowest KG (Average)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                                <div className="divide-y divide-border">
+                                    {lowestAvgKg.map((c, i) => (
+                                        <div key={c.id} className="flex items-center justify-between px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-black text-muted-foreground/50 w-4">{i + 1}.</span>
+                                                <span className="text-sm font-semibold">{c.name}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-foreground">{c.averageKg.toFixed(1)} KG</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
+
+                {/* 4. DEBTORS (Original) */}
+                <TabsContent value="debtors" className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Card className="glass-card overflow-hidden">
+                            <CardHeader className="pb-3 border-b border-border bg-gradient-to-r from-red-500/10 to-transparent">
+                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    <TrendingUp className="h-4 w-4 text-red-500" />
+                                    Highest Debt (Lacagta Guud)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                                <div className="divide-y divide-border">
+                                    {topDebtors.map((c, i) => (
+                                        <Link key={c.id} href={`/customers/${c.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 group">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-black text-red-500/50 w-4">{i + 1}.</span>
+                                                <span className="text-sm font-semibold group-hover:text-red-500 transition-colors">{c.name}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-red-500">${c.currentDebt.toLocaleString()}</span>
                                         </Link>
                                     ))}
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                        
+                        <Card className="glass-card overflow-hidden">
+                            <CardHeader className="pb-3 border-b border-border">
+                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    <TrendingDown className="h-4 w-4 text-emerald-500" />
+                                    Lowest Debt (Lacagta Guud)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
+                                <div className="divide-y divide-border">
+                                    {lowestDebt.map((c, i) => (
+                                        <Link key={c.id} href={`/customers/${c.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 group">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-black text-emerald-500/50 w-4">{i + 1}.</span>
+                                                <span className="text-sm font-semibold group-hover:text-emerald-500 transition-colors">{c.name}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-foreground">${c.currentDebt.toLocaleString()}</span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </TabsContent>
             </Tabs>
-
-            {/* All Customers Summary */}
-            <Card className="glass-card overflow-hidden">
-                <CardHeader className="pb-3 border-b border-border">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        <Users className="h-4 w-4 text-primary" />
-                        All Customers Summary ({customers.length})
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {/* Mobile-friendly table using cards */}
-                    <div className="divide-y divide-border">
-                        {customers.map((customer) => (
-                            <Link
-                                key={customer.id}
-                                href={`/customers/${customer.id}`}
-                                className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors"
-                            >
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-foreground truncate">{customer.name}</p>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        #{customer.code} · {customer.totalKg} KG
-                                    </p>
-                                </div>
-                                <div className="text-right ml-4">
-                                    <p className={`text-sm font-bold ${customer.debt > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                                        ${Math.abs(customer.debt).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                    </p>
-                                    <p className="text-[10px] text-muted-foreground">
-                                        Paid: ${customer.totalPaid.toLocaleString()}
-                                    </p>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     );
 }

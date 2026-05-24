@@ -44,107 +44,90 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+  --radius-full: 9999px;
 }
 
 /* 
-   THEME VARIABLES
-   :root = Light Mode (Clean White/Blue)
-   .dark = Dark Mode (Navy/Blue)
+   ONE UI THEME VARIABLES
 */
 :root {
-  --radius: 0.75rem;
+  --radius: 1.5rem; /* Large border radius for One UI */
 
-  /* LIGHT MODE: Clean White & Blue */
-  --background: #FFFFFF;
-  --foreground: #0F172A;
+  /* ONE UI LIGHT MODE */
+  --background: #F2F2F2; /* Very light gray background */
+  --foreground: #000000;
 
   --card: #FFFFFF;
-  --card-foreground: #0F172A;
+  --card-foreground: #000000;
 
   --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
+  --popover-foreground: #000000;
 
-  --primary: #2563EB;
+  --primary: #007AFF; /* Bright vibrant blue */
   --primary-foreground: #FFFFFF;
 
-  --secondary: #F1F5F9;
-  --secondary-foreground: #0F172A;
+  --secondary: #E5E5EA; /* Light gray for secondary elements */
+  --secondary-foreground: #000000;
 
-  --muted: #F1F5F9;
-  --muted-foreground: #64748B;
+  --muted: #E5E5EA;
+  --muted-foreground: #8E8E93;
 
-  --accent: #EFF6FF;
-  --accent-foreground: #1E40AF;
+  --accent: #E5F1FF;
+  --accent-foreground: #007AFF;
 
-  --destructive: #EF4444;
+  --destructive: #FF3B30;
 
-  --border: #E2E8F0;
-  --input: #E2E8F0;
-  --ring: #2563EB;
+  --border: transparent; /* One UI uses shadows/backgrounds instead of borders */
+  --input: #E5E5EA;
+  --ring: #007AFF;
 
-  /* Sidebar Light Mode */
-  --sidebar: #F8FAFC;
-  --sidebar-foreground: #0F172A;
-  --sidebar-primary: #2563EB;
+  --sidebar: #F2F2F2;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #007AFF;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #EFF6FF;
-  --sidebar-accent-foreground: #1E40AF;
-  --sidebar-border: #E2E8F0;
-  --sidebar-ring: #2563EB;
-
-  /* Chart Colors Light */
-  --chart-1: #2563EB;
-  --chart-2: #10B981;
-  --chart-3: #F59E0B;
-  --chart-4: #8B5CF6;
-  --chart-5: #EC4899;
+  --sidebar-accent: #E5E5EA;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: transparent;
+  --sidebar-ring: #007AFF;
 }
 
-/* DARK MODE: Premium Navy/Blue */
 .dark {
-  --background: #0F172A;
-  --foreground: #F1F5F9;
+  /* ONE UI DARK MODE */
+  --background: #000000; /* Deep black for AMOLED */
+  --foreground: #FFFFFF;
 
-  --card: #1E293B;
-  --card-foreground: #F1F5F9;
+  --card: #1C1C1E; /* Dark gray for cards */
+  --card-foreground: #FFFFFF;
 
-  --popover: #1E293B;
-  --popover-foreground: #F1F5F9;
+  --popover: #1C1C1E;
+  --popover-foreground: #FFFFFF;
 
-  --primary: #3B82F6;
+  --primary: #0A84FF; /* Brighter blue for dark mode */
   --primary-foreground: #FFFFFF;
 
-  --secondary: #334155;
-  --secondary-foreground: #F1F5F9;
+  --secondary: #2C2C2E;
+  --secondary-foreground: #FFFFFF;
 
-  --muted: #334155;
-  --muted-foreground: #94A3B8;
+  --muted: #2C2C2E;
+  --muted-foreground: #98989D;
 
-  --accent: #1E3A5F;
-  --accent-foreground: #93C5FD;
+  --accent: #0A84FF20;
+  --accent-foreground: #0A84FF;
 
-  --destructive: #EF4444;
+  --destructive: #FF453A;
 
-  --border: #334155;
-  --input: #1E293B;
-  --ring: #3B82F6;
+  --border: transparent;
+  --input: #2C2C2E;
+  --ring: #0A84FF;
 
-  /* Sidebar Dark Mode */
-  --sidebar: #0F172A;
-  --sidebar-foreground: #F1F5F9;
-  --sidebar-primary: #3B82F6;
+  --sidebar: #000000;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #0A84FF;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1E293B;
-  --sidebar-accent-foreground: #93C5FD;
-  --sidebar-border: #1E293B;
-  --sidebar-ring: #3B82F6;
-
-  /* Chart Colors Dark */
-  --chart-1: #3B82F6;
-  --chart-2: #10B981;
-  --chart-3: #F59E0B;
-  --chart-4: #8B5CF6;
-  --chart-5: #EC4899;
+  --sidebar-accent: #1C1C1E;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: transparent;
+  --sidebar-ring: #0A84FF;
 }
 
 @layer base {
@@ -154,83 +137,58 @@
 
   body {
     @apply bg-background text-foreground antialiased transition-colors duration-300;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  /* Premium One UI Card */
+  .one-ui-card {
+    @apply bg-card rounded-[28px] overflow-hidden;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .dark .one-ui-card {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
   }
 
-  @media print {
-
-    .print\:hidden,
-    nav,
-    footer,
-    .no-print,
-    header,
-    aside,
-    button:not(.print\:show),
-    .glass-card:not(.print\:show) {
-      display: none !important;
-    }
-
-    body {
-      background: white !important;
-      color: black !important;
-      padding: 0 !important;
-      margin: 0 !important;
-    }
-
-    .print\:block {
-      display: block !important;
-    }
-
-    .print\:w-full {
-      width: 100% !important;
-    }
-
-    .print\:p-0 {
-      padding: 0 !important;
-    }
-
-    /* Professional receipt look for print */
-    .print\:receipt {
-      border: 1px solid #eee !important;
-      padding: 20px !important;
-      margin: 0 !important;
-      box-shadow: none !important;
-      width: 100% !important;
-    }
+  .one-ui-card:active {
+    transform: scale(0.98);
   }
 
-  .text-buy {
-    @apply text-emerald-600 dark:text-emerald-400;
+  /* One UI Button Pill */
+  .one-ui-btn {
+    @apply rounded-full font-bold transition-all active:scale-[0.96] flex items-center justify-center;
   }
 
-  .text-sell {
-    @apply text-red-600 dark:text-red-400;
+  /* Large Viewport Header for One UI (Reachability) */
+  .one-ui-header {
+    @apply pt-12 pb-6 px-6;
   }
 
-  .bento-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1rem;
-  }
-
-  .glass-card {
-    @apply bg-card border border-border shadow-sm rounded-xl;
+  .one-ui-title {
+    @apply text-3xl font-bold tracking-tight;
   }
 
   /* Safe area for mobile bottom nav */
   .pb-safe {
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   @media (min-width: 768px) {
     .pb-safe {
       padding-bottom: 0;
     }
+  }
+
+  /* Scrollbar hiding */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -244,4 +202,14 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
+}
+
+/* Smooth page transitions */
+main {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }

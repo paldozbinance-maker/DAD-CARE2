@@ -20,7 +20,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-safe">
+            <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8 pb-safe">
                 {children}
             </main>
 

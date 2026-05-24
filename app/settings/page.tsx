@@ -65,7 +65,7 @@ export default function SettingsPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-3xl mx-auto w-full px-1 md:px-0">
             {/* Header */}
             <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
@@ -207,10 +207,10 @@ export default function SettingsPage() {
                                     <div className="flex-1">
                                         <h3 className="font-semibold text-foreground mb-1">Export Full Backup</h3>
                                         <p className="text-sm text-muted-foreground mb-4">
-                                            Download a complete JSON backup of all customers, transactions, payments, and settings.
+                                            Download a complete Excel-friendly CSV backup of all customers and transactions.
                                         </p>
                                         <Button
-                                            onClick={handleExportAll}
+                                            onClick={handleExportCSV}
                                             disabled={loading}
                                             className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                                         >

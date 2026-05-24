@@ -68,11 +68,13 @@ export async function POST(request: Request) {
         // 3. Insert new items
         if (items && items.length > 0) {
             const itemsToInsert = items
-                .filter((i: any) => i.kg > 0)
+                .filter((i: any) => i.kg > 0 || i.present === false || (i.note && i.note.trim() !== ''))
                 .map((i: any) => ({
                     daily_book_id: book.id,
                     customer_id: i.customer_id,
-                    kg: parseFloat(i.kg)
+                    kg: parseFloat(i.kg) || 0,
+                    present: i.present !== false, // true by default
+                    note: i.note || null
                 }));
 
             if (itemsToInsert.length > 0) {

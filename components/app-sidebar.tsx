@@ -11,7 +11,8 @@ import {
     Settings,
     LogOut,
     Sun,
-    Moon
+    Moon,
+    ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -47,24 +48,26 @@ export function AppSidebar() {
     };
 
     return (
-        <div className="flex h-full w-64 flex-col bg-sidebar border-r border-sidebar-border z-20 transition-colors duration-300">
-            {/* Header */}
-            <div className="flex h-16 items-center px-6 border-b border-sidebar-border">
+        <div className="flex h-full w-[260px] flex-col bg-sidebar/80 backdrop-blur-xl border-r border-sidebar-border/50 z-20 transition-colors duration-300">
+            {/* Header - Premium Logo */}
+            <div className="flex h-16 items-center px-5 border-b border-sidebar-border/50">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                        <span className="text-primary-foreground font-bold text-sm">D</span>
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shadow-primary/25 transition-transform hover:scale-105">
+                        <span className="text-primary-foreground font-black text-base">D</span>
                     </div>
                     <div>
-                        <h1 className="text-base font-bold tracking-tight text-sidebar-foreground">
+                        <h1 className="text-base font-black tracking-tight text-sidebar-foreground">
                             DADWORK
                         </h1>
-                        <p className="text-[10px] text-muted-foreground font-medium">Business Ledger</p>
+                        <p className="text-[10px] text-muted-foreground font-medium tracking-wider uppercase">
+                            Business Ledger
+                        </p>
                     </div>
                 </div>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
+            <nav className="flex-1 space-y-0.5 px-3 py-4 overflow-y-auto">
                 {navItems.map((item) => {
                     const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
                     return (
@@ -72,19 +75,24 @@ export function AppSidebar() {
                             key={item.href}
                             href={item.href}
                             className={cn(
-                                'group flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                                'group flex items-center rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
                                 isActive
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                    ? 'bg-primary/10 text-primary shadow-sm'
+                                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
                             )}
                         >
-                            <item.icon className={cn(
-                                "mr-3 h-4 w-4 flex-shrink-0 transition-colors",
-                                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                            )} />
-                            <span>{item.label}</span>
+                            <div className={cn(
+                                'mr-3 p-1.5 rounded-lg transition-colors',
+                                isActive ? 'bg-primary/15' : 'bg-transparent group-hover:bg-muted'
+                            )}>
+                                <item.icon className={cn(
+                                    "h-4 w-4 flex-shrink-0 transition-all",
+                                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                )} />
+                            </div>
+                            <span className="flex-1">{item.label}</span>
                             {isActive && (
-                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                                <ChevronRight className="h-3.5 w-3.5 text-primary/60" />
                             )}
                         </Link>
                     );
@@ -92,28 +100,32 @@ export function AppSidebar() {
             </nav>
 
             {/* Footer */}
-            <div className="border-t border-sidebar-border p-3 space-y-1">
+            <div className="border-t border-sidebar-border/50 p-3 space-y-1">
                 {/* Theme Toggle */}
                 <Button
                     variant="ghost"
-                    className="w-full justify-start text-muted-foreground hover:bg-muted hover:text-foreground rounded-xl text-sm"
+                    className="w-full justify-start text-muted-foreground hover:bg-muted/80 hover:text-foreground rounded-xl text-[13px] h-10"
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 >
-                    {mounted && theme === 'dark' ? (
-                        <Sun className="mr-3 h-4 w-4" />
-                    ) : (
-                        <Moon className="mr-3 h-4 w-4" />
-                    )}
+                    <div className="mr-3 p-1.5 rounded-lg bg-muted">
+                        {mounted && theme === 'dark' ? (
+                            <Sun className="h-4 w-4 text-amber-400" />
+                        ) : (
+                            <Moon className="h-4 w-4 text-indigo-400" />
+                        )}
+                    </div>
                     {mounted ? (theme === 'dark' ? 'Light Mode' : 'Dark Mode') : 'Toggle Theme'}
                 </Button>
 
                 {/* Logout */}
                 <Button
                     variant="ghost"
-                    className="w-full justify-start text-muted-foreground hover:bg-red-500/10 hover:text-red-500 rounded-xl text-sm transition-colors"
+                    className="w-full justify-start text-muted-foreground hover:bg-red-500/10 hover:text-red-500 rounded-xl text-[13px] h-10 transition-colors"
                     onClick={handleLogout}
                 >
-                    <LogOut className="mr-3 h-4 w-4" />
+                    <div className="mr-3 p-1.5 rounded-lg">
+                        <LogOut className="h-4 w-4" />
+                    </div>
                     Logout
                 </Button>
             </div>

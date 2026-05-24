@@ -562,8 +562,13 @@ export default function LedgerPage() {
                                         </div>
 
                                         {/* 4. BOOK MATH RECEIPT */}
-                                        <div className="mt-4 px-3 py-3 rounded-lg bg-muted/5 border border-border/60 space-y-0 font-mono text-xs">
-                                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center mb-2">Receipt</p>
+                                        <div className="relative overflow-hidden mt-4 py-3 rounded-lg bg-[#fdfbf7] dark:bg-[#1e1c18] border border-border/60 font-mono text-xs shadow-inner">
+                                            {/* Vertical Notebook Lines (Margin) */}
+                                            <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
+                                            <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
+                                            
+                                            <div className="relative z-10 pl-12 pr-4 space-y-0 text-slate-800 dark:text-slate-300">
+                                                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center mb-2">Receipt</p>
 
                                             {/* Maqalka breakdown lines */}
                                             {dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0).map((entry, idx) => (
@@ -622,15 +627,16 @@ export default function LedgerPage() {
                                             )}
 
                                             {/* Final Balance - double underline style */}
-                                            <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-foreground/30">
-                                                <span className="font-black text-sm">Lacagta Guud</span>
-                                                <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
+                                            <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
+                                                <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Lacagta Guud</span>
+                                                <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                     ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
                                                 </span>
                                             </div>
                                             <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
                                                 Lacagta Guud
                                             </p>
+                                            </div>
                                         </div>
 
                                         {/* Submit */}
@@ -654,7 +660,7 @@ export default function LedgerPage() {
                 <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border p-4 md:hidden z-50 animate-in slide-in-from-bottom duration-500 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
                     <div className="flex items-center gap-4 max-w-lg mx-auto">
                         <div className="flex-1">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Lacagta Guud</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">Lacagta Guud</p>
                             <p className={`text-xl font-black leading-none ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                 ${Math.round(finalLacagtaGuud).toLocaleString()}
                             </p>

@@ -10,8 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
-import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package } from 'lucide-react';
+import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Switch } from '@/components/ui/switch';
 
 interface Customer {
     id: string;
@@ -25,11 +26,14 @@ interface Customer {
 interface DailyBookItem {
     customer_id: string;
     kg: number;
+    present?: boolean;
+    note?: string;
     customer?: {
         id: string;
         name: string;
         customer_code: string;
         gender?: string;
+        avatar_url?: string;
     };
 }
 
@@ -42,7 +46,7 @@ interface SavedEntry {
 export default function DailyBookPage() {
     const [date, setDate] = useState<Date>(new Date());
     const [customers, setCustomers] = useState<Customer[]>([]);
-    const [entries, setEntries] = useState<{ [key: string]: number }>({});
+    const [entries, setEntries] = useState<{ [key: string]: { kg: number, present: boolean, note: string } }>({});
     const [saving, setSaving] = useState(false);
     const [savedEntries, setSavedEntries] = useState<SavedEntry[]>([]);
     const [viewMode, setViewMode] = useState<'edit' | 'details'>('edit');
@@ -77,9 +81,9 @@ export default function DailyBookPage() {
             const data = await res.json();
 
             if (data && data.items) {
-                const loadedEntries: { [key: string]: number } = {};
+                const loadedEntries: { [key: string]: { kg: number, present: boolean, note: string } } = {};
                 data.items.forEach((item: DailyBookItem) => {
-                    loadedEntries[item.customer_id] = item.kg;
+                    loadedEntries[item.customer_id] = { kg: item.kg || 0, present: item.present ?? true, note: item.note || '' };
                 });
                 setEntries(loadedEntries);
             } else {
@@ -131,10 +135,12 @@ export default function DailyBookPage() {
         const dateStr = format(date, 'yyyy-MM-dd');
 
         const items = Object.entries(entries)
-            .filter(([_, kg]) => kg > 0)
-            .map(([customer_id, kg]) => ({
+            .filter(([_, data]) => data.kg > 0 || data.present === false || data.note.trim() !== '')
+            .map(([customer_id, data]) => ({
                 customer_id,
-                kg,
+                kg: data.kg,
+                present: data.present,
+                note: data.note,
                 customer: customers.find(c => c.id === customer_id)
             }));
 
@@ -174,9 +180,9 @@ export default function DailyBookPage() {
     const handleEditEntry = (entry: SavedEntry) => {
         const selectedDate = parseISO(entry.date);
         setDate(selectedDate);
-        const loadedEntries: { [key: string]: number } = {};
+        const loadedEntries: { [key: string]: { kg: number, present: boolean, note: string } } = {};
         entry.items.forEach(item => {
-            loadedEntries[item.customer_id] = item.kg;
+            loadedEntries[item.customer_id] = { kg: item.kg || 0, present: item.present ?? true, note: item.note || '' };
         });
         setEntries(loadedEntries);
         setEditingDate(entry.date);
@@ -200,7 +206,7 @@ export default function DailyBookPage() {
         setDate(newDate);
     };
 
-    const totalKg = Object.values(entries).reduce((sum, kg) => sum + (parseFloat(String(kg)) || 0), 0);
+    const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
 
     const filteredEntries = searchDate
         ? savedEntries.filter(e => e.date === format(searchDate, 'yyyy-MM-dd'))
@@ -328,7 +334,8 @@ export default function DailyBookPage() {
                                 {/* Sticky Header */}
                                 <div className="sticky top-0 z-30 grid grid-cols-12 px-2 md:px-4 py-2 bg-[#f4ece0] dark:bg-slate-950 border-b-2 border-slate-300 dark:border-slate-700 shadow-sm">
                                     <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">ID</div>
-                                    <div className="col-span-7 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter pl-4">Customer Name</div>
+                                    <div className="col-span-5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter pl-4">Customer Name</div>
+                                    <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-center">Status</div>
                                     <div className="col-span-3 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-right">KG</div>
                                 </div>
 
@@ -342,11 +349,45 @@ export default function DailyBookPage() {
                                             </div>
 
                                             {/* Customer Name - With Short Underline */}
-                                            <div className="col-span-7 flex flex-col justify-center pl-4 border-l border-red-200/50 dark:border-red-900/30">
+                                            <div className="col-span-5 flex flex-col justify-center pl-4 border-l border-red-200/50 dark:border-red-900/30">
                                                 <div className="relative inline-block w-fit">
                                                     <span className="font-bold text-[11px] md:text-sm text-slate-700 dark:text-slate-300 uppercase truncate pr-4">{customer.name}</span>
                                                     <div className="absolute -bottom-0.5 left-0 w-full h-[1px] bg-blue-200/50 dark:bg-slate-700 pointer-events-none" />
                                                 </div>
+                                            </div>
+
+                                            {/* Status & Note Area */}
+                                            <div className="col-span-2 flex items-center justify-center gap-1.5 px-1">
+                                                <button
+                                                    onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })}
+                                                    className={`h-5 w-5 md:h-6 md:w-6 rounded flex items-center justify-center text-[10px] md:text-[11px] font-black transition-colors border ${
+                                                        entries[customer.id]?.present !== false 
+                                                        ? 'bg-green-100/50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400' 
+                                                        : 'bg-red-100/50 border-red-200 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400'
+                                                    }`}
+                                                >
+                                                    {entries[customer.id]?.present !== false ? 'P' : 'A'}
+                                                </button>
+                                                
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" size="sm" className={`h-5 w-5 md:h-6 md:w-6 p-0 rounded-md hover:bg-blue-100 dark:hover:bg-slate-800 ${entries[customer.id]?.note ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                            <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl">
+                                                        <div className="space-y-2">
+                                                            <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
+                                                            <Input
+                                                                placeholder="Add a remark..."
+                                                                value={entries[customer.id]?.note || ''}
+                                                                onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })}
+                                                                className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none"
+                                                                autoFocus
+                                                            />
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </div>
 
                                             {/* Input Area */}
@@ -357,16 +398,17 @@ export default function DailyBookPage() {
                                                         step="1"
                                                         placeholder="0"
                                                         inputMode="decimal"
-                                                        value={entries[customer.id] || ''}
-                                                        onChange={(e) => setEntries({ ...entries, [customer.id]: parseInt(e.target.value, 10) || 0 })}
+                                                        value={entries[customer.id]?.kg || ''}
+                                                        disabled={entries[customer.id]?.present === false}
+                                                        onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })}
                                                         onKeyDown={(e) => handleKeyPress(e, index)}
-                                                        className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id] > 0
+                                                        className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0
                                                             ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10'
                                                             : 'text-slate-400 dark:text-slate-500'
-                                                            }`}
+                                                            } ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`}
                                                     />
                                                 </div>
-                                                {entries[customer.id] > 0 && (
+                                                {(entries[customer.id]?.kg > 0 || entries[customer.id]?.present === false || entries[customer.id]?.note) && (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -596,8 +638,15 @@ export default function DailyBookPage() {
                                                                             {item.customer?.name || 'Unknown'}
                                                                         </div>
                                                                     </TableCell>
-                                                                    <TableCell className="text-right pr-6 font-bold text-primary">
-                                                                        {Math.round(item.kg)} KG
+                                                                    <TableCell className="text-right pr-6">
+                                                                        {item.present === false ? (
+                                                                            <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-600 text-xs font-bold">Absent</span>
+                                                                        ) : (
+                                                                            <span className="font-bold text-primary">{Math.round(item.kg)} KG</span>
+                                                                        )}
+                                                                        {item.note && (
+                                                                            <div className="text-xs text-muted-foreground mt-1">{item.note}</div>
+                                                                        )}
                                                                     </TableCell>
                                                                 </TableRow>
                                                             ))}

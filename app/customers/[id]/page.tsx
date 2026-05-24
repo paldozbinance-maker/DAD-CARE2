@@ -533,8 +533,8 @@ export default function CustomerDetailPage() {
                                         ) : (
                                             <div className="relative overflow-hidden bg-[#fdfbf7] dark:bg-[#1e1c18] font-mono text-[11px] pb-4 rounded-b-lg border-t border-border/40 shadow-inner">
                                                 {/* Vertical Notebook Lines (Margin) */}
-                                                <div className="absolute left-8 top-0 bottom-0 w-px bg-red-400/40 dark:bg-red-900/40 z-0"></div>
-                                                <div className="absolute left-9 top-0 bottom-0 w-px bg-red-400/40 dark:bg-red-900/40 z-0"></div>
+                                                <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
+                                                <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
                                                 
                                                 <div className="relative z-10 pl-12 pr-4 pt-3 space-y-0 text-slate-800 dark:text-slate-300">
                                                     {/* Maqalka entries */}
@@ -587,8 +587,8 @@ export default function CustomerDetailPage() {
                                                     )}
 
                                                     {/* Lacagta Guud */}
-                                                    <div className="flex justify-between items-center pt-2.5 mt-2 border-t-2 border-double border-slate-400 dark:border-slate-600 px-1 py-1">
-                                                        <span className="font-black text-xs uppercase tracking-tighter text-slate-900 dark:text-slate-100">Lacagta Guud</span>
+                                                    <div className="flex justify-between items-center pt-2.5 mt-2 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
+                                                        <span className="font-black text-xs uppercase tracking-tighter text-[#C19A6B] dark:text-[#D4B087]">Lacagta Guud</span>
                                                         <span className={`text-lg font-black ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                             ${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
                                                         </span>

@@ -137,7 +137,7 @@ export default function UsersPage() {
     );
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-3xl mx-auto w-full px-1 md:px-0">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
