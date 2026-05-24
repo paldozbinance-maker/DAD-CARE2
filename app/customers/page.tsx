@@ -143,7 +143,7 @@ export default function CustomersPage() {
                                             ${Math.abs(Math.round((customer as any).current_balance || 0)).toLocaleString()}
                                         </p>
                                         <p className="text-[8px] font-bold uppercase tracking-tighter text-muted-foreground mt-0.5">
-                                            {(customer as any).current_balance > 0 ? 'Lacagta Guud' : 'Settled'}
+                                            {(customer as any).current_balance > 0 ? 'Reesto' : 'Settled'}
                                         </p>
                                     </div>
 

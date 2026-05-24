@@ -247,9 +247,7 @@ export default function LedgerPage() {
         .filter(e => e.date && parseFloat(e.kg) > 0)
         .map(e => format(new Date(e.date), 'dd MMM'));
 
-    const dynamicMaqalLabel = activeDatesForHeader.length > 0
-        ? `Maqalka Taariikhda ${activeDatesForHeader.join(' iyo ')}`
-        : 'Maqalka Total';
+    const dynamicMaqalLabel = 'Maqalka';
 
     const handleSubmit = async (e: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -575,7 +573,13 @@ export default function LedgerPage() {
                                             <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
                                             
                                             <div className="relative z-10 pl-12 pr-4 space-y-0 text-slate-800 dark:text-slate-300">
-                                                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center mb-2">Receipt</p>
+                                                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center mb-1">Receipt</p>
+
+                                            {activeDatesForHeader.length > 0 && (
+                                                <p className="text-[9px] font-bold text-muted-foreground text-center mb-3">
+                                                    Maqalka Taariikhda {activeDatesForHeader.join(' iyo ')}
+                                                </p>
+                                            )}
 
                                             {/* Maqalka breakdown lines */}
                                             {dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0).map((entry, idx) => (
@@ -594,7 +598,7 @@ export default function LedgerPage() {
                                             {/* Reesto (Carry-over Balance) */}
                                             <div className="flex justify-between items-center py-1.5 border-b border-border/40">
                                                 <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>
-                                                    {history.length === 0 ? 'Initial Reesto' : 'Previous Balance'}
+                                                    Reesto
                                                 </span>
                                                 {fetchingDetails ? (
                                                     <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -616,7 +620,7 @@ export default function LedgerPage() {
 
                                             {/* Subtotal */}
                                             <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
-                                                <span>Subtotal</span>
+                                                <span>Lacagta Guud</span>
                                                 <span>${Math.round(subtotal).toLocaleString()}</span>
                                             </div>
 
@@ -635,13 +639,13 @@ export default function LedgerPage() {
 
                                             {/* Final Balance - double underline style */}
                                             <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
-                                                <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Lacagta Guud</span>
+                                                <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
                                                 <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                     ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
                                                 </span>
                                             </div>
                                             <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
-                                                Lacagta Guud
+                                                Reesto
                                             </p>
                                             </div>
                                         </div>
@@ -667,7 +671,7 @@ export default function LedgerPage() {
                 <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border p-4 md:hidden z-50 animate-in slide-in-from-bottom duration-500 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
                     <div className="flex items-center gap-4 max-w-lg mx-auto">
                         <div className="flex-1">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">Lacagta Guud</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">Reesto</p>
                             <p className={`text-xl font-black leading-none ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                 ${Math.round(finalLacagtaGuud).toLocaleString()}
                             </p>

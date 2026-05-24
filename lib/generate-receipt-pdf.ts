@@ -112,7 +112,7 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
     if (data.openingBalance !== 0) {
         doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
-        doc.text('Reesto (Previous)', margin, y);
+        doc.text('Reesto', margin, y);
         const sign = data.openingBalance > 0 ? '+' : '';
         doc.text(`${sign}$${Math.round(data.openingBalance).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
         y += 4;
@@ -123,7 +123,7 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
     adjustmentEntries.forEach(entry => {
         doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
-        doc.text(entry.note || 'Initial Reesto', margin, y);
+        doc.text(entry.note || 'Reesto', margin, y);
         doc.text(`+$${Math.round(entry.amount).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
         y += 3.5;
     });
@@ -136,7 +136,7 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     const subtotal = data.totalMaqalka + data.totalAdjustment + data.openingBalance;
-    doc.text('Subtotal Owed', margin, y);
+    doc.text('Lacagta Guud', margin, y);
     doc.text(`$${Math.round(subtotal).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
     y += 5;
 
@@ -171,7 +171,7 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('LACAGTA GUUD', margin, y);
+    doc.text('REESTO', margin, y);
     doc.text(`$${Math.abs(Math.round(data.closingBalance)).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
     y += 3.5;
 
@@ -232,12 +232,12 @@ export function shareReceiptToWhatsApp(data: ReceiptData, phone?: string) {
     // Previous balance
     if (data.openingBalance !== 0) {
         const sign = data.openingBalance > 0 ? '+' : '';
-        lines.push(`🔄 Reesto (Previous): ${sign}$${Math.round(data.openingBalance).toLocaleString()}`);
+        lines.push(`🔄 Reesto: ${sign}$${Math.round(data.openingBalance).toLocaleString()}`);
     }
 
     // Subtotal
     const subtotal = data.totalMaqalka + data.totalAdjustment + data.openingBalance;
-    lines.push(`📋 *Subtotal Owed: $${Math.round(subtotal).toLocaleString()}*`);
+    lines.push(`📋 *Lacagta Guud: $${Math.round(subtotal).toLocaleString()}*`);
 
     // Payments
     const payments = data.entries.filter(e => e.type === 'PAYMENT');
@@ -254,7 +254,7 @@ export function shareReceiptToWhatsApp(data: ReceiptData, phone?: string) {
     lines.push('');
     lines.push('═══════════════');
     const emoji = data.closingBalance > 0 ? '🔴' : '🟢';
-    lines.push(`${emoji} *LACAGTA GUUD: $${Math.abs(Math.round(data.closingBalance)).toLocaleString()}*`);
+    lines.push(`${emoji} *REESTO: $${Math.abs(Math.round(data.closingBalance)).toLocaleString()}*`);
     if (data.closingBalance > 0) {
         lines.push('_(Amount Owed)_');
     } else {
