@@ -421,9 +421,9 @@ export default function DailyBookPage() {
                                                             delete newEntries[customer.id];
                                                             setEntries(newEntries);
                                                         }}
-                                                        className="h-6 w-6 p-0 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-0"
+                                                        className="h-8 w-8 md:h-6 md:w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                                                     >
-                                                        <Trash2 className="w-3 h-3" />
+                                                        <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
                                                     </Button>
                                                 )}
                                             </div>
@@ -576,17 +576,17 @@ export default function DailyBookPage() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                            <div className="flex gap-1 md:gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity mt-2 md:mt-0" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center gap-2 mt-3 md:mt-0 border-t border-border/50 pt-3 md:border-0 md:pt-0" onClick={(e) => e.stopPropagation()}>
                                                 <Button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleEditEntry(entry);
                                                     }}
-                                                    variant="secondary"
+                                                    variant="outline"
                                                     size="sm"
-                                                    className="text-primary h-8"
+                                                    className="flex-1 md:flex-none text-primary border-primary/20 hover:bg-primary/10 h-10 md:h-8"
                                                 >
-                                                    <Edit className="w-3.5 h-3.5 md:mr-1" /> <span className="hidden md:inline">Edit</span>
+                                                    <Edit className="w-4 h-4 mr-2 md:mr-1" /> <span>Edit</span>
                                                 </Button>
                                                 <Button
                                                     onClick={(e) => {
@@ -603,9 +603,9 @@ export default function DailyBookPage() {
                                                     }}
                                                     variant="destructive"
                                                     size="sm"
-                                                    className="h-8 bg-red-500/10 text-red-600 hover:bg-red-500 hover:text-white"
+                                                    className="flex-1 md:flex-none h-10 md:h-8"
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5 md:mr-1" /> <span className="hidden md:inline">Delete</span>
+                                                    <Trash2 className="w-4 h-4 mr-2 md:mr-1" /> <span>Delete</span>
                                                 </Button>
                                             </div>
                                         </div>
