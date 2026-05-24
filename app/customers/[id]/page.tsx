@@ -53,6 +53,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { downloadReceiptPDF, shareReceiptToWhatsApp } from '@/lib/generate-receipt-pdf';
+import { MessageCircle, FileDown } from 'lucide-react';
 
 interface Customer {
     id: string;
@@ -514,7 +516,50 @@ export default function CustomerDetailPage() {
                                             <p className="text-[10px] uppercase mt-2">{receipt.titleString}</p>
                                         </div>
 
-                                        <div className="px-3 py-2 flex justify-end gap-2 bg-muted/10 border-b border-border/30 print:hidden">
+                                        <div className="px-3 py-2 flex justify-end gap-2 bg-muted/10 border-b border-border/30 print:hidden flex-wrap">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-[10px] font-black uppercase tracking-widest gap-1.5 rounded-full border-emerald-500/20 bg-background hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                                                onClick={() => {
+                                                    downloadReceiptPDF({
+                                                        customerName: customer.name,
+                                                        customerCode: customer.customer_code,
+                                                        titleString: receipt.titleString || '',
+                                                        entries: receipt.entries,
+                                                        totalMaqalka: receipt.totalMaqalka,
+                                                        totalPaid: receipt.totalPaid,
+                                                        totalAdjustment: receipt.totalAdjustment,
+                                                        openingBalance: receipt.openingBalance,
+                                                        closingBalance: receipt.closingBalance,
+                                                    });
+                                                    toast.success('PDF Downloaded!');
+                                                }}
+                                            >
+                                                <FileDown className="w-3 h-3" />
+                                                PDF
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-[10px] font-black uppercase tracking-widest gap-1.5 rounded-full border-green-500/20 bg-background hover:bg-green-500 hover:text-white transition-all shadow-sm"
+                                                onClick={() => {
+                                                    shareReceiptToWhatsApp({
+                                                        customerName: customer.name,
+                                                        customerCode: customer.customer_code,
+                                                        titleString: receipt.titleString || '',
+                                                        entries: receipt.entries,
+                                                        totalMaqalka: receipt.totalMaqalka,
+                                                        totalPaid: receipt.totalPaid,
+                                                        totalAdjustment: receipt.totalAdjustment,
+                                                        openingBalance: receipt.openingBalance,
+                                                        closingBalance: receipt.closingBalance,
+                                                    }, customer.phone);
+                                                }}
+                                            >
+                                                <MessageCircle className="w-3 h-3" />
+                                                WhatsApp
+                                            </Button>
                                             <Button
                                                 variant="outline"
                                                 size="sm"
@@ -522,7 +567,7 @@ export default function CustomerDetailPage() {
                                                 onClick={() => window.print()}
                                             >
                                                 <Printer className="w-3 h-3" />
-                                                Print Proof
+                                                Print
                                             </Button>
                                         </div>
                                         {receipt.kind === 'ADJUSTMENT' ? (

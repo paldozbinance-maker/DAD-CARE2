@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import { LayoutWrapper } from '@/components/layout-wrapper';
 import { ThemeProvider } from '@/components/theme-provider';
+import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,6 +23,11 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <meta name="theme-color" content="#2563EB" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="DadCare" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className={`${inter.className} h-full antialiased`}>
         <ThemeProvider
@@ -34,6 +40,7 @@ export default function RootLayout({
             {children}
           </LayoutWrapper>
           <Toaster />
+          <ServiceWorkerRegistration />
         </ThemeProvider>
       </body>
     </html>

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 interface CustomerStats {
     id: string;
@@ -88,28 +89,57 @@ export default function ReportsPage() {
     const performanceRanked = [...customers].sort((a, b) => b.performanceScore - a.performanceScore);
 
     const handleExport = () => {
-        const exportData = {
-            exportDate: new Date().toISOString(),
-            summary: { totalDebt, totalPaid, totalKg, totalCustomers: customers.length },
-            customers: customers.map(c => ({
-                name: c.name,
-                code: c.code,
-                currentDebt: c.currentDebt,
-                totalKg: c.totalKg,
-                averageDailyKg: Number(c.averageKg.toFixed(2)),
-                totalPaid: c.totalPaid,
-                performanceScore: Number(c.performanceScore.toFixed(2))
-            }))
-        };
+        try {
+            // Summary sheet data
+            const summaryData = [
+                ['DADCARE LEDGER - REPORT'],
+                ['Generated:', new Date().toLocaleDateString()],
+                [],
+                ['Total Customers', customers.length],
+                ['Total Debt', totalDebt],
+                ['Total Paid', totalPaid],
+                ['Total KG', totalKg],
+            ];
 
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `dadwork-advanced-report-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success('Advanced Report exported successfully');
+            // Customers sheet data
+            const customerRows = customers.map(c => ({
+                'Name': c.name,
+                'Code': c.code,
+                'Current Debt ($)': Number(c.currentDebt.toFixed(2)),
+                'Total KG': Number(c.totalKg.toFixed(2)),
+                'Avg Daily KG': Number(c.averageKg.toFixed(2)),
+                'Total Paid ($)': Number(c.totalPaid.toFixed(2)),
+                'Performance (%)': Number(c.performanceScore.toFixed(1)),
+            }));
+
+            // Top Debtors sheet
+            const debtorRows = [...customers]
+                .filter(c => c.currentDebt > 0)
+                .sort((a, b) => b.currentDebt - a.currentDebt)
+                .map((c, i) => ({
+                    'Rank': i + 1,
+                    'Name': c.name,
+                    'Code': c.code,
+                    'Debt ($)': Number(c.currentDebt.toFixed(2)),
+                }));
+
+            const wb = XLSX.utils.book_new();
+
+            const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+            const wsCustomers = XLSX.utils.json_to_sheet(customerRows);
+            XLSX.utils.book_append_sheet(wb, wsCustomers, 'All Customers');
+
+            const wsDebtors = XLSX.utils.json_to_sheet(debtorRows);
+            XLSX.utils.book_append_sheet(wb, wsDebtors, 'Top Debtors');
+
+            XLSX.writeFile(wb, `dadcare-report-${new Date().toISOString().split('T')[0]}.xlsx`);
+            toast.success('Excel report downloaded!');
+        } catch (e) {
+            console.error('Export failed:', e);
+            toast.error('Export failed');
+        }
     };
 
     const getPerformanceColor = (score: number) => {
@@ -153,7 +183,7 @@ export default function ReportsPage() {
                     className="border-border hover:bg-muted shadow-sm transition-all hover:scale-105"
                 >
                     <Download className="w-4 h-4 mr-2" />
-                    Export Complete Data
+                    Export Excel
                 </Button>
             </div>
 
