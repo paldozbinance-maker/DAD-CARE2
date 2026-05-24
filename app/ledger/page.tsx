@@ -424,7 +424,7 @@ export default function LedgerPage() {
                                             </div>
 
                                             <div className="space-y-4">
-
+                                                {dateEntries.map((entry, index) => (
                                                     <div key={entry.id} className="relative p-4 md:p-5 bg-background shadow-sm border border-border/60 rounded-2xl group transition-all hover:shadow-md">
                                                         <div className="flex flex-col md:grid md:grid-cols-3 gap-3 md:gap-4">
                                                             {/* Date Picker - Full width on mobile, 1 col on desktop */}
