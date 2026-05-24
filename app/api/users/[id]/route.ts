@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server';
 
 export async function PUT(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const id = params.id;
+    const { id } = await params;
     const body = await request.json();
     const supabase = await createClient();
 
@@ -26,9 +26,9 @@ export async function PUT(
 
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const id = params.id;
+    const { id } = await params;
     const supabase = await createClient();
 
     try {

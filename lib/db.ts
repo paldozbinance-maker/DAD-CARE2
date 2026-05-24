@@ -8,14 +8,18 @@ import { Pool } from 'pg';
 
 const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
+declare global {
+    var pool: Pool | undefined;
+}
+
 let pool: Pool;
 
-if (!global.pool) {
-    global.pool = new Pool({
+if (!globalThis.pool) {
+    globalThis.pool = new Pool({
         connectionString,
         ssl: { rejectUnauthorized: false }, // Required for Supabase in some envs
     });
 }
-pool = global.pool;
+pool = globalThis.pool;
 
 export default pool;

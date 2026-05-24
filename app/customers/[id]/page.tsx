@@ -89,6 +89,7 @@ interface ReceiptGroup {
     entries: Transaction[];
     totalKilos: number;
     totalMaqalka: number;
+    totalAdjustment: number;
     totalPaid: number;
     openingBalance: number;
     closingBalance: number;

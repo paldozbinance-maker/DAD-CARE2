@@ -15,7 +15,7 @@ export async function GET() {
         // 2. Get all ledger entries for aggregation
         const { data: allLedger, error: ledgerError } = await supabase
             .from('Ledger')
-            .select('customer_id, type, amount, new_debt');
+            .select('customer_id, type, amount, new_debt, kg');
 
         if (ledgerError) throw ledgerError;
 
