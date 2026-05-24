@@ -551,45 +551,42 @@ export default function DailyBookPage() {
                                         className="group transition-all hover:bg-muted/30"
                                     >
                                         {/* Entry Header - Clickable */}
-                                        <div
-                                            onClick={() => setExpandedEntry(expandedEntry === entry.date ? null : entry.date)}
-                                            className="flex items-center justify-between p-4 cursor-pointer"
-                                        >
-                                            <div className="flex items-center gap-4 flex-1">
-                                                <div className={`p-2 rounded-lg transition-colors ${expandedEntry === entry.date ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-card'}`}>
-                                                    {expandedEntry === entry.date ? (
-                                                        <ChevronDown className="w-5 h-5" />
-                                                    ) : (
-                                                        <ChevronRight className="w-5 h-5" />
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-semibold text-foreground text-lg">
-                                                        {format(new Date(entry.date), 'MMMM dd, yyyy')}
-                                                    </h4>
-                                                    <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                                                        <span className="flex items-center gap-1">
-                                                            <BookOpen className="w-3 h-3" />
-                                                            {entry.items.length} customers
-                                                        </span>
-                                                        <span className="hidden md:inline">•</span>
-                                                        <span className="font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                                                            {Math.round(entry.totalKg)} KG Total
-                                                        </span>
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between p-4 cursor-pointer">
+                                                <div className="flex items-center gap-3 md:gap-4 flex-1">
+                                                    <div className={`p-2 rounded-lg transition-colors shrink-0 ${expandedEntry === entry.date ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-card'}`}>
+                                                        {expandedEntry === entry.date ? (
+                                                            <ChevronDown className="w-5 h-5" />
+                                                        ) : (
+                                                            <ChevronRight className="w-5 h-5" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="font-semibold text-foreground text-base md:text-lg">
+                                                            {format(new Date(entry.date), 'MMM dd, yyyy')}
+                                                        </h4>
+                                                        <div className="flex flex-wrap items-center gap-1 md:gap-3 text-xs md:text-sm text-muted-foreground mt-1">
+                                                            <span className="flex items-center gap-1">
+                                                                <BookOpen className="w-3 h-3" />
+                                                                {entry.items.length} <span className="hidden md:inline">customers</span>
+                                                            </span>
+                                                            <span className="hidden md:inline">•</span>
+                                                            <span className="font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full ml-2 md:ml-0">
+                                                                {Math.round(entry.totalKg)} KG
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex gap-1 md:gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity mt-2 md:mt-0" onClick={(e) => e.stopPropagation()}>
                                                 <Button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleEditEntry(entry);
                                                     }}
-                                                    variant="ghost"
+                                                    variant="secondary"
                                                     size="sm"
-                                                    className="text-primary hover:bg-primary/10"
+                                                    className="text-primary h-8"
                                                 >
-                                                    <Edit className="w-4 h-4 mr-1" /> Edit
+                                                    <Edit className="w-3.5 h-3.5 md:mr-1" /> <span className="hidden md:inline">Edit</span>
                                                 </Button>
                                                 <Button
                                                     onClick={(e) => {
@@ -604,11 +601,11 @@ export default function DailyBookPage() {
                                                                 .catch(err => toast.error('Failed to delete'));
                                                         }
                                                     }}
-                                                    variant="ghost"
+                                                    variant="destructive"
                                                     size="sm"
-                                                    className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
+                                                    className="h-8 bg-red-500/10 text-red-600 hover:bg-red-500 hover:text-white"
                                                 >
-                                                    <Trash2 className="w-4 h-4 mr-1" /> Delete
+                                                    <Trash2 className="w-3.5 h-3.5 md:mr-1" /> <span className="hidden md:inline">Delete</span>
                                                 </Button>
                                             </div>
                                         </div>
@@ -617,56 +614,43 @@ export default function DailyBookPage() {
                                         {expandedEntry === entry.date && (
                                             <div className="bg-muted/10 p-4 border-t border-border animate-in slide-in-from-top-2 duration-200">
                                                 <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
-                                                    <Table>
-                                                        <TableHeader>
-                                                            <TableRow className="bg-muted/50 border-b border-border">
-                                                                <TableHead className="pl-6 text-muted-foreground">Customer Code</TableHead>
-                                                                <TableHead className="text-muted-foreground">Customer Name</TableHead>
-                                                                <TableHead className="text-right pr-6 text-muted-foreground">Quantity</TableHead>
-                                                            </TableRow>
-                                                        </TableHeader>
-                                                        <TableBody>
-                                                            {entry.items.map((item) => (
-                                                                <TableRow key={item.customer_id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                                                                    <TableCell className="pl-6 font-mono text-xs text-muted-foreground">
-                                                                        {item.customer?.customer_code || 'N/A'}
-                                                                    </TableCell>
-                                                                    <TableCell className="font-medium text-foreground">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <Avatar className="h-7 w-7 border border-border/50">
-                                                                                <AvatarImage src={item.customer?.avatar_url || ''} alt={item.customer?.name || 'Customer'} />
-                                                                                <AvatarFallback className={`${item.customer?.gender === 'Male' ? 'bg-blue-500/10 text-blue-500' :
-                                                                                    item.customer?.gender === 'Female' ? 'bg-pink-500/10 text-pink-500' :
-                                                                                        'bg-slate-500/10 text-slate-500'
-                                                                                    }`}>
-                                                                                    <User className="h-3.5 w-3.5" />
-                                                                                </AvatarFallback>
-                                                                            </Avatar>
-                                                                            {item.customer?.name || 'Unknown'}
-                                                                        </div>
-                                                                    </TableCell>
-                                                                    <TableCell className="text-right pr-6">
-                                                                        {item.present === false ? (
-                                                                            <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-600 text-xs font-bold">Absent</span>
-                                                                        ) : (
-                                                                            <span className="font-bold text-primary">{Math.round(item.kg)} KG</span>
-                                                                        )}
-                                                                        {item.note && (
-                                                                            <div className="text-xs text-muted-foreground mt-1">{item.note}</div>
-                                                                        )}
-                                                                    </TableCell>
-                                                                </TableRow>
-                                                            ))}
-                                                            <TableRow className="bg-primary/5">
-                                                                <TableCell colSpan={2} className="pl-6 font-bold text-right text-foreground">
-                                                                    Total Daily Quantity
-                                                                </TableCell>
-                                                                <TableCell className="text-right pr-6 font-extrabold text-primary text-lg">
-                                                                    {Math.round(entry.totalKg)} KG
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        </TableBody>
-                                                    </Table>
+                                                    <div className="divide-y divide-border">
+                                                        {entry.items.map((item) => (
+                                                            <div key={item.customer_id} className="flex items-center justify-between p-3 hover:bg-muted/30">
+                                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                                    <Avatar className="h-8 w-8 md:h-10 md:w-10 border border-border/50 shrink-0">
+                                                                        <AvatarImage src={item.customer?.avatar_url || ''} alt={item.customer?.name || 'Customer'} />
+                                                                        <AvatarFallback className={`${item.customer?.gender === 'Male' ? 'bg-blue-500/10 text-blue-500' :
+                                                                            item.customer?.gender === 'Female' ? 'bg-pink-500/10 text-pink-500' :
+                                                                                'bg-slate-500/10 text-slate-500'
+                                                                            }`}>
+                                                                            <User className="h-4 w-4" />
+                                                                        </AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div className="flex flex-col overflow-hidden">
+                                                                        <span className="font-semibold text-sm text-foreground truncate">{item.customer?.name || 'Unknown'}</span>
+                                                                        <span className="text-xs text-muted-foreground font-mono">#{item.customer?.customer_code || 'N/A'}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right shrink-0 ml-2">
+                                                                    {item.present === false ? (
+                                                                        <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase tracking-wider">Absent</span>
+                                                                    ) : (
+                                                                        <span className="font-black text-primary text-base md:text-lg">{Math.round(item.kg)} <span className="text-[10px] opacity-60">KG</span></span>
+                                                                    )}
+                                                                    {item.note && (
+                                                                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[100px] md:max-w-[150px]">{item.note}</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        
+                                                        {/* Summary Footer */}
+                                                        <div className="bg-primary/5 p-4 flex items-center justify-between border-t-2 border-primary/10">
+                                                            <span className="font-bold text-sm text-foreground uppercase tracking-wider">Total Quantity</span>
+                                                            <span className="font-black text-primary text-xl">{Math.round(entry.totalKg)} <span className="text-xs opacity-60">KG</span></span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
