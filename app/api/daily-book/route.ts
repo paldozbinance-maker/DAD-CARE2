@@ -97,8 +97,25 @@ export async function DELETE(request: Request) {
 
     const supabase = await createClient();
     try {
-        const { error } = await supabase.from('DailyBook').delete().eq('date', dateStr);
-        if (error) throw error;
+        // First get the book ID
+        const { data: book, error: findError } = await supabase
+            .from('DailyBook')
+            .select('id')
+            .eq('date', dateStr)
+            .single();
+
+        if (findError || !book) {
+            return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+        }
+
+        // Must delete child items first to avoid foreign key constraint errors!
+        const { error: itemsError } = await supabase.from('DailyBookItem').delete().eq('daily_book_id', book.id);
+        if (itemsError) throw itemsError;
+
+        // Now safe to delete the main book
+        const { error: bookError } = await supabase.from('DailyBook').delete().eq('id', book.id);
+        if (bookError) throw bookError;
+
         return NextResponse.json({ success: true });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -593,12 +593,13 @@ export default function DailyBookPage() {
                                                         e.stopPropagation();
                                                         if (confirm('Delete this entry?')) {
                                                             fetch(`/api/daily-book?date=${entry.date}`, { method: 'DELETE' })
-                                                                .then(() => {
+                                                                .then(async (res) => {
+                                                                    if (!res.ok) throw new Error(await res.text());
                                                                     const updated = savedEntries.filter(e => e.date !== entry.date);
                                                                     setSavedEntries(updated);
                                                                     toast.success('Entry deleted');
                                                                 })
-                                                                .catch(err => toast.error('Failed to delete'));
+                                                                .catch(err => toast.error('Failed to delete: ' + (err.message || 'Server error')));
                                                         }
                                                     }}
                                                     variant="destructive"
