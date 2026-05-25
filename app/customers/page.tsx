@@ -49,26 +49,40 @@ export default function CustomersPage() {
 
     return (
         <div className="space-y-4 max-w-2xl mx-auto px-1 md:px-0">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary" />
-                    <h2 className="text-lg font-black tracking-tight text-foreground">Customers</h2>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                        {loading ? '—' : customers.length}
-                    </span>
+            {/* Header / Cover */}
+            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm mb-6">
+                {/* Decorative background elements */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-[80px] pointer-events-none" />
+                
+                <div className="relative z-10 flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
+                            <Users className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Customers</h2>
+                        <span className="text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full ml-2">
+                            {loading ? '—' : customers.length}
+                        </span>
+                    </div>
+                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
+                        Manage all registered clients, review balances, and find individuals in your ledger instantly.
+                    </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                
+                <div className="relative z-10 flex flex-col sm:flex-row gap-3 self-stretch md:self-center">
+                    <div className="relative flex-1 sm:w-[220px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
-                            placeholder="Search..."
+                            placeholder="Search by name or ID..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-8 h-8 text-xs w-[160px] bg-background border-input focus:border-primary"
+                            className="pl-9 h-11 bg-background/50 backdrop-blur-sm border-border/60 focus:border-primary transition-colors w-full rounded-xl"
                         />
                     </div>
-                    <AddCustomerDialog onSuccess={loadCustomers} />
+                    <div className="shrink-0 flex items-center">
+                        <AddCustomerDialog onSuccess={loadCustomers} />
+                    </div>
                 </div>
             </div>
 

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info } from 'lucide-react';
+import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info, BookOpen } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -277,7 +277,7 @@ export default function LedgerPage() {
                 type: 'ADJUSTMENT',
                 date: format(new Date(), 'yyyy-MM-dd'),
                 amount: adjustmentAmount,
-                note: "Initial Debt Setup"
+                note: "Reesto"
             });
         }
 
@@ -339,13 +339,22 @@ export default function LedgerPage() {
 
     return (
         <div className="space-y-8 pb-20">
-            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border">
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px]" />
-                <div className="relative z-10">
-                    <h2 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">Buuga Maqalka</h2>
-                    <p className="text-muted-foreground text-sm mt-1 flex items-center gap-2">
-                        <Lock className="w-3 h-3" />
-                        Manually record kilos and payments into master ledger
+            {/* Header / Cover */}
+            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
+                {/* Decorative background elements */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-[80px] pointer-events-none" />
+                
+                <div className="relative z-10 flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
+                            <BookOpen className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Buuga Maqalka</h2>
+                    </div>
+                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1 flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-muted-foreground/70" />
+                        Manually record kilos and payments into master ledger.
                     </p>
                 </div>
             </div>

@@ -66,14 +66,23 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto w-full px-1 md:px-0">
-            {/* Header */}
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
-                    Settings
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                    Manage your system preferences
-                </p>
+            {/* Header / Cover */}
+            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm mb-6">
+                {/* Decorative background elements */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-slate-500/10 rounded-full blur-[80px] pointer-events-none" />
+                
+                <div className="relative z-10 flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
+                            <Settings className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Settings</h2>
+                    </div>
+                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
+                        Manage your system preferences, business configurations, themes, and data backups.
+                    </p>
+                </div>
             </div>
 
             <Tabs defaultValue="business" className="w-full">

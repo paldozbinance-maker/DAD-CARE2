@@ -14,7 +14,8 @@ import {
     Award,
     AlertTriangle,
     Scale,
-    DollarSign
+    DollarSign,
+    BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -167,24 +168,34 @@ export default function ReportsPage() {
 
     return (
         <div className="space-y-6 pb-20 max-w-4xl mx-auto w-full px-1 md:px-0">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
-                        Advanced Reports
-                    </h1>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Deep insights into customer behavior & performance
+            {/* Header / Cover */}
+            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
+                {/* Decorative background elements */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none" />
+                
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
+                            <BarChart3 className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Advanced Reports</h2>
+                    </div>
+                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
+                        Deep insights into customer behavior, ledger history, and overall business performance.
                     </p>
                 </div>
-                <Button
-                    onClick={handleExport}
-                    variant="outline"
-                    className="border-border hover:bg-muted shadow-sm transition-all hover:scale-105"
-                >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Excel
-                </Button>
+                
+                <div className="relative z-10 flex self-start md:self-center">
+                    <Button
+                        onClick={handleExport}
+                        variant="default"
+                        className="h-11 rounded-xl px-5 font-black uppercase tracking-wider text-xs transition-all bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5"
+                    >
+                        <Download className="w-4 h-4 mr-2 text-current opacity-80" />
+                        Export Excel
+                    </Button>
+                </div>
             </div>
 
             {/* Summary Cards */}

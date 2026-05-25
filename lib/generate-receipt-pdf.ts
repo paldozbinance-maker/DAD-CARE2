@@ -123,7 +123,7 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
     adjustmentEntries.forEach(entry => {
         doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
-        doc.text(entry.note || 'Reesto', margin, y);
+        doc.text('Reesto', margin, y);
         doc.text(`+$${Math.round(entry.amount).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
         y += 3.5;
     });
@@ -229,11 +229,16 @@ export function shareReceiptToWhatsApp(data: ReceiptData, phone?: string) {
         lines.push('');
     }
 
-    // Previous balance
+    // Previous balance & Adjustments
     if (data.openingBalance !== 0) {
         const sign = data.openingBalance > 0 ? '+' : '';
         lines.push(`🔄 Reesto: ${sign}$${Math.round(data.openingBalance).toLocaleString()}`);
     }
+    
+    const adjustments = data.entries.filter(e => e.type === 'ADJUSTMENT');
+    adjustments.forEach(entry => {
+        lines.push(`🔄 Reesto: +$${Math.round(entry.amount).toLocaleString()}`);
+    });
 
     // Subtotal
     const subtotal = data.totalMaqalka + data.totalAdjustment + data.openingBalance;

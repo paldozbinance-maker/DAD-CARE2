@@ -243,30 +243,40 @@ export default function DailyBookPage() {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto px-1 md:px-0">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-yellow-200 bg-clip-text text-transparent">
-                        Daily Book
-                    </h2>
-                    <p className="text-muted-foreground text-sm mt-1">Record and manage daily product entries</p>
+            {/* Header / Cover */}
+            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
+                {/* Decorative background elements */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
+                
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
+                            <BookOpen className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Daily Book</h2>
+                    </div>
+                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
+                        Record and manage daily product entries, attendance, and notes for all customers in one centralized location.
+                    </p>
                 </div>
-                <div className="flex gap-2">
+                
+                <div className="relative z-10 flex gap-3 self-start md:self-center">
                     <Button
                         variant={viewMode === 'edit' ? 'default' : 'outline'}
                         onClick={() => setViewMode('edit')}
-                        className={viewMode === 'edit' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90' : 'border-border text-primary hover:bg-accent hover:text-accent-foreground'}
+                        className={`h-11 rounded-xl px-5 font-black uppercase tracking-wider text-xs transition-all ${viewMode === 'edit' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5' : 'border-border/60 bg-background/50 backdrop-blur-sm text-foreground hover:bg-accent'}`}
                     >
-                        <Plus className="w-4 h-4 mr-2" />
+                        <Plus className="w-4 h-4 mr-2 text-current opacity-80" />
                         New Entry
                     </Button>
                     <Button
                         variant={viewMode === 'details' ? 'default' : 'outline'}
                         onClick={() => setViewMode('details')}
-                        className={viewMode === 'details' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90' : 'border-border text-primary hover:bg-accent hover:text-accent-foreground'}
+                        className={`h-11 rounded-xl px-5 font-black uppercase tracking-wider text-xs transition-all ${viewMode === 'details' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5' : 'border-border/60 bg-background/50 backdrop-blur-sm text-foreground hover:bg-accent'}`}
                     >
-                        <FileText className="w-4 h-4 mr-2" />
-                        History ({savedEntries.length})
+                        <FileText className="w-4 h-4 mr-2 text-current opacity-80" />
+                        History <span className="ml-1.5 opacity-70">({savedEntries.length})</span>
                     </Button>
                 </div>
             </div>

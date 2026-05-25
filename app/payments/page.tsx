@@ -85,19 +85,23 @@ export default function PaymentsPage() {
 
     return (
         <div className="space-y-5 md:space-y-6 max-w-3xl mx-auto w-full px-1 md:px-0">
-            {/* Header */}
-            <div>
-                <div className="flex items-center gap-2 mb-1">
-                    <div className="p-1.5 rounded-lg bg-emerald-500/10">
-                        <Wallet className="h-4 w-4 text-emerald-500" />
+            {/* Header / Cover */}
+            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm mb-2">
+                {/* Decorative background elements */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none" />
+                
+                <div className="relative z-10 flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
+                            <Wallet className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Lacagaha</h2>
                     </div>
-                    <h1 className="text-xl md:text-2xl font-black text-foreground tracking-tight">
-                        Lacagaha
-                    </h1>
+                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
+                        Track and manage all customer payments securely.
+                    </p>
                 </div>
-                <p className="text-xs md:text-sm text-muted-foreground ml-9">
-                    Track and manage customer payments
-                </p>
             </div>
 
             {/* Stats */}
