@@ -303,16 +303,19 @@ export default function CustomerDetailPage() {
 
     const handleDeleteCustomer = async () => {
         if (!customer) return;
-        if (confirm(`Delete ${customer.name}? This removes ALL their data permanently.`)) {
-            try {
-                const res = await fetch(`/api/customers?id=${customerId}`, { method: 'DELETE' });
-                if (res.ok) {
-                    toast.success(`${customer.name} deleted`);
-                    router.push('/customers');
-                }
-            } catch {
-                toast.error('Network error');
+        const userInput = prompt(`Are you sure you want to delete ${customer.name}? This removes ALL their data permanently. Type "DELETE" to confirm:`);
+        if (userInput !== 'DELETE') {
+            if (userInput !== null) toast.error('Confirmation failed. Customer not deleted.');
+            return;
+        }
+        try {
+            const res = await fetch(`/api/customers?id=${customerId}`, { method: 'DELETE' });
+            if (res.ok) {
+                toast.success(`${customer.name} deleted`);
+                router.push('/customers');
             }
+        } catch {
+            toast.error('Network error');
         }
     };
 
