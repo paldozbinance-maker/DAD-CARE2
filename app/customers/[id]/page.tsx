@@ -281,7 +281,11 @@ export default function CustomerDetailPage() {
     };
 
     const handleClearAllHistory = async () => {
-        if (!confirm('Are you sure you want to DELETE ALL ledger history for this customer? This cannot be undone.')) return;
+        const userInput = prompt('Are you sure you want to DELETE ALL ledger history for this customer? This cannot be undone. Type "DELETE" to confirm:');
+        if (userInput !== 'DELETE') {
+            if (userInput !== null) toast.error('Confirmation failed. History not cleared.');
+            return;
+        }
         setUpdating(true);
         try {
             const res = await fetch(`/api/ledger?customerId=${customerId}`, {
