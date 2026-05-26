@@ -171,7 +171,7 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('REESTO', margin, y);
+    doc.text(data.totalPaid > 0 ? 'REESTO' : 'LACAGTA GUUD', margin, y);
     doc.text(`$${Math.abs(Math.round(data.closingBalance)).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
     y += 3.5;
 
@@ -259,7 +259,7 @@ export function shareReceiptToWhatsApp(data: ReceiptData, phone?: string) {
     lines.push('');
     lines.push('═══════════════');
     const emoji = data.closingBalance > 0 ? '🔴' : '🟢';
-    lines.push(`${emoji} *REESTO: $${Math.abs(Math.round(data.closingBalance)).toLocaleString()}*`);
+    lines.push(`${emoji} *${data.totalPaid > 0 ? 'REESTO' : 'LACAGTA GUUD'}: $${Math.abs(Math.round(data.closingBalance)).toLocaleString()}*`);
     if (data.closingBalance > 0) {
         lines.push('_(Amount Owed)_');
     } else {

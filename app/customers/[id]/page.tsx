@@ -458,11 +458,9 @@ export default function CustomerDetailPage() {
                             <p className={`text-lg sm:text-xl font-black leading-none ${summary.currentBalance > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                 ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
                             </p>
-                            {summary.currentBalance > 0 ? (
-                                <span className="text-[8px] uppercase font-bold text-destructive/70">Reesto</span>
-                            ) : (
-                                <span className="text-[8px] uppercase font-bold text-emerald-500/70">Settled (Reesto)</span>
-                            )}
+                            <span className={`text-[8px] uppercase font-bold ${summary.currentBalance > 0 ? 'text-destructive/70' : 'text-emerald-500/70'}`}>
+                                {summary.totalPaid > 0 ? 'Reesto' : 'Lacagta Guud'}
+                            </span>
                         </div>
                     </div>
                 </CardContent>
@@ -571,10 +569,7 @@ export default function CustomerDetailPage() {
                                             </Button>
                                         </div>
                                         {receipt.kind === 'ADJUSTMENT' ? (
-                                            <div className="px-4 py-3 bg-amber-500/5 text-center">
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-amber-600/60 mb-0.5">Reesto</p>
-                                                <p className="text-lg font-black text-amber-600">${Math.round(receipt.entries[0].amount).toLocaleString()}</p>
-                                                <p className="text-[10px] text-muted-foreground italic">"Reesto"</p>
+                                            <div>
                                             </div>
                                         ) : (
                                             <div className="relative overflow-hidden bg-[#fdfbf7] dark:bg-[#1e1c18] font-mono text-[11px] pb-4 rounded-b-lg border-t border-border/40 shadow-inner">
@@ -640,9 +635,11 @@ export default function CustomerDetailPage() {
                                                         </>
                                                     )}
 
-                                                    {/* 6. Final Reesto (remaining balance after payments) */}
-                                                    <div className="flex justify-between items-center pt-2.5 mt-2 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
-                                                        <span className="font-black text-xs uppercase tracking-tighter text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                    {/* 6. Final Balance */}
+                                                    <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
+                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">
+                                                            {receipt.totalPaid > 0 ? 'Reesto' : 'Lacagta Guud'}
+                                                        </span>
                                                         <span className={`text-lg font-black ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                             ${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
                                                         </span>

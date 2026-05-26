@@ -239,7 +239,7 @@ export default function LedgerPage() {
         return sum + (isNaN(amount) ? 0 : amount);
     }, 0);
 
-    const currentReesto = history.length === 0 ? (parseFloat(adjustmentAmount) || 0) : summary.currentBalance;
+    const currentReesto = summary.currentBalance === 0 ? (parseFloat(adjustmentAmount) || 0) : summary.currentBalance;
     const subtotal = productGrandTotal + currentReesto;
     const finalLacagtaGuud = subtotal - activePaymentAmount;
 
@@ -260,7 +260,7 @@ export default function LedgerPage() {
         const validEntries = dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0);
         const validPayments = paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0);
 
-        if (validEntries.length === 0 && validPayments.length === 0 && !(history.length === 0 && parseFloat(adjustmentAmount) > 0)) {
+        if (validEntries.length === 0 && validPayments.length === 0 && !(summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) {
             toast.error('No valid data to save');
             return;
         }
@@ -272,7 +272,7 @@ export default function LedgerPage() {
         const items = [];
 
         // Initial setup if first time
-        if (history.length === 0 && parseFloat(adjustmentAmount) > 0) {
+        if (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0) {
             items.push({
                 type: 'ADJUSTMENT',
                 date: format(new Date(), 'yyyy-MM-dd'),
@@ -605,27 +605,25 @@ export default function LedgerPage() {
                                             </div>
 
                                             {/* Reesto (Carry-over Balance) */}
-                                            <div className="flex justify-between items-center py-1.5 border-b border-border/40">
-                                                <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>
-                                                    Reesto
-                                                </span>
-                                                {fetchingDetails ? (
-                                                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
-                                                ) : history.length === 0 ? (
+                                            {(currentReesto !== 0 || summary.currentBalance === 0) && (
+                                                <div className="flex justify-between items-center py-1.5 border-b border-border/40">
+                                                  <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto > 0 ? 'Reesto' : 'Reesto'}</span>
+                                                  {summary.currentBalance === 0 ? (
                                                     <Input
-                                                        type="number"
-                                                        value={adjustmentAmount}
-                                                        onChange={e => setAdjustmentAmount(e.target.value)}
-                                                        inputMode="decimal"
-                                                        placeholder="0"
-                                                        className="h-7 w-20 text-right font-black text-xs border-primary/20 bg-background/50 px-1.5"
+                                                      type="number"
+                                                      value={adjustmentAmount}
+                                                      onChange={e => setAdjustmentAmount(e.target.value)}
+                                                      inputMode="decimal"
+                                                      placeholder="0"
+                                                      className="h-7 w-20 text-right font-black text-xs border-primary/20 bg-background/50 px-1.5"
                                                     />
-                                                ) : (
+                                                  ) : (
                                                     <span className={cn("font-black", currentReesto < 0 ? "text-emerald-600" : "text-destructive")}>
-                                                        {currentReesto < 0 ? "-" : "+"}${Math.abs(Math.round(currentReesto)).toLocaleString()}
+                                                      {currentReesto < 0 ? "-" : "+"}{Math.abs(Math.round(currentReesto)).toLocaleString()}
                                                     </span>
-                                                )}
-                                            </div>
+                                                  )}
+                                                </div>
+                                            )}
 
                                             {/* Subtotal */}
                                             <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
@@ -646,16 +644,20 @@ export default function LedgerPage() {
                                                 </>
                                             )}
 
-                                            {/* Final Balance - double underline style */}
-                                            <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
-                                                <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
-                                                <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                                    ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
-                                                </span>
-                                            </div>
-                                            <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
-                                                Reesto
-                                            </p>
+                                            {/* Final Balance - double underline style (Only if payments were made) */}
+                                            {activePaymentAmount > 0 && (
+                                                <div className="flex flex-col">
+                                                    <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
+                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                        <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
+                                                            ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
+                                                        Reesto
+                                                    </p>
+                                                </div>
+                                            )}
                                             </div>
                                         </div>
 
@@ -680,7 +682,7 @@ export default function LedgerPage() {
                 <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border p-4 md:hidden z-50 animate-in slide-in-from-bottom duration-500 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
                     <div className="flex items-center gap-4 max-w-lg mx-auto">
                         <div className="flex-1">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">Reesto</p>
+                             <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">{activePaymentAmount > 0 ? 'Reesto' : 'Lacagta Guud'}</p>
                             <p className={`text-xl font-black leading-none ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                 ${Math.round(finalLacagtaGuud).toLocaleString()}
                             </p>

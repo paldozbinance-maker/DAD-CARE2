@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     const supabase = await createClient();
     try {
@@ -12,7 +14,9 @@ export async function GET() {
                 ledger_entries:Ledger (
                     new_debt,
                     created_at,
-                    id
+                    id,
+                    type,
+                    amount
                 )
             `)
             .order('name', { ascending: true })
@@ -23,10 +27,12 @@ export async function GET() {
 
         const transformedData = (data || []).map((customer: any) => {
             const entries = customer.ledger_entries || [];
-            // Pick the first entry because we ordered by created_at DESC
+            const sortedEntries = [...entries].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            const totalPaid = entries.filter((e: any) => e.type === 'PAYMENT').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
             return {
                 ...customer,
-                current_balance: entries.length > 0 ? entries[0].new_debt : 0
+                current_balance: sortedEntries.length > 0 ? sortedEntries[0].new_debt : 0,
+                total_paid: totalPaid
             };
         });
 

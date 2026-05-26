@@ -48,7 +48,7 @@ export default function CustomersPage() {
     });
 
     return (
-        <div className="space-y-4 max-w-2xl mx-auto px-1 md:px-0">
+        <div className="space-y-4 max-w-2xl mx-auto px-1 md:px-0" suppressHydrationWarning>
             {/* Header / Cover */}
             <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm mb-6">
                 {/* Decorative background elements */}
@@ -154,10 +154,10 @@ export default function CustomersPage() {
                                     {/* Balance Info */}
                                     <div className="text-right shrink-0 min-w-[70px]">
                                         <p className={`text-sm font-black leading-none ${(customer as any).current_balance > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
-                                            ${Math.abs(Math.round((customer as any).current_balance || 0)).toLocaleString()}
+                                            ${Math.abs(Math.round((customer as any).current_balance || 0)).toLocaleString('en-US')}
                                         </p>
                                         <p className="text-[8px] font-bold uppercase tracking-tighter text-muted-foreground mt-0.5">
-                                            {(customer as any).current_balance > 0 ? 'Reesto' : 'Settled'}
+                                            {(customer as any).total_paid > 0 ? 'Reesto' : 'Lacagta Guud'}
                                         </p>
                                     </div>
 
