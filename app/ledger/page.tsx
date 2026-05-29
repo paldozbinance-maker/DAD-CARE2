@@ -32,6 +32,7 @@ interface Transaction {
     kg?: number;
     price_per_kg?: number;
     amount: number;
+    previous_debt?: number;
     new_debt: number;
     created_at?: string;
     receipt_id?: string;
