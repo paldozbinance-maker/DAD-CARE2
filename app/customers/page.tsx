@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useEffect, useState } from 'react';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { toast } from 'sonner';
-import { Phone, Search, ChevronRight, Users } from 'lucide-react';
+import { Phone, Search, ChevronRight, Users, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 interface Customer {
@@ -157,8 +157,9 @@ export default function CustomersPage() {
                                         <p className={`text-xs font-black truncate group-hover:${accentColor} transition-colors uppercase flex items-center gap-1.5`}>
                                             {customer.name}
                                             {currentUser?.assigned_customer_ids?.includes(customer.id) && (
-                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-md">
-                                                    ★ Priority
+                                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase bg-amber-500/10 text-amber-500 border border-amber-500/30 px-1.5 py-0.5 rounded-md shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                                                    <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                                                    Priority
                                                 </span>
                                             )}
                                         </p>

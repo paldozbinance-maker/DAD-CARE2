@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     Dialog,
@@ -35,6 +34,11 @@ import {
     Plus,
     Image as ImageIcon,
     Check,
+    Star,
+    Shield,
+    Palette,
+    HardDrive,
+    Pencil,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -351,220 +355,223 @@ export default function SettingsPage() {
 
     if (currentUser?.role !== 'SUPER_ADMIN' && currentUser?.role !== 'ADMIN') {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
-                <h2 className="text-2xl font-bold text-foreground">Access Denied</h2>
-                <p className="text-muted-foreground mt-2">You do not have permission to view this page.</p>
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-6">
+                <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mb-4">
+                    <Shield className="w-8 h-8 text-destructive" />
+                </div>
+                <h2 className="text-xl font-black text-foreground">Access Denied</h2>
+                <p className="text-muted-foreground mt-2 text-sm">You do not have permission to view this page.</p>
             </div>
         );
     }
 
-    return (
-        <div className="space-y-6 max-w-4xl mx-auto w-full px-1 md:px-0" suppressHydrationWarning>
-            {/* Header / Cover */}
-            <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm mb-6">
-                {/* Decorative background elements */}
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
-                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-slate-500/10 rounded-full blur-[80px] pointer-events-none" />
+    const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
 
-                <div className="relative z-10 flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
-                            <Settings className="w-6 h-6" />
-                        </div>
-                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Settings</h2>
+    return (
+        <div className="space-y-4 max-w-4xl mx-auto w-full pb-24" suppressHydrationWarning>
+            {/* Compact Header */}
+            <div className="relative px-4 pt-4 pb-3 rounded-2xl bg-card overflow-hidden border border-border/50 mx-1 shadow-sm">
+                <div className="absolute -top-20 -right-20 w-52 h-52 bg-primary/8 rounded-full blur-[80px] pointer-events-none" />
+                <div className="relative z-10 flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 shadow-inner">
+                        <Settings className="w-5 h-5 text-primary" />
                     </div>
-                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
-                        Manage your system users, business configurations, themes, and data backups.
-                    </p>
+                    <div>
+                        <h2 className="text-lg font-black text-foreground tracking-tight">Settings</h2>
+                        <p className="text-[11px] text-muted-foreground font-medium -mt-0.5">Users, theme & data</p>
+                    </div>
                 </div>
             </div>
 
-            <Tabs defaultValue="business" className="w-full">
-                <TabsList className={`bg-muted border border-border p-1 rounded-xl w-full grid gap-1 ${currentUser?.role === 'SUPER_ADMIN' ? 'grid-cols-4' : 'grid-cols-3'}`}>
-                    {currentUser?.role === 'SUPER_ADMIN' && (
+            {/* Tabs - Compact pill style */}
+            <div className="px-1">
+                <Tabs defaultValue={isSuperAdmin ? "business" : "users"} className="w-full">
+                    <TabsList className="bg-muted/60 backdrop-blur-sm border border-border/40 p-1 rounded-2xl w-full flex gap-0.5 h-auto">
+                        {isSuperAdmin && (
+                            <TabsTrigger
+                                value="business"
+                                className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
+                            >
+                                <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                                <span className="hidden xs:inline">Price</span>
+                                <span className="xs:hidden">💲</span>
+                            </TabsTrigger>
+                        )}
                         <TabsTrigger
-                            value="business"
-                            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg text-xs font-semibold py-2.5"
+                            value="users"
+                            className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
                         >
-                            <DollarSign className="w-3.5 h-3.5 mr-1.5 hidden sm:block text-primary" />
-                            Business
+                            <Users className="w-3.5 h-3.5 text-blue-500" />
+                            Users
                         </TabsTrigger>
-                    )}
-                    <TabsTrigger
-                        value="users"
-                        className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg text-xs font-semibold py-2.5"
-                    >
-                        <Users className="w-3.5 h-3.5 mr-1.5 hidden sm:block text-blue-500" />
-                        Users
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="appearance"
-                        className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg text-xs font-semibold py-2.5"
-                    >
-                        <Sun className="w-3.5 h-3.5 mr-1.5 hidden sm:block text-amber-500" />
-                        Theme
-                    </TabsTrigger>
-                    {currentUser?.role === 'SUPER_ADMIN' && (
                         <TabsTrigger
-                            value="backup"
-                            className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg text-xs font-semibold py-2.5"
+                            value="appearance"
+                            className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
                         >
-                            <Database className="w-3.5 h-3.5 mr-1.5 hidden sm:block text-emerald-500" />
-                            Backup
+                            <Palette className="w-3.5 h-3.5 text-violet-500" />
+                            Theme
                         </TabsTrigger>
-                    )}
-                </TabsList>
+                        {isSuperAdmin && (
+                            <TabsTrigger
+                                value="backup"
+                                className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
+                            >
+                                <HardDrive className="w-3.5 h-3.5 text-amber-500" />
+                                <span className="hidden xs:inline">Backup</span>
+                                <span className="xs:hidden">💾</span>
+                            </TabsTrigger>
+                        )}
+                    </TabsList>
 
-                {/* Business Settings */}
-                {currentUser?.role === 'SUPER_ADMIN' && (
-                    <TabsContent value="business">
-                        <Card className="glass-card mt-4 border border-border/60">
-                            <CardHeader className="border-b border-border">
-                                <CardTitle className="text-foreground flex items-center gap-2 text-base">
-                                    <DollarSign className="w-5 h-5 text-primary" />
-                                    Price Settings
-                                </CardTitle>
-                                <CardDescription className="text-muted-foreground">
-                                    Set the default price per kilogram for calculations
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-6 pt-6">
-                                <div className="space-y-3">
-                                    <Label className="text-sm font-medium text-foreground">
-                                        Default Price per KG ($)
-                                    </Label>
-                                    <div className="relative max-w-xs">
-                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+                    {/* ── Business Settings ── */}
+                    {isSuperAdmin && (
+                        <TabsContent value="business" className="mt-3">
+                            <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-emerald-500/5 to-transparent">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-1.5 rounded-lg bg-emerald-500/15">
+                                            <DollarSign className="w-4 h-4 text-emerald-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-foreground">Default Price</h3>
+                                            <p className="text-[10px] text-muted-foreground">Price per KG for ledger calculations</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-3 flex items-center gap-2.5">
+                                    <div className="relative flex-1">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-sm">$</div>
                                         <Input
                                             type="number"
                                             value={pricePerKg}
                                             onChange={(e) => setPricePerKg(e.target.value)}
-                                            className="pl-10 h-14 text-2xl font-bold bg-background border-border"
+                                            className="pl-7 h-11 text-xl font-black bg-background/50 border-border/60 rounded-xl text-center"
                                             step="1"
                                         />
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        This price is used as the default when processing daily book entries into the ledger.
-                                    </p>
+                                    <Button
+                                        onClick={handleSavePrice}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 rounded-xl shadow-md shadow-emerald-600/15 active:scale-95 transition-all px-5 shrink-0"
+                                    >
+                                        <Save className="w-4 h-4 mr-1.5" />
+                                        Save
+                                    </Button>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    )}
+
+                    {/* ── Users Management ── */}
+                    <TabsContent value="users" className="mt-3">
+                        <div className="space-y-3">
+                            {/* Search + Add */}
+                            <div className="flex gap-2 px-0.5">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                                    <Input
+                                        placeholder="Search users..."
+                                        value={searchUser}
+                                        onChange={e => setSearchUser(e.target.value)}
+                                        className="pl-9 bg-background/50 border-border/50 rounded-xl h-11 text-sm"
+                                    />
                                 </div>
                                 <Button
-                                    onClick={handleSavePrice}
-                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-11"
+                                    onClick={handleOpenCreateDialog}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 shrink-0 h-11 rounded-xl px-3 active:scale-95 transition-all"
                                 >
-                                    <Save className="w-4 h-4 mr-2" />
-                                    Save Price
+                                    <UserPlus className="w-4 h-4 mr-1.5" />
+                                    <span className="hidden sm:inline">Add User</span>
+                                    <span className="sm:hidden">Add</span>
                                 </Button>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                )}
-
-                {/* Users Management Tab */}
-                <TabsContent value="users">
-                    <div className="space-y-4 mt-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="relative flex-1 max-w-md">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search users..."
-                                    value={searchUser}
-                                    onChange={e => setSearchUser(e.target.value)}
-                                    className="pl-10 bg-background border-border"
-                                />
                             </div>
-                            <Button
-                                onClick={handleOpenCreateDialog}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 shrink-0 h-11"
-                            >
-                                <UserPlus className="w-4 h-4 mr-2" />
-                                Add New User
-                            </Button>
-                        </div>
 
-                        <Card className="glass-card border border-border/60 overflow-hidden">
-                            <CardHeader className="bg-muted/20 border-b border-border py-4">
-                                <CardTitle className="text-foreground text-base flex items-center gap-2">
-                                    <Users className="w-5 h-5 text-primary" />
-                                    User Management
-                                </CardTitle>
-                                <CardDescription className="text-muted-foreground">
-                                    Create login accounts, fill profiles, and assign priority customers.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-0">
+                            {/* User Cards */}
+                            <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                <div className="px-4 py-2.5 border-b border-border/40 bg-gradient-to-r from-blue-500/5 to-transparent flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-blue-500" />
+                                        <span className="text-xs font-bold text-foreground">Team Members</span>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                                        {filteredUsers.length}
+                                    </span>
+                                </div>
+
                                 {usersLoading ? (
-                                    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                                        <p className="text-xs font-semibold uppercase tracking-widest">Loading Users...</p>
+                                    <div className="flex flex-col items-center justify-center py-14 gap-3">
+                                        <Loader2 className="w-7 h-7 animate-spin text-primary" />
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading...</p>
                                     </div>
                                 ) : filteredUsers.length === 0 ? (
-                                    <div className="text-center py-16">
-                                        <User className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
-                                        <p className="text-foreground font-bold text-lg">No Users Registered</p>
-                                        <p className="text-muted-foreground text-sm mt-1 mb-6">Create credentials and profile information for system users.</p>
-                                        <Button onClick={handleOpenCreateDialog} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
-                                            <Plus className="w-4 h-4 mr-2" /> Create First User
+                                    <div className="text-center py-14 px-6">
+                                        <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                                            <User className="w-7 h-7 text-muted-foreground/40" />
+                                        </div>
+                                        <p className="text-foreground font-bold text-sm">No Users Yet</p>
+                                        <p className="text-muted-foreground text-xs mt-1 mb-4">Create user accounts for your team</p>
+                                        <Button onClick={handleOpenCreateDialog} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 active:scale-95">
+                                            <Plus className="w-3.5 h-3.5 mr-1.5" /> Create User
                                         </Button>
                                     </div>
                                 ) : (
-                                    <div className="divide-y divide-border/40">
+                                    <div className="divide-y divide-border/30">
                                         {filteredUsers.map((user) => {
                                             const hasAvatar = !!user.avatar_url;
                                             const assignedCount = user.assigned_customer_ids?.length || 0;
                                             const isUserAdmin = user.role === 'ADMIN';
 
                                             return (
-                                                <div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 gap-4 hover:bg-muted/10 transition-colors">
-                                                    {/* Profile Info */}
-                                                    <div className="flex items-center gap-4">
-                                                        <Avatar className="h-12 w-12 border border-border bg-muted shrink-0 shadow-sm">
-                                                            {hasAvatar ? (
-                                                                <AvatarImage src={user.avatar_url} className="object-cover" />
-                                                            ) : null}
-                                                            <AvatarFallback className="text-base font-black bg-primary/10 text-primary uppercase">
-                                                                {user.gender === 'Female' ? '👩' : user.gender === 'Male' ? '👨' : user.name?.charAt(0) || '👤'}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-black text-foreground text-sm uppercase">{user.name}</span>
-                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase ${isUserAdmin ? 'bg-amber-500/15 text-amber-500 border border-amber-500/35' : 'bg-blue-500/15 text-blue-500 border border-blue-500/35'}`}>
-                                                                    {user.role}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
-                                                                <span className="font-bold">@{user.username}</span>
-                                                                {user.phone && (
-                                                                    <span className="flex items-center gap-1">
-                                                                        <Phone className="w-3 h-3 text-muted-foreground/60" /> {user.phone}
-                                                                    </span>
-                                                                )}
-                                                                <span className="px-2 py-0.5 rounded-lg bg-muted text-[10px] font-bold">
-                                                                    {assignedCount} Priority Customers
-                                                                </span>
-                                                            </div>
+                                                <div key={user.id} className="flex items-center gap-3 px-3 py-3 active:bg-muted/20 transition-colors">
+                                                    {/* Avatar */}
+                                                    <Avatar className="h-11 w-11 border border-border/60 bg-muted shrink-0 shadow-sm">
+                                                        {hasAvatar ? (
+                                                            <AvatarImage src={user.avatar_url} className="object-cover" />
+                                                        ) : null}
+                                                        <AvatarFallback className="text-sm font-black bg-primary/10 text-primary uppercase">
+                                                            {user.gender === 'Female' ? '👩' : user.gender === 'Male' ? '👨' : user.name?.charAt(0) || '👤'}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+
+                                                    {/* Info */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-black text-foreground text-xs uppercase truncate">{user.name}</span>
+                                                            <span className={`shrink-0 px-1.5 py-0.5 rounded-md text-[8px] font-black tracking-wider uppercase ${isUserAdmin ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30' : 'bg-blue-500/15 text-blue-500 border border-blue-500/30'}`}>
+                                                                {user.role}
+                                                            </span>
                                                         </div>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <span className="text-[10px] font-bold text-muted-foreground">@{user.username}</span>
+                                                            {user.phone && (
+                                                                <span className="hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                                                    <Phone className="w-2.5 h-2.5" /> {user.phone}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {/* Priority stars */}
+                                                        {assignedCount > 0 && (
+                                                            <div className="flex items-center gap-1 mt-1">
+                                                                <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                                                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">{assignedCount} Priority</span>
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     {/* Actions */}
-                                                    <div className="flex items-center gap-3 shrink-0 self-end md:self-auto">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <button
                                                             onClick={() => handleOpenEditDialog(user)}
-                                                            className="border-border hover:bg-muted text-foreground text-xs font-bold px-3.5 rounded-xl"
+                                                            className="p-2 rounded-xl border border-border/50 hover:bg-muted/50 active:scale-90 transition-all"
                                                         >
-                                                            Edit
-                                                        </Button>
+                                                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                                        </button>
                                                         {user.username !== 'admin' && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
+                                                            <button
                                                                 onClick={() => handleDeleteUser(user.id, user.username)}
-                                                                className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl"
+                                                                className="p-2 rounded-xl border border-destructive/20 hover:bg-destructive/10 active:scale-90 transition-all"
                                                             >
-                                                                <Trash2 className="w-4.5 h-4.5" />
-                                                            </Button>
+                                                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -572,271 +579,283 @@ export default function SettingsPage() {
                                         })}
                                     </div>
                                 )}
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-
-                {/* Appearance Tab */}
-                <TabsContent value="appearance">
-                    <Card className="glass-card mt-4 border border-border/60">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-foreground flex items-center gap-2 text-base">
-                                <Sun className="w-5 h-5 text-primary" />
-                                Appearance
-                            </CardTitle>
-                            <CardDescription className="text-muted-foreground">
-                                Choose your preferred theme
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-6">
-                            <div className="grid grid-cols-2 gap-4 max-w-md">
-                                <button
-                                    onClick={() => setTheme('light')}
-                                    className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'light'
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-border hover:border-primary/30'
-                                        }`}
-                                >
-                                    <div className="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm">
-                                        <Sun className="h-6 w-6 text-amber-500" />
-                                    </div>
-                                    <span className="text-sm font-semibold text-foreground">Light</span>
-                                </button>
-                                <button
-                                    onClick={() => setTheme('dark')}
-                                    className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'dark'
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-border hover:border-primary/30'
-                                        }`}
-                                >
-                                    <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center shadow-sm">
-                                        <Moon className="h-6 w-6 text-blue-400" />
-                                    </div>
-                                    <span className="text-sm font-semibold text-foreground">Dark</span>
-                                </button>
                             </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                        </div>
+                    </TabsContent>
 
-                {/* Backup Tab */}
-                {currentUser?.role === 'SUPER_ADMIN' && (
-                    <TabsContent value="backup">
-                        <Card className="glass-card mt-4 border border-border/60">
-                            <CardHeader className="border-b border-border">
-                                <CardTitle className="text-foreground flex items-center gap-2 text-base">
-                                    <Database className="w-5 h-5 text-primary" />
-                                    Data Backup
-                                </CardTitle>
-                                <CardDescription className="text-muted-foreground">
-                                    Export all your business data as a backup file
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-6 pt-6">
-                                <div className="p-6 rounded-xl bg-primary/5 border border-primary/10">
-                                    <div className="flex items-start gap-4">
-                                        <div className="p-3 rounded-lg bg-primary/10">
-                                            <Download className="h-6 w-6 text-primary" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-semibold text-foreground mb-1">Export Full Backup</h3>
-                                            <p className="text-sm text-muted-foreground mb-4">
-                                                Download a complete Excel-friendly CSV backup of all customers and transactions.
-                                            </p>
-                                            <Button
-                                                onClick={handleExportCSV}
-                                                disabled={loading}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-                                            >
-                                                {loading ? (
-                                                    <>
-                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                        Exporting...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Download className="w-4 h-4 mr-2" />
-                                                        Download Backup
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </div>
+                    {/* ── Appearance ── */}
+                    <TabsContent value="appearance" className="mt-3">
+                        <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                            <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-violet-500/5 to-transparent">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="p-1.5 rounded-lg bg-violet-500/15">
+                                        <Palette className="w-4 h-4 text-violet-500" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-foreground">Appearance</h3>
+                                        <p className="text-[10px] text-muted-foreground">Choose your preferred look</p>
                                     </div>
                                 </div>
-
-                                <div className="p-6 rounded-xl bg-muted/50 border border-border">
-                                    <div className="flex items-start gap-4">
-                                        <div className="p-3 rounded-lg bg-emerald-500/10">
-                                            <Save className="h-6 w-6 text-emerald-500" />
+                            </div>
+                            <div className="p-4">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => setTheme('light')}
+                                        className={`relative p-5 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 active:scale-95 ${theme === 'light'
+                                            ? 'border-primary bg-primary/5 shadow-md shadow-primary/10'
+                                            : 'border-border/50 hover:border-primary/30 bg-background/50'
+                                            }`}
+                                    >
+                                        {theme === 'light' && (
+                                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                                <Check className="w-3 h-3 text-primary-foreground stroke-[3]" />
+                                            </div>
+                                        )}
+                                        <div className="w-14 h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
+                                            <Sun className="h-7 w-7 text-amber-500" />
                                         </div>
-                                        <div>
-                                            <h3 className="font-semibold text-foreground mb-1 italic">Security & Reliability Info</h3>
-                                            <div className="text-xs text-muted-foreground space-y-2 mt-2">
-                                                <p className="font-bold text-foreground">1. Cloud Persistence</p>
-                                                <p>Your data is stored in Supabase (Google Cloud infrastructure) with 99.9% uptime. It is not just on your phone—it is in the master cloud database.</p>
-                                                <p className="font-bold text-foreground">2. Automatic Backups</p>
-                                                <p>The database performs daily automatic backups. Even if your computer breaks, your data is safe.</p>
-                                                <p className="font-bold text-foreground">3. Proof of Record</p>
-                                                <p>Every single transaction is logged with a timestamp and a unique ID. You can download these as CSV for legal proof.</p>
+                                        <span className="text-sm font-bold text-foreground">Light</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setTheme('dark')}
+                                        className={`relative p-5 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 active:scale-95 ${theme === 'dark'
+                                            ? 'border-primary bg-primary/5 shadow-md shadow-primary/10'
+                                            : 'border-border/50 hover:border-primary/30 bg-background/50'
+                                            }`}
+                                    >
+                                        {theme === 'dark' && (
+                                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                                <Check className="w-3 h-3 text-primary-foreground stroke-[3]" />
+                                            </div>
+                                        )}
+                                        <div className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-600 flex items-center justify-center shadow-sm">
+                                            <Moon className="h-7 w-7 text-blue-400" />
+                                        </div>
+                                        <span className="text-sm font-bold text-foreground">Dark</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </TabsContent>
+
+                    {/* ── Backup ── */}
+                    {isSuperAdmin && (
+                        <TabsContent value="backup" className="mt-3">
+                            <div className="space-y-3">
+                                {/* Export Card */}
+                                <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                    <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-amber-500/5 to-transparent">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 rounded-lg bg-amber-500/15">
+                                                <Download className="w-4 h-4 text-amber-500" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-bold text-foreground">Export Data</h3>
+                                                <p className="text-[10px] text-muted-foreground">Download full CSV backup</p>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                )}
-            </Tabs>
-
-            {/* Create/Edit User Dialog */}
-            <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
-                <DialogContent className="bg-card border-border max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-foreground">
-                            {selectedUser ? <UserCheck className="w-5 h-5 text-primary" /> : <UserPlus className="w-5 h-5 text-primary" />}
-                            {selectedUser ? 'Edit User Details' : 'Add New User Profile'}
-                        </DialogTitle>
-                        <DialogDescription className="text-muted-foreground text-xs">
-                            Define login credentials, basic details, profile picture, and assign their priority customers.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 pt-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Profile Picture Upload & Preview */}
-                            <div className="space-y-2 md:col-span-2 flex flex-col items-center bg-muted/20 border border-dashed border-border/80 p-4 rounded-2xl relative overflow-hidden">
-                                <Avatar className="h-20 w-20 border-2 border-primary bg-background shadow-inner">
-                                    {userForm.avatar_url ? (
-                                        <AvatarImage src={userForm.avatar_url} className="object-cover" />
-                                    ) : null}
-                                    <AvatarFallback className="text-2xl font-black text-primary bg-primary/5 uppercase">
-                                        {userForm.gender === 'Female' ? '👩' : userForm.gender === 'Male' ? '👨' : userForm.name?.charAt(0) || '👤'}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="mt-3 flex items-center justify-center">
-                                    <Label
-                                        htmlFor="avatar-upload"
-                                        className="cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
-                                    >
-                                        <ImageIcon className="w-3.5 h-3.5" />
-                                        Upload Picture
-                                    </Label>
-                                    <input
-                                        id="avatar-upload"
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleFileChange}
-                                        className="hidden"
-                                    />
-                                    {userForm.avatar_url && (
+                                    <div className="p-4">
+                                        <p className="text-xs text-muted-foreground mb-3">
+                                            Download a complete Excel-friendly CSV backup of all customers and transactions.
+                                        </p>
                                         <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setUserForm(p => ({ ...p, avatar_url: '' }))}
-                                            className="text-destructive hover:bg-destructive/10 hover:text-destructive text-xs font-bold ml-2 h-8 px-2 rounded-lg"
+                                            onClick={handleExportCSV}
+                                            disabled={loading}
+                                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-amber-600/20 active:scale-[0.98] transition-all"
                                         >
-                                            Remove
+                                            {loading ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    Exporting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Download className="w-4 h-4 mr-2" />
+                                                    Download Backup
+                                                </>
+                                            )}
                                         </Button>
-                                    )}
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-muted-foreground mt-2">Recommended: Square format image, size under 2MB.</p>
-                            </div>
 
-                            {/* Username */}
-                            <div className="space-y-1.5">
-                                <Label className="text-foreground text-xs font-bold uppercase tracking-wider">Username *</Label>
+                                {/* Security Info */}
+                                <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                    <div className="px-4 py-3 border-b border-border/40">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 rounded-lg bg-emerald-500/15">
+                                                <Shield className="w-4 h-4 text-emerald-500" />
+                                            </div>
+                                            <h3 className="text-sm font-bold text-foreground">Security Info</h3>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 space-y-3">
+                                        {[
+                                            { title: 'Cloud Persistence', desc: 'Data stored in Supabase with 99.9% uptime.' },
+                                            { title: 'Auto Backups', desc: 'Daily automatic backups keep your data safe.' },
+                                            { title: 'Proof of Record', desc: 'Every transaction logged with timestamp & ID.' },
+                                        ].map((item, i) => (
+                                            <div key={i} className="flex gap-3 items-start">
+                                                <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                                                    <span className="text-[10px] font-black text-emerald-500">{i + 1}</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-foreground">{item.title}</p>
+                                                    <p className="text-[11px] text-muted-foreground leading-relaxed">{item.desc}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    )}
+                </Tabs>
+            </div>
+
+            {/* ── Create/Edit User Dialog ── */}
+            <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
+                <DialogContent className="bg-card border-border/50 max-w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl p-0">
+                    {/* Dialog Header */}
+                    <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-xl border-b border-border/40 px-4 py-3 rounded-t-2xl">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2 text-foreground text-sm">
+                                {selectedUser ? <UserCheck className="w-4 h-4 text-primary" /> : <UserPlus className="w-4 h-4 text-primary" />}
+                                {selectedUser ? 'Edit User' : 'New User'}
+                            </DialogTitle>
+                            <DialogDescription className="text-muted-foreground text-[10px]">
+                                Set credentials, profile & priority customers.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+
+                    <div className="px-4 pb-4 pt-2 space-y-4">
+                        {/* Avatar */}
+                        <div className="flex flex-col items-center py-3 bg-muted/20 border border-dashed border-border/60 rounded-2xl">
+                            <Avatar className="h-16 w-16 border-2 border-primary/30 bg-background shadow-inner">
+                                {userForm.avatar_url ? (
+                                    <AvatarImage src={userForm.avatar_url} className="object-cover" />
+                                ) : null}
+                                <AvatarFallback className="text-xl font-black text-primary bg-primary/5 uppercase">
+                                    {userForm.gender === 'Female' ? '👩' : userForm.gender === 'Male' ? '👨' : userForm.name?.charAt(0) || '👤'}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="mt-2 flex items-center gap-2">
+                                <Label
+                                    htmlFor="avatar-upload"
+                                    className="cursor-pointer bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-sm flex items-center gap-1 active:scale-95"
+                                >
+                                    <ImageIcon className="w-3 h-3" />
+                                    Upload
+                                </Label>
+                                <input
+                                    id="avatar-upload"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    className="hidden"
+                                />
+                                {userForm.avatar_url && (
+                                    <button
+                                        onClick={() => setUserForm(p => ({ ...p, avatar_url: '' }))}
+                                        className="text-destructive text-[10px] font-bold px-2 py-1.5 rounded-lg hover:bg-destructive/10 active:scale-95 transition-all"
+                                    >
+                                        Remove
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Form Fields - 2 column grid */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-foreground text-[10px] font-bold uppercase tracking-wider">Username *</Label>
                                 <Input
                                     value={userForm.username}
                                     onChange={e => setUserForm({ ...userForm, username: e.target.value.toLowerCase().trim() })}
-                                    placeholder="Enter username"
+                                    placeholder="username"
                                     disabled={selectedUser !== null}
-                                    className="bg-background border-border focus:border-primary text-sm h-11"
+                                    className="bg-background/50 border-border/50 text-sm h-10 rounded-xl"
                                 />
                             </div>
-
-                            {/* Password */}
-                            <div className="space-y-1.5">
-                                <Label className="text-foreground text-xs font-bold uppercase tracking-wider">Password *</Label>
+                            <div className="space-y-1">
+                                <Label className="text-foreground text-[10px] font-bold uppercase tracking-wider">Password *</Label>
                                 <Input
                                     type="password"
                                     value={userForm.password}
                                     onChange={e => setUserForm({ ...userForm, password: e.target.value })}
-                                    placeholder="Password"
-                                    className="bg-background border-border focus:border-primary text-sm h-11"
+                                    placeholder="••••••"
+                                    className="bg-background/50 border-border/50 text-sm h-10 rounded-xl"
                                 />
                             </div>
-
-                            {/* Full Name */}
-                            <div className="space-y-1.5">
-                                <Label className="text-foreground text-xs font-bold uppercase tracking-wider">Full Name *</Label>
+                            <div className="space-y-1">
+                                <Label className="text-foreground text-[10px] font-bold uppercase tracking-wider">Full Name *</Label>
                                 <Input
                                     value={userForm.name}
                                     onChange={e => setUserForm({ ...userForm, name: e.target.value })}
-                                    placeholder="Enter full name"
-                                    className="bg-background border-border focus:border-primary text-sm h-11"
+                                    placeholder="Full name"
+                                    className="bg-background/50 border-border/50 text-sm h-10 rounded-xl"
                                 />
                             </div>
-
-                            {/* Phone */}
-                            <div className="space-y-1.5">
-                                <Label className="text-foreground text-xs font-bold uppercase tracking-wider">Phone Number</Label>
+                            <div className="space-y-1">
+                                <Label className="text-foreground text-[10px] font-bold uppercase tracking-wider">Phone</Label>
                                 <Input
                                     value={userForm.phone}
                                     onChange={e => setUserForm({ ...userForm, phone: e.target.value })}
-                                    placeholder="Enter phone number"
+                                    placeholder="Phone"
                                     type="tel"
-                                    className="bg-background border-border focus:border-primary text-sm h-11"
+                                    className="bg-background/50 border-border/50 text-sm h-10 rounded-xl"
                                 />
-                            </div>
-
-                            {/* Gender */}
-                            <div className="space-y-1.5">
-                                <Label className="text-foreground text-xs font-bold uppercase tracking-wider">Gender</Label>
-                                <div className="flex gap-2">
-                                    {['Male', 'Female'].map((g) => {
-                                        const isSelected = userForm.gender === g;
-                                        return (
-                                            <button
-                                                key={g}
-                                                type="button"
-                                                onClick={() => setUserForm({ ...userForm, gender: g })}
-                                                className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${isSelected
-                                                    ? 'bg-primary/10 border-primary text-primary shadow-sm'
-                                                    : 'border-border hover:border-primary/20 text-muted-foreground bg-background/50'
-                                                    }`}
-                                            >
-                                                {g === 'Male' ? '👨 Male' : '👩 Female'}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
                             </div>
                         </div>
 
-                        {/* Customer Assignment Checklist */}
-                        <div className="space-y-2 border-t border-border pt-4">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-foreground text-xs font-black uppercase tracking-wider">
-                                    Assign Customers ({userForm.assigned_customer_ids.length} Selected)
-                                </Label>
-                                <span className="text-[10px] text-muted-foreground font-medium">Assigned customers will appear at the top of their list (Priority)</span>
+                        {/* Gender */}
+                        <div className="space-y-1.5">
+                            <Label className="text-foreground text-[10px] font-bold uppercase tracking-wider">Gender</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['Male', 'Female'].map((g) => {
+                                    const isSelected = userForm.gender === g;
+                                    return (
+                                        <button
+                                            key={g}
+                                            type="button"
+                                            onClick={() => setUserForm({ ...userForm, gender: g })}
+                                            className={`py-2.5 rounded-xl border text-xs font-bold transition-all active:scale-95 ${isSelected
+                                                ? 'bg-primary/10 border-primary text-primary shadow-sm'
+                                                : 'border-border/50 hover:border-primary/20 text-muted-foreground bg-background/50'
+                                                }`}
+                                        >
+                                            {g === 'Male' ? '👨 Male' : '👩 Female'}
+                                        </button>
+                                    );
+                                })}
                             </div>
+                        </div>
 
-                            <div className="relative mb-2">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        {/* Customer Assignment */}
+                        <div className="space-y-2 border-t border-border/40 pt-3">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-foreground text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                    Priority Customers ({userForm.assigned_customer_ids.length})
+                                </Label>
+                            </div>
+                            <p className="text-[9px] text-muted-foreground -mt-1">These customers appear first in their lists with a ★ star badge</p>
+
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground/50" />
                                 <Input
-                                    placeholder="Search customers to assign..."
+                                    placeholder="Search customers..."
                                     value={searchCustomer}
                                     onChange={e => setSearchCustomer(e.target.value)}
-                                    className="pl-8 bg-background border-border h-9 text-xs"
+                                    className="pl-7 bg-background/50 border-border/40 h-8 text-[11px] rounded-xl"
                                 />
                             </div>
 
-                            <div className="border border-border/80 rounded-2xl p-2.5 max-h-44 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-background/40 shadow-inner">
+                            <div className="border border-border/40 rounded-xl p-2 max-h-36 overflow-y-auto grid grid-cols-1 gap-1 bg-background/30 shadow-inner">
                                 {filteredCustomers.length === 0 ? (
-                                    <div className="col-span-full py-6 text-center text-xs text-muted-foreground">
-                                        No customers match your search
+                                    <div className="py-4 text-center text-[10px] text-muted-foreground">
+                                        No customers found
                                     </div>
                                 ) : (
                                     filteredCustomers.map(customer => {
@@ -846,19 +865,20 @@ export default function SettingsPage() {
                                                 key={customer.id}
                                                 type="button"
                                                 onClick={() => handleToggleCustomerAssignment(customer.id)}
-                                                className={`flex items-center gap-2 p-2 rounded-xl text-left border transition-all ${isAssigned
-                                                    ? 'bg-primary/10 border-primary/40 text-primary font-bold'
-                                                    : 'border-border/40 hover:border-border text-foreground hover:bg-muted/20'
+                                                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-left border transition-all active:scale-[0.97] ${isAssigned
+                                                    ? 'bg-amber-500/10 border-amber-500/30 text-foreground'
+                                                    : 'border-transparent hover:bg-muted/30 text-foreground'
                                                     }`}
                                             >
-                                                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${isAssigned ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30 bg-background'
+                                                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${isAssigned ? 'bg-amber-500 border-amber-500' : 'border-muted-foreground/30 bg-background'
                                                     }`}>
-                                                    {isAssigned && <Check className="w-3 h-3 stroke-[3]" />}
+                                                    {isAssigned && <Star className="w-2.5 h-2.5 text-white fill-white" />}
                                                 </div>
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="text-xs truncate uppercase leading-tight">{customer.name}</p>
+                                                    <p className="text-[11px] truncate uppercase leading-tight font-bold">{customer.name}</p>
                                                     <p className="text-[9px] text-muted-foreground leading-none mt-0.5">#{customer.customer_code}</p>
                                                 </div>
+                                                {isAssigned && <Star className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />}
                                             </button>
                                         );
                                     })
@@ -867,27 +887,27 @@ export default function SettingsPage() {
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex gap-2 border-t border-border pt-4 mt-2">
+                        <div className="grid grid-cols-2 gap-2 border-t border-border/40 pt-3">
                             <Button
                                 variant="outline"
                                 onClick={() => setIsUserDialogOpen(false)}
-                                className="flex-1 border-border rounded-xl font-bold h-11"
+                                className="border-border/50 rounded-xl font-bold h-11 active:scale-95 transition-all"
                                 disabled={loading}
                             >
                                 Cancel
                             </Button>
                             <Button
                                 onClick={handleSaveUser}
-                                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl h-11 shadow-md shadow-primary/10"
+                                className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl h-11 shadow-md shadow-primary/10 active:scale-95 transition-all"
                                 disabled={loading}
                             >
                                 {loading ? (
                                     <>
-                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                        <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
                                         Saving...
                                     </>
                                 ) : (
-                                    'Save Profile'
+                                    'Save'
                                 )}
                             </Button>
                         </div>

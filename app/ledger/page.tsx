@@ -188,7 +188,7 @@ export default function LedgerPage() {
 
     const sortedCustomers = useMemo(() => {
         if (!currentUser?.assigned_customer_ids?.length) return allCustomers;
-        
+
         const priorityIds = currentUser.assigned_customer_ids;
         const priorityCustomers: typeof allCustomers = [];
         const otherCustomers: typeof allCustomers = [];
@@ -225,7 +225,7 @@ export default function LedgerPage() {
 
     const lastReceiptGroup = useMemo(() => {
         if (!history || history.length === 0) return null;
-        
+
         const sortedHistory = [...history].sort((a, b) => {
             const timeA = new Date(a.created_at || 0).getTime();
             const timeB = new Date(b.created_at || 0).getTime();
@@ -234,9 +234,9 @@ export default function LedgerPage() {
 
         const latestTxn = sortedHistory[0];
         if (!latestTxn) return null;
-        
+
         const latestReceiptId = latestTxn.receipt_id;
-        
+
         let lastGroupTxns: Transaction[] = [];
         if (latestReceiptId) {
             lastGroupTxns = sortedHistory.filter(t => t.receipt_id === latestReceiptId);
@@ -253,21 +253,21 @@ export default function LedgerPage() {
                 }
             }
         }
-        
+
         if (lastGroupTxns.length === 0) return null;
-        
+
         const sortedGroup = [...lastGroupTxns].reverse();
-        
+
         const totalKilos = lastGroupTxns.reduce((sum, t) => sum + (t.kg || 0), 0);
         const totalMaqalka = lastGroupTxns.filter(t => t.type === 'PRODUCT').reduce((sum, t) => sum + (t.amount || 0), 0);
         const totalPaid = lastGroupTxns.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
         const totalAdjustment = lastGroupTxns.filter(t => t.type === 'ADJUSTMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
-        
+
         const firstTxn = sortedGroup[0];
         const lastTxnInGroup = sortedGroup[sortedGroup.length - 1];
         const openingBalance = firstTxn.previous_debt || 0;
         const closingBalance = lastTxnInGroup.new_debt;
-        
+
         const productDates = sortedGroup.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
         let titleString = format(new Date(lastTxnInGroup.created_at || new Date()), 'EEEE, MMMM dd, yyyy');
 
@@ -278,7 +278,7 @@ export default function LedgerPage() {
             else if (uniqueDates.length === 2) titleString = `Maqalka Taariikhda ${uniqueDates[0]} iyo ${uniqueDates[1]}`;
             else titleString = `Maqalka Taariikhda ${uniqueDates[0]} ila ${uniqueDates[uniqueDates.length - 1]}`;
         }
-        
+
         return {
             id: latestReceiptId || `orphan-latest`,
             titleString,
@@ -466,7 +466,7 @@ export default function LedgerPage() {
                 {/* Decorative background elements */}
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
                 <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-[80px] pointer-events-none" />
-                
+
                 <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
@@ -540,10 +540,10 @@ export default function LedgerPage() {
                                         <option value="" disabled>Select Customer...</option>
                                         {currentUser?.assigned_customer_ids?.length > 0 ? (
                                             <>
-                                                <optgroup label="★ PRIORITY CUSTOMERS">
+                                                <optgroup label="⭐ PRIORITY CUSTOMERS">
                                                     {sortedCustomers.filter(c => currentUser.assigned_customer_ids.includes(c.id)).map(c => (
                                                         <option key={c.id} value={c.id}>
-                                                            {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                            ⭐ {c.name.toUpperCase()} (ID: {c.customer_code})
                                                         </option>
                                                     ))}
                                                 </optgroup>
@@ -584,13 +584,13 @@ export default function LedgerPage() {
                                                     </span>
                                                 )}
                                             </div>
-                                            
+
                                             <div className="flex gap-1.5">
                                                 {lastReceiptGroup.receiptId && (
-                                                    <Button 
-                                                        type="button" 
-                                                        variant="outline" 
-                                                        size="sm" 
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
                                                         onClick={() => setUpdateLastMaqal(!updateLastMaqal)}
                                                         className={cn(
                                                             "h-7 text-[9px] px-2.5 rounded font-black uppercase tracking-wider",
@@ -600,11 +600,11 @@ export default function LedgerPage() {
                                                         {updateLastMaqal ? "Start New Maqal" : "Edit Last Maqal"}
                                                     </Button>
                                                 )}
-                                                
-                                                <Button 
-                                                    type="button" 
-                                                    variant="ghost" 
-                                                    size="sm" 
+
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
                                                     onClick={async () => {
                                                         setFetchingDetails(true);
                                                         try {
@@ -631,7 +631,7 @@ export default function LedgerPage() {
                                             {/* Vertical Notebook Lines (Margin) */}
                                             <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
                                             <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
-                                            
+
                                             <div className="relative z-10 pl-12 pr-4 pt-3 space-y-0 text-slate-800 dark:text-slate-300">
                                                 <p className="text-[9px] font-bold text-muted-foreground text-center mb-2 uppercase tracking-wider">
                                                     {lastReceiptGroup.titleString}
@@ -764,7 +764,7 @@ export default function LedgerPage() {
                                                                     </PopoverContent>
                                                                 </Popover>
                                                             </div>
-                                                            
+
                                                             {/* KG and Price Side-by-Side on Mobile */}
                                                             <div className="grid grid-cols-2 md:col-span-2 gap-3 md:gap-4">
                                                                 <div className="space-y-1.5 md:space-y-2">
@@ -876,86 +876,86 @@ export default function LedgerPage() {
                                             {/* Vertical Notebook Lines (Margin) */}
                                             <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
                                             <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
-                                            
+
                                             <div className="relative z-10 pl-12 pr-4 space-y-0 text-slate-800 dark:text-slate-300">
                                                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center mb-1">Receipt</p>
 
-                                            {activeDatesForHeader.length > 0 && (
-                                                <p className="text-[9px] font-bold text-muted-foreground text-center mb-3">
-                                                    Maqalka Taariikhda {activeDatesForHeader.join(' iyo ')}
-                                                </p>
-                                            )}
-
-                                            {/* Maqalka breakdown lines */}
-                                            {dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0).map((entry, idx) => (
-                                                <div key={`rec-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-muted-foreground">
-                                                    <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
-                                                    <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
-                                                </div>
-                                            ))}
-
-                                            {/* Maqalka Total */}
-                                            <div className="flex justify-between py-1.5 border-b border-border/40 font-bold text-foreground">
-                                                <span>{dynamicMaqalLabel}</span>
-                                                <span>${productGrandTotal.toLocaleString()}</span>
-                                            </div>
-
-                                            {/* Reesto (Carry-over Balance) */}
-                                            {(currentReesto !== 0 || summary.currentBalance === 0) && (
-                                                <div className="flex justify-between items-center py-1.5 border-b border-border/40">
-                                                  <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto > 0 ? 'Reesto' : 'Reesto'}</span>
-                                                  {summary.currentBalance === 0 ? (
-                                                    <Input
-                                                      type="number"
-                                                      value={adjustmentAmount}
-                                                      onChange={e => setAdjustmentAmount(e.target.value)}
-                                                      inputMode="decimal"
-                                                      placeholder="0"
-                                                      className="h-7 w-20 text-right font-black text-xs border-primary/20 bg-background/50 px-1.5"
-                                                    />
-                                                  ) : (
-                                                    <span className={cn("font-black", currentReesto < 0 ? "text-emerald-600" : "text-destructive")}>
-                                                      {currentReesto < 0 ? "-" : "+"}{Math.abs(Math.round(currentReesto)).toLocaleString()}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                            )}
-
-                                            {/* Subtotal */}
-                                            {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) && (
-                                                <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
-                                                    <span>Lacagta Guud</span>
-                                                    <span>${Math.round(subtotal).toLocaleString()}</span>
-                                                </div>
-                                            )}
-
-                                            {/* Lacagaha (payments) */}
-                                            {activePaymentAmount > 0 && (
-                                                <>
-                                                    <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-600/60 pt-1.5">Lacagaha</p>
-                                                    {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
-                                                        <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
-                                                            <span>{format(new Date(pay.date), 'MMM dd')} Payment</span>
-                                                            <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
-                                                        </div>
-                                                    ))}
-                                                </>
-                                            )}
-
-                                            {/* Final Balance - double underline style (Only if payments were made) */}
-                                            {activePaymentAmount > 0 && (
-                                                <div className="flex flex-col">
-                                                    <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
-                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
-                                                        <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                                            ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
-                                                        </span>
-                                                    </div>
-                                                    <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
-                                                        Reesto
+                                                {activeDatesForHeader.length > 0 && (
+                                                    <p className="text-[9px] font-bold text-muted-foreground text-center mb-3">
+                                                        Maqalka Taariikhda {activeDatesForHeader.join(' iyo ')}
                                                     </p>
+                                                )}
+
+                                                {/* Maqalka breakdown lines */}
+                                                {dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0).map((entry, idx) => (
+                                                    <div key={`rec-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-muted-foreground">
+                                                        <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
+                                                        <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
+                                                    </div>
+                                                ))}
+
+                                                {/* Maqalka Total */}
+                                                <div className="flex justify-between py-1.5 border-b border-border/40 font-bold text-foreground">
+                                                    <span>{dynamicMaqalLabel}</span>
+                                                    <span>${productGrandTotal.toLocaleString()}</span>
                                                 </div>
-                                            )}
+
+                                                {/* Reesto (Carry-over Balance) */}
+                                                {(currentReesto !== 0 || summary.currentBalance === 0) && (
+                                                    <div className="flex justify-between items-center py-1.5 border-b border-border/40">
+                                                        <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto > 0 ? 'Reesto' : 'Reesto'}</span>
+                                                        {summary.currentBalance === 0 ? (
+                                                            <Input
+                                                                type="number"
+                                                                value={adjustmentAmount}
+                                                                onChange={e => setAdjustmentAmount(e.target.value)}
+                                                                inputMode="decimal"
+                                                                placeholder="0"
+                                                                className="h-7 w-20 text-right font-black text-xs border-primary/20 bg-background/50 px-1.5"
+                                                            />
+                                                        ) : (
+                                                            <span className={cn("font-black", currentReesto < 0 ? "text-emerald-600" : "text-destructive")}>
+                                                                {currentReesto < 0 ? "-" : "+"}{Math.abs(Math.round(currentReesto)).toLocaleString()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Subtotal */}
+                                                {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) && (
+                                                    <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
+                                                        <span>Lacagta Guud</span>
+                                                        <span>${Math.round(subtotal).toLocaleString()}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Lacagaha (payments) */}
+                                                {activePaymentAmount > 0 && (
+                                                    <>
+                                                        <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-600/60 pt-1.5">Lacagaha</p>
+                                                        {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
+                                                            <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
+                                                                <span>{format(new Date(pay.date), 'MMM dd')} Payment</span>
+                                                                <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+                                                    </>
+                                                )}
+
+                                                {/* Final Balance - double underline style (Only if payments were made) */}
+                                                {activePaymentAmount > 0 && (
+                                                    <div className="flex flex-col">
+                                                        <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
+                                                            <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                            <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
+                                                                ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
+                                                            Reesto
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -980,7 +980,7 @@ export default function LedgerPage() {
                 <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border p-4 md:hidden z-50 animate-in slide-in-from-bottom duration-500 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
                     <div className="flex items-center gap-4 max-w-lg mx-auto">
                         <div className="flex-1">
-                             <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">{activePaymentAmount > 0 ? 'Reesto' : 'Lacagta Guud'}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">{activePaymentAmount > 0 ? 'Reesto' : 'Lacagta Guud'}</p>
                             <p className={`text-xl font-black leading-none ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                 ${Math.round(finalLacagtaGuud).toLocaleString()}
                             </p>
