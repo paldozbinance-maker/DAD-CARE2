@@ -32,7 +32,8 @@ export async function GET() {
             return {
                 ...customer,
                 current_balance: sortedEntries.length > 0 ? sortedEntries[0].new_debt : 0,
-                total_paid: totalPaid
+                total_paid: totalPaid,
+                last_transaction_type: sortedEntries.length > 0 ? sortedEntries[0].type : null
             };
         });
 

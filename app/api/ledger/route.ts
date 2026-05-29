@@ -169,7 +169,8 @@ export async function GET(request: Request) {
             summary: {
                 totalKg,
                 totalPaid,
-                currentBalance
+                currentBalance,
+                lastTransactionType: transactions && transactions.length > 0 ? transactions[0].type : null
             }
         });
     } catch (error: any) {

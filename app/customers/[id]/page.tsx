@@ -82,6 +82,7 @@ interface Summary {
     totalKg: number;
     totalPaid: number;
     currentBalance: number;
+    lastTransactionType?: string | null;
 }
 
 interface ReceiptGroup {
@@ -510,7 +511,7 @@ export default function CustomerDetailPage() {
                                 ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
                             </p>
                             <span className={`text-[8px] uppercase font-bold ${summary.currentBalance > 0 ? 'text-destructive/70' : 'text-emerald-500/70'}`}>
-                                {summary.totalPaid > 0 ? 'Reesto' : 'Lacagta Guud'}
+                                {summary.lastTransactionType === 'PAYMENT' ? 'Reesto' : 'Lacagta Guud'}
                             </span>
                         </div>
                     </div>
