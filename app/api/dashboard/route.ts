@@ -1,125 +1,129 @@
-import { createClient } from '@/lib/supabase/server';
+import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-    const supabase = await createClient();
-
     try {
-        // 1. Total customers
-        const { count: totalCustomers } = await supabase
-            .from('Customer')
-            .select('*', { count: 'exact', head: true });
-
-        // 2. Get all ledger entries for aggregation
-        const { data: allLedger, error: ledgerError } = await supabase
-            .from('Ledger')
-            .select('customer_id, type, amount, new_debt, kg');
-
-        if (ledgerError) throw ledgerError;
-
-        // 3. Calculate running balances per customer using historical sum
-        const customerBalances: Record<string, number> = {};
-        allLedger?.forEach(entry => {
-            const current = customerBalances[entry.customer_id] || 0;
-            if (entry.type === 'PRODUCT' || entry.type === 'ADJUSTMENT') {
-                customerBalances[entry.customer_id] = current + (entry.amount || 0);
-            } else if (entry.type === 'PAYMENT') {
-                customerBalances[entry.customer_id] = current - (entry.amount || 0);
-            }
-        });
-
-        // 4. Calculate total stats
-        const totalCurrentDebt = Object.values(customerBalances)
-            .filter(balance => balance > 0) // Only count what is actually OWED to us
-            .reduce((sum, b) => sum + b, 0);
-
-        const totalPayments = allLedger
-            ?.filter(e => e.type === 'PAYMENT')
-            .reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
-
-        const totalKgAllTime = allLedger
-            ?.filter(e => e.type === 'PRODUCT')
-            .reduce((sum, e) => sum + (e.kg || 0), 0) || 0;
-
-        // 5. Get current state for Top Debtors
-        // (We still need the latest new_debt to correctly identify the current state for the list)
-        const latestDebtPerCustomer: Record<string, number> = {};
-        const { data: latestEntries } = await supabase
-            .from('Ledger')
-            .select('customer_id, new_debt')
-            .order('created_at', { ascending: false });
-
-        const seenInList = new Set<string>();
-        latestEntries?.forEach(entry => {
-            if (!seenInList.has(entry.customer_id)) {
-                seenInList.add(entry.customer_id);
-                latestDebtPerCustomer[entry.customer_id] = entry.new_debt || 0;
-            }
-        });
-
-        // 5. Top 5 debtors
-        const { data: customers } = await supabase
-            .from('Customer')
-            .select('id, name, customer_code');
-
-        const customerMap: Record<string, { name: string; code: string }> = {};
-        customers?.forEach(c => {
-            customerMap[c.id] = { name: c.name, code: c.customer_code };
-        });
-
-        const topDebtors = Object.entries(latestDebtPerCustomer)
-            .map(([id, debt]) => ({
-                id,
-                name: customerMap[id]?.name || 'Unknown',
-                code: customerMap[id]?.code || '',
-                debt
-            }))
-            .filter(d => d.debt > 0)
-            .sort((a, b) => b.debt - a.debt)
-            .slice(0, 50);
-
-        // 6. Today's daily book
         const today = new Date().toISOString().split('T')[0];
-        const { data: todayBook } = await supabase
-            .from('DailyBook')
-            .select('id')
-            .eq('date', today)
-            .single();
 
-        let todayKg = 0;
-        let todayCustomerCount = 0;
+        // Run queries in parallel
+        const [
+            totalCustomersResult,
+            totalDebtResult,
+            totalPaidResult,
+            totalKgResult,
+            todayStatsResult,
+            topDebtorsResult,
+            recentTransactionsResult
+        ] = await Promise.all([
+            // 1. Total customers count
+            pool.query('SELECT count(*)::int as count FROM "Customer"'),
+            
+            // 2. Total Current Debt (sum of positive balances of each customer)
+            pool.query(`
+                SELECT COALESCE(SUM(new_debt), 0)::float as total_debt
+                FROM (
+                    SELECT DISTINCT ON (customer_id) new_debt
+                    FROM "Ledger"
+                    ORDER BY customer_id, created_at DESC, id DESC
+                ) latest_balances
+                WHERE new_debt > 0
+            `),
 
-        if (todayBook) {
-            const { data: todayItems } = await supabase
-                .from('DailyBookItem')
-                .select('kg')
-                .eq('daily_book_id', todayBook.id);
+            // 3. Total Payments
+            pool.query(`
+                SELECT COALESCE(SUM(amount), 0)::float as total_paid
+                FROM "Ledger"
+                WHERE type = 'PAYMENT'
+            `),
 
-            todayKg = todayItems?.reduce((sum, i) => sum + (i.kg || 0), 0) || 0;
-            todayCustomerCount = todayItems?.length || 0;
-        }
+            // 4. Total KG all time
+            pool.query(`
+                SELECT COALESCE(SUM(kg), 0)::float as total_kg
+                FROM "Ledger"
+                WHERE type = 'PRODUCT'
+            `),
 
-        // 7. Recent transactions (last 5)
-        const { data: recentTxns } = await supabase
-            .from('Ledger')
-            .select('*, customer:Customer(name)')
-            .order('created_at', { ascending: false })
-            .limit(5);
+            // 5. Today's daily book stats (KG and active customer count)
+            pool.query(`
+                SELECT 
+                    COALESCE(SUM(dbi.kg), 0)::float as today_kg, 
+                    COUNT(dbi.id)::int as today_customer_count
+                FROM "DailyBookItem" dbi
+                JOIN "DailyBook" db ON dbi.daily_book_id = db.id
+                WHERE db.date = $1
+            `, [today]),
+
+            // 6. Top Debtors (limit 50)
+            pool.query(`
+                SELECT 
+                    l.customer_id as id, 
+                    c.name, 
+                    c.customer_code as code, 
+                    l.new_debt::float as debt
+                FROM (
+                    SELECT DISTINCT ON (customer_id) customer_id, new_debt
+                    FROM "Ledger"
+                    ORDER BY customer_id, created_at DESC, id DESC
+                ) l
+                JOIN "Customer" c ON l.customer_id = c.id
+                WHERE l.new_debt > 0
+                ORDER BY l.new_debt DESC
+                LIMIT 50
+            `),
+
+            // 7. Recent transactions (last 5)
+            pool.query(`
+                SELECT 
+                    l.*, 
+                    c.name as "customerName"
+                FROM "Ledger" l
+                JOIN "Customer" c ON l.customer_id = c.id
+                ORDER BY l.created_at DESC
+                LIMIT 5
+            `)
+        ]);
+
+        const totalCustomers = totalCustomersResult.rows[0]?.count || 0;
+        const totalDebt = totalDebtResult.rows[0]?.total_debt || 0;
+        const totalPaid = totalPaidResult.rows[0]?.total_paid || 0;
+        const totalKg = totalKgResult.rows[0]?.total_kg || 0;
+        const todayKg = todayStatsResult.rows[0]?.today_kg || 0;
+        const todayCustomerCount = todayStatsResult.rows[0]?.today_customer_count || 0;
+        const topDebtors = topDebtorsResult.rows || [];
+
+        // Map recent transactions format back to what the frontend expects
+        const recentTransactions = recentTransactionsResult.rows.map(row => ({
+            id: row.id,
+            customer_id: row.customer_id,
+            type: row.type,
+            reference_date: row.reference_date,
+            kg: row.kg,
+            price_per_kg: row.price_per_kg,
+            amount: row.amount,
+            previous_debt: row.previous_debt,
+            new_debt: row.new_debt,
+            note: row.note,
+            created_at: row.created_at,
+            customer: {
+                name: row.customerName
+            }
+        }));
 
         return NextResponse.json({
-            totalCustomers: totalCustomers || 0,
-            totalDebt: totalCurrentDebt,
-            totalPaid: totalPayments,
-            totalKg: totalKgAllTime,
+            totalCustomers,
+            totalDebt,
+            totalPaid,
+            totalKg,
             todayKg,
             todayCustomerCount,
             topDebtors,
-            recentTransactions: recentTxns || []
+            recentTransactions
         });
+
     } catch (error: any) {
-        console.error('Dashboard Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('Dashboard Fetch Error:', error);
+        return NextResponse.json({ error: error.message || 'Failed to fetch dashboard' }, { status: 500 });
     }
 }

@@ -1,43 +1,33 @@
-import { createClient } from '@/lib/supabase/server';
+import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-    const supabase = await createClient();
     try {
-        // Fetch customers with their latest balance from the Ledger table
-        const { data, error } = await supabase
-            .from('Customer')
-            .select(`
-                *,
-                ledger_entries:Ledger (
-                    new_debt,
-                    created_at,
-                    id,
-                    type,
-                    amount
-                )
-            `)
-            .order('name', { ascending: true })
-            .order('created_at', { foreignTable: 'Ledger', ascending: false })
-            .order('id', { foreignTable: 'Ledger', ascending: false });
+        const query = `
+            SELECT 
+                c.*,
+                COALESCE(l.new_debt, 0)::float as current_balance,
+                COALESCE(l.type, null) as last_transaction_type,
+                COALESCE(p.total_paid, 0)::float as total_paid
+            FROM "Customer" c
+            LEFT JOIN (
+                SELECT DISTINCT ON (customer_id) customer_id, new_debt, type
+                FROM "Ledger"
+                ORDER BY customer_id, created_at DESC, id DESC
+            ) l ON c.id = l.customer_id
+            LEFT JOIN (
+                SELECT customer_id, SUM(amount) as total_paid
+                FROM "Ledger"
+                WHERE type = 'PAYMENT'
+                GROUP BY customer_id
+            ) p ON c.id = p.customer_id
+            ORDER BY c.name ASC;
+        `;
 
-        if (error) throw error;
-
-        const transformedData = (data || []).map((customer: any) => {
-            const entries = customer.ledger_entries || [];
-            const sortedEntries = [...entries].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-            const totalPaid = entries.filter((e: any) => e.type === 'PAYMENT').reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-            return {
-                ...customer,
-                current_balance: sortedEntries.length > 0 ? sortedEntries[0].new_debt : 0,
-                total_paid: totalPaid,
-                last_transaction_type: sortedEntries.length > 0 ? sortedEntries[0].type : null
-            };
-        });
-
-        return NextResponse.json(transformedData);
+        const { rows } = await pool.query(query);
+        return NextResponse.json(rows);
     } catch (error: any) {
         console.error('Fetch Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
