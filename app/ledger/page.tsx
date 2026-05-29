@@ -265,7 +265,7 @@ export default function LedgerPage() {
         
         const firstTxn = sortedGroup[0];
         const lastTxnInGroup = sortedGroup[sortedGroup.length - 1];
-        const openingBalance = firstTxn.previous_debt;
+        const openingBalance = firstTxn.previous_debt || 0;
         const closingBalance = lastTxnInGroup.new_debt;
         
         const productDates = sortedGroup.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));

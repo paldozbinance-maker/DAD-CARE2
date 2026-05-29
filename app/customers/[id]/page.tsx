@@ -627,7 +627,7 @@ export default function CustomerDetailPage() {
                                                 {/* Vertical Notebook Lines (Margin) */}
                                                 <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
                                                 <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
-                                                
+
                                                 <div className="relative z-10 pl-12 pr-4 pt-3 space-y-0 text-slate-800 dark:text-slate-300">
                                                     {receipt.titleString && (
                                                         <p className="text-[9px] font-bold text-muted-foreground text-center mb-2">

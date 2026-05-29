@@ -37,8 +37,8 @@ export default function CustomersPage() {
         }
     };
 
-    useEffect(() => { 
-        loadCustomers(); 
+    useEffect(() => {
+        loadCustomers();
         const userStr = localStorage.getItem('currentUser');
         if (userStr) {
             try {
@@ -73,7 +73,7 @@ export default function CustomersPage() {
                 {/* Decorative background elements */}
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
                 <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-[80px] pointer-events-none" />
-                
+
                 <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
@@ -88,7 +88,7 @@ export default function CustomersPage() {
                         Manage all registered clients, review balances, and find individuals in your ledger instantly.
                     </p>
                 </div>
-                
+
                 <div className="relative z-10 flex flex-col sm:flex-row gap-3 self-stretch md:self-center">
                     <div className="relative flex-1 sm:w-[220px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
