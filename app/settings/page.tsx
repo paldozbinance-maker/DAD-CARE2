@@ -76,7 +76,7 @@ export default function SettingsPage() {
         username: '',
         name: '',
         password: '',
-        role: 'ADMIN' as 'ADMIN' | 'CUSTOMER',
+        role: 'ADMIN' as string,
         gender: '',
         phone: '',
         avatar_url: '',
@@ -271,13 +271,13 @@ export default function SettingsPage() {
             if (res.ok) {
                 toast.success(isEditing ? 'User updated successfully' : 'User created successfully');
                 setIsUserDialogOpen(false);
-                
+
                 if (isEditing && currentUser && selectedUser?.id === currentUser.id) {
                     const updatedUser = { ...currentUser, ...responseData };
                     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
                     setCurrentUser(updatedUser);
                 }
-                
+
                 loadUsers();
             } else {
                 toast.error(responseData.error || 'Failed to save user');
@@ -332,10 +332,10 @@ export default function SettingsPage() {
 
     // Filters
     const filteredUsers = users.filter(u =>
-        ((currentUser?.role === 'SUPER_ADMIN' && (u.role === 'ADMIN' || u.role === 'SUPER_ADMIN')) || 
-         (currentUser?.role === 'ADMIN' && u.role === 'USER')) &&
+        ((currentUser?.role === 'SUPER_ADMIN' && (u.role === 'ADMIN' || u.role === 'SUPER_ADMIN')) ||
+            (currentUser?.role === 'ADMIN' && u.role === 'USER')) &&
         (u.name?.toLowerCase().includes(searchUser.toLowerCase()) ||
-        u.username?.toLowerCase().includes(searchUser.toLowerCase()))
+            u.username?.toLowerCase().includes(searchUser.toLowerCase()))
     );
 
     // Get all assigned customers by OTHER admins/users to prevent duplicate assignment
@@ -346,7 +346,7 @@ export default function SettingsPage() {
     const filteredCustomers = allCustomers.filter(c =>
         !assignedToOthers.has(c.id) &&
         (c.name?.toLowerCase().includes(searchCustomer.toLowerCase()) ||
-        c.customer_code?.toLowerCase().includes(searchCustomer.toLowerCase()))
+            c.customer_code?.toLowerCase().includes(searchCustomer.toLowerCase()))
     );
 
     if (currentUser?.role !== 'SUPER_ADMIN' && currentUser?.role !== 'ADMIN') {
@@ -365,7 +365,7 @@ export default function SettingsPage() {
                 {/* Decorative background elements */}
                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
                 <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-slate-500/10 rounded-full blur-[80px] pointer-events-none" />
-                
+
                 <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
@@ -418,45 +418,45 @@ export default function SettingsPage() {
                 {/* Business Settings */}
                 {currentUser?.role === 'SUPER_ADMIN' && (
                     <TabsContent value="business">
-                    <Card className="glass-card mt-4 border border-border/60">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-foreground flex items-center gap-2 text-base">
-                                <DollarSign className="w-5 h-5 text-primary" />
-                                Price Settings
-                            </CardTitle>
-                            <CardDescription className="text-muted-foreground">
-                                Set the default price per kilogram for calculations
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6 pt-6">
-                            <div className="space-y-3">
-                                <Label className="text-sm font-medium text-foreground">
-                                    Default Price per KG ($)
-                                </Label>
-                                <div className="relative max-w-xs">
-                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
-                                    <Input
-                                        type="number"
-                                        value={pricePerKg}
-                                        onChange={(e) => setPricePerKg(e.target.value)}
-                                        className="pl-10 h-14 text-2xl font-bold bg-background border-border"
-                                        step="1"
-                                    />
+                        <Card className="glass-card mt-4 border border-border/60">
+                            <CardHeader className="border-b border-border">
+                                <CardTitle className="text-foreground flex items-center gap-2 text-base">
+                                    <DollarSign className="w-5 h-5 text-primary" />
+                                    Price Settings
+                                </CardTitle>
+                                <CardDescription className="text-muted-foreground">
+                                    Set the default price per kilogram for calculations
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6 pt-6">
+                                <div className="space-y-3">
+                                    <Label className="text-sm font-medium text-foreground">
+                                        Default Price per KG ($)
+                                    </Label>
+                                    <div className="relative max-w-xs">
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+                                        <Input
+                                            type="number"
+                                            value={pricePerKg}
+                                            onChange={(e) => setPricePerKg(e.target.value)}
+                                            className="pl-10 h-14 text-2xl font-bold bg-background border-border"
+                                            step="1"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        This price is used as the default when processing daily book entries into the ledger.
+                                    </p>
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                    This price is used as the default when processing daily book entries into the ledger.
-                                </p>
-                            </div>
-                            <Button
-                                onClick={handleSavePrice}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-11"
-                            >
-                                <Save className="w-4 h-4 mr-2" />
-                                Save Price
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                                <Button
+                                    onClick={handleSavePrice}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-11"
+                                >
+                                    <Save className="w-4 h-4 mr-2" />
+                                    Save Price
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
                 )}
 
                 {/* Users Management Tab */}
@@ -594,8 +594,8 @@ export default function SettingsPage() {
                                 <button
                                     onClick={() => setTheme('light')}
                                     className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'light'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-border hover:border-primary/30'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-border hover:border-primary/30'
                                         }`}
                                 >
                                     <div className="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm">
@@ -606,8 +606,8 @@ export default function SettingsPage() {
                                 <button
                                     onClick={() => setTheme('dark')}
                                     className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'dark'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-border hover:border-primary/30'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-border hover:border-primary/30'
                                         }`}
                                 >
                                     <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center shadow-sm">
@@ -622,70 +622,70 @@ export default function SettingsPage() {
 
                 {/* Backup Tab */}
                 {currentUser?.role === 'SUPER_ADMIN' && (
-                <TabsContent value="backup">
-                    <Card className="glass-card mt-4 border border-border/60">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-foreground flex items-center gap-2 text-base">
-                                <Database className="w-5 h-5 text-primary" />
-                                Data Backup
-                            </CardTitle>
-                            <CardDescription className="text-muted-foreground">
-                                Export all your business data as a backup file
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6 pt-6">
-                            <div className="p-6 rounded-xl bg-primary/5 border border-primary/10">
-                                <div className="flex items-start gap-4">
-                                    <div className="p-3 rounded-lg bg-primary/10">
-                                        <Download className="h-6 w-6 text-primary" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-foreground mb-1">Export Full Backup</h3>
-                                        <p className="text-sm text-muted-foreground mb-4">
-                                            Download a complete Excel-friendly CSV backup of all customers and transactions.
-                                        </p>
-                                        <Button
-                                            onClick={handleExportCSV}
-                                            disabled={loading}
-                                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-                                        >
-                                            {loading ? (
-                                                <>
-                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                    Exporting...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Download className="w-4 h-4 mr-2" />
-                                                    Download Backup
-                                                </>
-                                            )}
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-6 rounded-xl bg-muted/50 border border-border">
-                                <div className="flex items-start gap-4">
-                                    <div className="p-3 rounded-lg bg-emerald-500/10">
-                                        <Save className="h-6 w-6 text-emerald-500" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold text-foreground mb-1 italic">Security & Reliability Info</h3>
-                                        <div className="text-xs text-muted-foreground space-y-2 mt-2">
-                                            <p className="font-bold text-foreground">1. Cloud Persistence</p>
-                                            <p>Your data is stored in Supabase (Google Cloud infrastructure) with 99.9% uptime. It is not just on your phone—it is in the master cloud database.</p>
-                                            <p className="font-bold text-foreground">2. Automatic Backups</p>
-                                            <p>The database performs daily automatic backups. Even if your computer breaks, your data is safe.</p>
-                                            <p className="font-bold text-foreground">3. Proof of Record</p>
-                                            <p>Every single transaction is logged with a timestamp and a unique ID. You can download these as CSV for legal proof.</p>
+                    <TabsContent value="backup">
+                        <Card className="glass-card mt-4 border border-border/60">
+                            <CardHeader className="border-b border-border">
+                                <CardTitle className="text-foreground flex items-center gap-2 text-base">
+                                    <Database className="w-5 h-5 text-primary" />
+                                    Data Backup
+                                </CardTitle>
+                                <CardDescription className="text-muted-foreground">
+                                    Export all your business data as a backup file
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6 pt-6">
+                                <div className="p-6 rounded-xl bg-primary/5 border border-primary/10">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-3 rounded-lg bg-primary/10">
+                                            <Download className="h-6 w-6 text-primary" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-foreground mb-1">Export Full Backup</h3>
+                                            <p className="text-sm text-muted-foreground mb-4">
+                                                Download a complete Excel-friendly CSV backup of all customers and transactions.
+                                            </p>
+                                            <Button
+                                                onClick={handleExportCSV}
+                                                disabled={loading}
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                                            >
+                                                {loading ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                        Exporting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Download className="w-4 h-4 mr-2" />
+                                                        Download Backup
+                                                    </>
+                                                )}
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+
+                                <div className="p-6 rounded-xl bg-muted/50 border border-border">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-3 rounded-lg bg-emerald-500/10">
+                                            <Save className="h-6 w-6 text-emerald-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-foreground mb-1 italic">Security & Reliability Info</h3>
+                                            <div className="text-xs text-muted-foreground space-y-2 mt-2">
+                                                <p className="font-bold text-foreground">1. Cloud Persistence</p>
+                                                <p>Your data is stored in Supabase (Google Cloud infrastructure) with 99.9% uptime. It is not just on your phone—it is in the master cloud database.</p>
+                                                <p className="font-bold text-foreground">2. Automatic Backups</p>
+                                                <p>The database performs daily automatic backups. Even if your computer breaks, your data is safe.</p>
+                                                <p className="font-bold text-foreground">3. Proof of Record</p>
+                                                <p>Every single transaction is logged with a timestamp and a unique ID. You can download these as CSV for legal proof.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
                 )}
             </Tabs>
 
@@ -801,11 +801,10 @@ export default function SettingsPage() {
                                                 key={g}
                                                 type="button"
                                                 onClick={() => setUserForm({ ...userForm, gender: g })}
-                                                className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                                                    isSelected
-                                                        ? 'bg-primary/10 border-primary text-primary shadow-sm'
-                                                        : 'border-border hover:border-primary/20 text-muted-foreground bg-background/50'
-                                                }`}
+                                                className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${isSelected
+                                                    ? 'bg-primary/10 border-primary text-primary shadow-sm'
+                                                    : 'border-border hover:border-primary/20 text-muted-foreground bg-background/50'
+                                                    }`}
                                             >
                                                 {g === 'Male' ? '👨 Male' : '👩 Female'}
                                             </button>
@@ -847,15 +846,13 @@ export default function SettingsPage() {
                                                 key={customer.id}
                                                 type="button"
                                                 onClick={() => handleToggleCustomerAssignment(customer.id)}
-                                                className={`flex items-center gap-2 p-2 rounded-xl text-left border transition-all ${
-                                                    isAssigned
-                                                        ? 'bg-primary/10 border-primary/40 text-primary font-bold'
-                                                        : 'border-border/40 hover:border-border text-foreground hover:bg-muted/20'
-                                                }`}
+                                                className={`flex items-center gap-2 p-2 rounded-xl text-left border transition-all ${isAssigned
+                                                    ? 'bg-primary/10 border-primary/40 text-primary font-bold'
+                                                    : 'border-border/40 hover:border-border text-foreground hover:bg-muted/20'
+                                                    }`}
                                             >
-                                                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${
-                                                    isAssigned ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30 bg-background'
-                                                }`}>
+                                                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${isAssigned ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30 bg-background'
+                                                    }`}>
                                                     {isAssigned && <Check className="w-3 h-3 stroke-[3]" />}
                                                 </div>
                                                 <div className="min-w-0 flex-1">
