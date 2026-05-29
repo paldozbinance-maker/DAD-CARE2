@@ -21,6 +21,7 @@ export default function CustomersPage() {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [currentUser, setCurrentUser] = useState<any | null>(null);
 
     const loadCustomers = async () => {
         try {
@@ -36,12 +37,30 @@ export default function CustomersPage() {
         }
     };
 
-    useEffect(() => { loadCustomers(); }, []);
+    useEffect(() => { 
+        loadCustomers(); 
+        const userStr = localStorage.getItem('currentUser');
+        if (userStr) {
+            try {
+                setCurrentUser(JSON.parse(userStr));
+            } catch (e) {
+                console.error('Failed to parse current user session', e);
+            }
+        }
+    }, []);
 
     const filteredCustomers = customers.filter(c =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.customer_code.toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a, b) => {
+        // Prioritize assigned customers of the logged-in user
+        const assignedIds = currentUser?.assigned_customer_ids || [];
+        const isAAssigned = assignedIds.includes(a.id);
+        const isBAssigned = assignedIds.includes(b.id);
+
+        if (isAAssigned && !isBAssigned) return -1;
+        if (!isAAssigned && isBAssigned) return 1;
+
         const idA = parseInt(a.customer_code.replace(/\D/g, ''), 10) || 0;
         const idB = parseInt(b.customer_code.replace(/\D/g, ''), 10) || 0;
         return idA - idB;
@@ -135,8 +154,13 @@ export default function CustomersPage() {
 
                                     {/* Main info */}
                                     <div className="flex-1 min-w-0">
-                                        <p className={`text-xs font-black truncate group-hover:${accentColor} transition-colors uppercase`}>
+                                        <p className={`text-xs font-black truncate group-hover:${accentColor} transition-colors uppercase flex items-center gap-1.5`}>
                                             {customer.name}
+                                            {currentUser?.assigned_customer_ids?.includes(customer.id) && (
+                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-md">
+                                                    ★ Priority
+                                                </span>
+                                            )}
                                         </p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <span className="text-[10px] font-bold text-muted-foreground/70">

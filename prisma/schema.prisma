@@ -19,15 +19,19 @@ enum LedgerType {
 }
 
 model User {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  username   String   @unique
-  name       String?
-  password   String   
-  role       Role     @default(CUSTOMER)
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  email                 String   @unique
+  username              String   @unique
+  name                  String?
+  password              String   
+  role                  Role     @default(CUSTOMER)
+  is_active             Boolean  @default(true)
+  gender                String?
+  phone                 String?
+  avatar_url            String?
+  assigned_customer_ids String[] @default([])
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
 }
 
 model Customer {

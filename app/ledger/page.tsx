@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info, BookOpen } from 'lucide-react';
+import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info, BookOpen, RefreshCw } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,8 @@ interface Transaction {
     price_per_kg?: number;
     amount: number;
     new_debt: number;
+    created_at?: string;
+    receipt_id?: string;
 }
 
 interface CustomerSummary {
@@ -60,6 +62,9 @@ export default function LedgerPage() {
     const [allCustomers, setAllCustomers] = useState<{ id: string, name: string, customer_code: string }[]>([]);
     const [history, setHistory] = useState<Transaction[]>([]);
     const [summary, setSummary] = useState<CustomerSummary>({ totalKg: 0, totalPaid: 0, currentBalance: 0 });
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [showLastMaqal, setShowLastMaqal] = useState(false);
+    const [updateLastMaqal, setUpdateLastMaqal] = useState(false);
 
     // Form state
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -72,6 +77,11 @@ export default function LedgerPage() {
     useEffect(() => {
         const savedPrice = localStorage.getItem('dadwork_price_per_kg');
         if (savedPrice) setDefaultPrice(savedPrice);
+
+        const storedUser = localStorage.getItem('currentUser');
+        if (storedUser) {
+            setCurrentUser(JSON.parse(storedUser));
+        }
 
         // sessionStorage disappears when browser/tab closes but survives navigation.
         // If there's NO session flag, this is a fresh open → clear old draft.
@@ -171,7 +181,116 @@ export default function LedgerPage() {
         setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
         setHistory([]);
         setCustomerDailyDates([]);
+        setShowLastMaqal(false);
+        setUpdateLastMaqal(false);
     };
+
+    const sortedCustomers = useMemo(() => {
+        if (!currentUser?.assigned_customer_ids?.length) return allCustomers;
+        
+        const priorityIds = currentUser.assigned_customer_ids;
+        const priorityCustomers: typeof allCustomers = [];
+        const otherCustomers: typeof allCustomers = [];
+
+        const customerMap = new Map(allCustomers.map(c => [c.id, c]));
+
+        for (const id of priorityIds) {
+            if (customerMap.has(id)) {
+                priorityCustomers.push(customerMap.get(id)!);
+                customerMap.delete(id);
+            }
+        }
+
+        for (const c of allCustomers) {
+            if (customerMap.has(c.id)) {
+                otherCustomers.push(c);
+            }
+        }
+
+        priorityCustomers.sort((a, b) => {
+            const numA = parseInt(a.customer_code.replace(/[^0-9]/g, '')) || 0;
+            const numB = parseInt(b.customer_code.replace(/[^0-9]/g, '')) || 0;
+            return numA - numB;
+        });
+
+        otherCustomers.sort((a, b) => {
+            const numA = parseInt(a.customer_code.replace(/[^0-9]/g, '')) || 0;
+            const numB = parseInt(b.customer_code.replace(/[^0-9]/g, '')) || 0;
+            return numA - numB;
+        });
+
+        return [...priorityCustomers, ...otherCustomers];
+    }, [allCustomers, currentUser]);
+
+    const lastReceiptGroup = useMemo(() => {
+        if (!history || history.length === 0) return null;
+        
+        const sortedHistory = [...history].sort((a, b) => {
+            const timeA = new Date(a.created_at || 0).getTime();
+            const timeB = new Date(b.created_at || 0).getTime();
+            return timeB - timeA;
+        });
+
+        const latestTxn = sortedHistory[0];
+        if (!latestTxn) return null;
+        
+        const latestReceiptId = latestTxn.receipt_id;
+        
+        let lastGroupTxns: Transaction[] = [];
+        if (latestReceiptId) {
+            lastGroupTxns = sortedHistory.filter(t => t.receipt_id === latestReceiptId);
+        } else {
+            lastGroupTxns = [latestTxn];
+            for (let i = 1; i < sortedHistory.length; i++) {
+                const txn = sortedHistory[i];
+                if (txn.receipt_id) break;
+                const diff = Math.abs(new Date(txn.created_at || '').getTime() - new Date(latestTxn.created_at || '').getTime());
+                if (diff < 15000) {
+                    lastGroupTxns.push(txn);
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        if (lastGroupTxns.length === 0) return null;
+        
+        const sortedGroup = [...lastGroupTxns].reverse();
+        
+        const totalKilos = lastGroupTxns.reduce((sum, t) => sum + (t.kg || 0), 0);
+        const totalMaqalka = lastGroupTxns.filter(t => t.type === 'PRODUCT').reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalPaid = lastGroupTxns.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalAdjustment = lastGroupTxns.filter(t => t.type === 'ADJUSTMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+        
+        const firstTxn = sortedGroup[0];
+        const lastTxnInGroup = sortedGroup[sortedGroup.length - 1];
+        const openingBalance = firstTxn.previous_debt;
+        const closingBalance = lastTxnInGroup.new_debt;
+        
+        const productDates = sortedGroup.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
+        let titleString = format(new Date(lastTxnInGroup.created_at || new Date()), 'EEEE, MMMM dd, yyyy');
+
+        if (productDates.length > 0) {
+            productDates.sort((a, b) => a.getTime() - b.getTime());
+            const uniqueDates = Array.from(new Set(productDates.map(d => format(d, 'dd MMM'))));
+            if (uniqueDates.length === 1) titleString = `Maqalka Taariikhda ${uniqueDates[0]}`;
+            else if (uniqueDates.length === 2) titleString = `Maqalka Taariikhda ${uniqueDates[0]} iyo ${uniqueDates[1]}`;
+            else titleString = `Maqalka Taariikhda ${uniqueDates[0]} ila ${uniqueDates[uniqueDates.length - 1]}`;
+        }
+        
+        return {
+            id: latestReceiptId || `orphan-latest`,
+            titleString,
+            entries: sortedGroup,
+            totalKilos,
+            totalMaqalka,
+            totalPaid,
+            totalAdjustment,
+            openingBalance,
+            closingBalance,
+            receiptId: latestReceiptId
+        };
+    }, [history]);
 
     const addDateEntry = () => {
         const newEntry: DateEntry = {
@@ -266,7 +385,9 @@ export default function LedgerPage() {
         }
 
         setLoading(true);
-        const receiptId = crypto.randomUUID();
+        const receiptId = (updateLastMaqal && lastReceiptGroup?.receiptId)
+            ? lastReceiptGroup.receiptId
+            : crypto.randomUUID();
 
         // 1. Gather all items for the batch
         const items = [];
@@ -381,12 +502,27 @@ export default function LedgerPage() {
                                         Select Customer
                                     </Label>
                                     {selectedCustomerId && !fetchingDetails && (
-                                        <div className={cn(
-                                            "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border animate-in fade-in zoom-in duration-300",
-                                            summary.currentBalance > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                                        )}>
-                                            Current Balance: ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
-                                            {summary.currentBalance > 0 ? " (OWED)" : " (CREDIT)"}
+                                        <div className="flex flex-col items-end gap-1.5">
+                                            <div className={cn(
+                                                "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border animate-in fade-in zoom-in duration-300",
+                                                summary.currentBalance > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                            )}>
+                                                Current Balance: ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
+                                                {summary.currentBalance > 0 ? " (OWED)" : " (CREDIT)"}
+                                            </div>
+                                            {history.length > 0 && (
+                                                <Button type="button" variant="outline" size="sm" onClick={() => {
+                                                    const nextShow = !showLastMaqal;
+                                                    setShowLastMaqal(nextShow);
+                                                    if (nextShow && lastReceiptGroup?.receiptId) {
+                                                        setUpdateLastMaqal(true);
+                                                    } else {
+                                                        setUpdateLastMaqal(false);
+                                                    }
+                                                }} className="h-6 text-[10px] px-2 rounded font-bold border-primary/20 text-primary hover:bg-primary/5">
+                                                    <BookOpen className="w-3 h-3 mr-1" /> {showLastMaqal ? 'Hide Last Maqal' : 'Read Last Maqal'}
+                                                </Button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -401,14 +537,173 @@ export default function LedgerPage() {
                                         required
                                     >
                                         <option value="" disabled>Select Customer...</option>
-                                        {allCustomers.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name.toUpperCase()} (ID: {c.customer_code})</option>
-                                        ))}
+                                        {currentUser?.assigned_customer_ids?.length > 0 ? (
+                                            <>
+                                                <optgroup label="★ PRIORITY CUSTOMERS">
+                                                    {sortedCustomers.filter(c => currentUser.assigned_customer_ids.includes(c.id)).map(c => (
+                                                        <option key={c.id} value={c.id}>
+                                                            {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                                <optgroup label="OTHER CUSTOMERS">
+                                                    {sortedCustomers.filter(c => !currentUser.assigned_customer_ids.includes(c.id)).map(c => (
+                                                        <option key={c.id} value={c.id}>
+                                                            {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            </>
+                                        ) : (
+                                            sortedCustomers.map(c => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                </option>
+                                            ))
+                                        )}
                                     </select>
                                     <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
                                         {fetchingDetails ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <ArrowRight className="w-4 h-4 text-muted-foreground" />}
                                     </div>
                                 </div>
+
+                                {showLastMaqal && lastReceiptGroup && (
+                                    <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
+                                        {/* Receipt Header Actions */}
+                                        <div className="flex items-center justify-between px-1">
+                                            <div className="flex items-center gap-2">
+                                                {updateLastMaqal ? (
+                                                    <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-amber-500/20 flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                        Updating Last Maqal
+                                                    </span>
+                                                ) : (
+                                                    <span className="bg-primary/10 text-primary text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-primary/20">
+                                                        🆕 New Maqal
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="flex gap-1.5">
+                                                {lastReceiptGroup.receiptId && (
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={() => setUpdateLastMaqal(!updateLastMaqal)}
+                                                        className={cn(
+                                                            "h-7 text-[9px] px-2.5 rounded font-black uppercase tracking-wider",
+                                                            updateLastMaqal ? "border-primary text-primary hover:bg-primary/5" : "border-border text-muted-foreground hover:bg-muted"
+                                                        )}
+                                                    >
+                                                        {updateLastMaqal ? "Start New Maqal" : "Edit Last Maqal"}
+                                                    </Button>
+                                                )}
+                                                
+                                                <Button 
+                                                    type="button" 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    onClick={async () => {
+                                                        setFetchingDetails(true);
+                                                        try {
+                                                            const ledgerRes = await fetch(`/api/ledger?customerId=${selectedCustomerId}&limit=200&t=${Date.now()}`);
+                                                            const ledgerData = await ledgerRes.json();
+                                                            setHistory(ledgerData.transactions || []);
+                                                            setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
+                                                            toast.success('Refreshed last maqal!');
+                                                        } catch (e) {
+                                                            toast.error('Failed to refresh data');
+                                                        } finally {
+                                                            setFetchingDetails(false);
+                                                        }
+                                                    }}
+                                                    className="h-7 text-[9px] px-2 rounded font-bold border border-border/40 text-muted-foreground hover:bg-muted"
+                                                >
+                                                    <RefreshCw className="w-3 h-3 mr-1" /> Refresh
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Notebook Receipt Style Box */}
+                                        <div className="relative overflow-hidden bg-[#fdfbf7] dark:bg-[#1e1c18] font-mono text-[11px] pb-4 rounded-xl border border-border/60 shadow-md">
+                                            {/* Vertical Notebook Lines (Margin) */}
+                                            <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
+                                            <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
+                                            
+                                            <div className="relative z-10 pl-12 pr-4 pt-3 space-y-0 text-slate-800 dark:text-slate-300">
+                                                <p className="text-[9px] font-bold text-muted-foreground text-center mb-2 uppercase tracking-wider">
+                                                    {lastReceiptGroup.titleString}
+                                                </p>
+
+                                                {/* 1. Maqalka entries (products) */}
+                                                {lastReceiptGroup.entries.filter(e => e.type === 'PRODUCT').map(e => (
+                                                    <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium">
+                                                        <span>{format(new Date(e.reference_date), 'MMM dd')} · {Math.round(e.kg || 0)}KG @ ${e.price_per_kg}</span>
+                                                        <span className="font-bold">${Math.round(e.amount).toLocaleString()}</span>
+                                                    </div>
+                                                ))}
+
+                                                {/* 2. Maqalka Total */}
+                                                {lastReceiptGroup.entries.some(e => e.type === 'PRODUCT') && (
+                                                    <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
+                                                        <span>Maqalka</span>
+                                                        <span>${Math.round(lastReceiptGroup.totalMaqalka).toLocaleString()}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* 3. Reesto (Previous/Opening Balance) */}
+                                                {lastReceiptGroup.openingBalance !== 0 && (
+                                                    <div className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
+                                                        <span>Reesto</span>
+                                                        <span>{lastReceiptGroup.openingBalance > 0 ? '+' : ''}${Math.round(lastReceiptGroup.openingBalance).toLocaleString()}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* 3b. Adjustment entries (also Reesto) */}
+                                                {lastReceiptGroup.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
+                                                    <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
+                                                        <span>Reesto</span>
+                                                        <span>+${Math.round(e.amount).toLocaleString()}</span>
+                                                    </div>
+                                                ))}
+
+                                                {/* 4. Lacagta Guud */}
+                                                {(lastReceiptGroup.totalMaqalka > 0 || lastReceiptGroup.totalAdjustment > 0) && (
+                                                    <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
+                                                        <span>Lacagta Guud</span>
+                                                        <span>${Math.round(lastReceiptGroup.totalMaqalka + lastReceiptGroup.totalAdjustment + lastReceiptGroup.openingBalance).toLocaleString()}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* 5. Lacagaha (Payments) */}
+                                                {lastReceiptGroup.entries.some(e => e.type === 'PAYMENT') && (
+                                                    <>
+                                                        <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
+                                                        {lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').map(e => (
+                                                            <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
+                                                                <span>{format(new Date(e.reference_date), 'MMM dd')} Payment</span>
+                                                                <span>-${Math.round(e.amount).toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+                                                    </>
+                                                )}
+
+                                                {/* 6. Final Balance */}
+                                                {lastReceiptGroup.totalPaid > 0 && (
+                                                    <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
+                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">
+                                                            Reesto
+                                                        </span>
+                                                        <span className={`text-lg font-black ${lastReceiptGroup.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
+                                                            ${Math.abs(Math.round(lastReceiptGroup.closingBalance)).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {selectedCustomerId && (
                                     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -626,10 +921,12 @@ export default function LedgerPage() {
                                             )}
 
                                             {/* Subtotal */}
-                                            <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
-                                                <span>Lacagta Guud</span>
-                                                <span>${Math.round(subtotal).toLocaleString()}</span>
-                                            </div>
+                                            {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) && (
+                                                <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
+                                                    <span>Lacagta Guud</span>
+                                                    <span>${Math.round(subtotal).toLocaleString()}</span>
+                                                </div>
+                                            )}
 
                                             {/* Lacagaha (payments) */}
                                             {activePaymentAmount > 0 && (

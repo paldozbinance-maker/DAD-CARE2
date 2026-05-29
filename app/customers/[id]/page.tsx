@@ -215,7 +215,51 @@ export default function CustomerDetailPage() {
             } as ReceiptGroup;
         }).sort((a, b) => new Date(b.entries[0].created_at).getTime() - new Date(a.entries[0].created_at).getTime());
 
-        return processedReceipts;
+        // 6. MERGE STEP: fold payment-only receipts into the nearest product receipt.
+        // We sort oldest-first so the product receipt always appears BEFORE the payment in iteration order,
+        // then merge the payment backward into the last product receipt.
+        const oldestFirst = [...processedReceipts].sort((a, b) =>
+            new Date(a.entries[0].created_at).getTime() - new Date(b.entries[0].created_at).getTime()
+        );
+
+        const merged: ReceiptGroup[] = [];
+        for (const current of oldestFirst) {
+            const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
+
+            if (isPaymentOnly && merged.length > 0) {
+                // Find the most recent product/adjustment receipt in merged (look backward)
+                let targetIdx = -1;
+                for (let k = merged.length - 1; k >= 0; k--) {
+                    if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
+                        targetIdx = k;
+                        break;
+                    }
+                }
+
+                if (targetIdx !== -1) {
+                    const target = merged[targetIdx];
+                    // Combine entries sorted oldest-first
+                    const mergedEntries = [...target.entries, ...current.entries].sort(
+                        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    );
+                    const latestEntry = mergedEntries[mergedEntries.length - 1];
+                    merged[targetIdx] = {
+                        ...target,
+                        entries: mergedEntries,
+                        totalPaid: target.totalPaid + current.totalPaid,
+                        closingBalance: latestEntry.new_debt,
+                    };
+                    continue; // payment absorbed — don't add it separately
+                }
+            }
+            merged.push(current);
+        }
+
+        // Re-sort newest-first for display
+        return merged.sort((a, b) =>
+            new Date(b.entries[b.entries.length - 1].created_at).getTime() -
+            new Date(a.entries[a.entries.length - 1].created_at).getTime()
+        );
     };
 
     const loadCustomerData = async () => {
@@ -333,8 +377,8 @@ export default function CustomerDetailPage() {
     if (!customer) return null;
 
     const filteredReceipts = receipts.filter(r => {
-        // Show only receipts that have Maqalka entries
-        return r.totalMaqalka > 0;
+        // Show receipts that have either Maqalka (products), payments, or adjustments
+        return r.totalMaqalka > 0 || r.totalPaid > 0 || r.totalAdjustment > 0;
     });
 
     return (
@@ -624,10 +668,12 @@ export default function CustomerDetailPage() {
                                                     ))}
 
                                                     {/* 4. Lacagta Guud (Maqalka + Reesto combined) */}
-                                                    <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
-                                                        <span>Lacagta Guud</span>
-                                                        <span>${Math.round(receipt.totalMaqalka + receipt.totalAdjustment + receipt.openingBalance).toLocaleString()}</span>
-                                                    </div>
+                                                    {(receipt.totalMaqalka > 0 || receipt.totalAdjustment > 0) && (
+                                                        <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
+                                                            <span>Lacagta Guud</span>
+                                                            <span>${Math.round(receipt.totalMaqalka + receipt.totalAdjustment + receipt.openingBalance).toLocaleString()}</span>
+                                                        </div>
+                                                    )}
 
                                                     {/* 5. Lacagaha (Payments) */}
                                                     {receipt.entries.some(e => e.type === 'PAYMENT') && (
@@ -643,14 +689,16 @@ export default function CustomerDetailPage() {
                                                     )}
 
                                                     {/* 6. Final Balance */}
-                                                    <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
-                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">
-                                                            {receipt.totalPaid > 0 ? 'Reesto' : 'Lacagta Guud'}
-                                                        </span>
-                                                        <span className={`text-lg font-black ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                                            ${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
-                                                        </span>
-                                                    </div>
+                                                    {receipt.totalPaid > 0 && (
+                                                        <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
+                                                            <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">
+                                                                Reesto
+                                                            </span>
+                                                            <span className={`text-lg font-black ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
+                                                                ${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}

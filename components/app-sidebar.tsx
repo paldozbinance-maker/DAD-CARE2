@@ -43,6 +43,7 @@ export function AppSidebar() {
     }, []);
 
     const handleLogout = async () => {
+        localStorage.removeItem('currentUser');
         await supabase.auth.signOut();
         router.push('/login');
     };

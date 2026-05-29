@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate-custom": "node run_db_migration.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

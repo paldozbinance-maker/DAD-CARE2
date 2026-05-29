@@ -43,6 +43,7 @@ export function MobileNav() {
     const supabase = createClient();
 
     const handleLogout = async () => {
+        localStorage.removeItem('currentUser');
         await supabase.auth.signOut();
         router.push('/login');
     };

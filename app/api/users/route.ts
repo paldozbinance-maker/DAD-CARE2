@@ -18,7 +18,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
     const body = await request.json();
-    const { username, name, password, role } = body;
+    const { username, name, password, role, gender, phone, avatar_url, assigned_customer_ids } = body;
     const supabase = await createClient();
 
     try {
@@ -32,17 +32,11 @@ export async function POST(request: Request) {
             .from('User')
             .select('id')
             .eq('username', username)
-            .single();
+            .maybeSingle();
 
         if (existingUser) {
             return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
         }
-
-        // Ideally we should hash the password here using bcrypt
-        // For now, we'll store it as is (per "default 123" requirement context, though hashing is best practice)
-        // Since I cannot install packages without permission, I will proceed with storing it directly 
-        // but structured so hashing can be added easily later or if bcrypt is available.
-        // NOTE: In a real production app, ALWAYS hash passwords. 
 
         const { data, error } = await supabase
             .from('User')
@@ -52,7 +46,11 @@ export async function POST(request: Request) {
                 name,
                 password: password,
                 role: role || 'CUSTOMER',
-                is_active: true
+                is_active: true,
+                gender: gender || null,
+                phone: phone || null,
+                avatar_url: avatar_url || null,
+                assigned_customer_ids: Array.isArray(assigned_customer_ids) ? assigned_customer_ids : []
             })
             .select()
             .single();

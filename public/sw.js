@@ -1,10 +1,7 @@
-const CACHE_NAME = 'dadcare-v3';
+const CACHE_NAME = 'dadcare-v4';
 const STATIC_ASSETS = [
-  '/dashboard',
-  '/daily-book',
-  '/ledger',
-  '/customers',
-  '/reports',
+  '/',
+  '/manifest.json'
 ];
 
 // Install: pre-cache critical pages

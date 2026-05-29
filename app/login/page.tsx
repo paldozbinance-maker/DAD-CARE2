@@ -25,13 +25,27 @@ export default function LoginPage() {
             return;
         }
 
-        if (username === 'admin' && password === '123') {
-            toast.success('Welcome back, Admin!');
-            setTimeout(() => {
-                router.push('/dashboard');
-            }, 500);
-        } else {
-            toast.error('Invalid username or password');
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username.trim().toLowerCase(), password })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                localStorage.setItem('currentUser', JSON.stringify(data));
+                toast.success(`Welcome back, ${data.name || data.username}!`);
+                setTimeout(() => {
+                    router.push('/dashboard');
+                }, 500);
+            } else {
+                toast.error(data.error || 'Invalid username or password');
+                setLoading(false);
+            }
+        } catch (error) {
+            toast.error('Connection error occurred');
             setLoading(false);
         }
     };
