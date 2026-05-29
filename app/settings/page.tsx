@@ -43,7 +43,7 @@ interface UserData {
     username: string;
     name: string;
     password?: string;
-    role: 'ADMIN' | 'CUSTOMER';
+    role: string;
     is_active: boolean;
     gender?: string;
     phone?: string;
