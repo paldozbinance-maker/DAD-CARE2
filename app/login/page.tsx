@@ -117,12 +117,6 @@ export default function LoginPage() {
                     </form>
                 </div>
 
-                <div className="mt-8 text-center space-y-4">
-                    <div className="bg-muted/40 backdrop-blur-sm p-4 rounded-xl border border-border/50 text-sm text-muted-foreground inline-block">
-                        <span className="text-primary font-black uppercase tracking-widest mr-2">Demo:</span>
-                        <code className="bg-background px-2 py-0.5 rounded text-foreground font-bold">admin / 123</code>
-                    </div>
-                </div>
             </div>
         </div>
     );

@@ -11,11 +11,25 @@ export async function GET() {
                 c.*,
                 COALESCE(l.new_debt, 0)::float as current_balance,
                 COALESCE(l.type, null) as last_transaction_type,
-                COALESCE(p.total_paid, 0)::float as total_paid
+                COALESCE(p.total_paid, 0)::float as total_paid,
+                COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment
             FROM "Customer" c
             LEFT JOIN (
-                SELECT DISTINCT ON (customer_id) customer_id, new_debt, type
-                FROM "Ledger"
+                SELECT DISTINCT ON (customer_id) 
+                    customer_id, 
+                    new_debt, 
+                    type,
+                    EXISTS (
+                        SELECT 1 FROM "Ledger" l2 
+                        WHERE l2.customer_id = l1.customer_id 
+                          AND (
+                              (l1.receipt_id IS NOT NULL AND l2.receipt_id = l1.receipt_id)
+                              OR
+                              (l1.receipt_id IS NULL AND l2.id = l1.id)
+                          )
+                          AND l2.type = 'PAYMENT'
+                    ) as last_receipt_has_payment
+                FROM "Ledger" l1
                 ORDER BY customer_id, created_at DESC, id DESC
             ) l ON c.id = l.customer_id
             LEFT JOIN (

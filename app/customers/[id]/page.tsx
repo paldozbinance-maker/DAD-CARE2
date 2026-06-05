@@ -1,5 +1,14 @@
 'use client';
 
+// ─── SINGLE SOURCE OF TRUTH for balance labels ───────────────────────────────
+// Change these two strings here and EVERY label in the UI updates automatically.
+const LABEL_REESTO       = 'Reesto';       // Shown when a payment exists → remaining balance
+const LABEL_LACAGTA_GUUD = 'Lacagta Guud'; // Shown when no payment made → total amount owed
+/** Returns the correct balance label based purely on whether a payment was made */
+const getBalanceLabel = (totalPaid: number): string =>
+    totalPaid > 0 ? LABEL_REESTO : LABEL_LACAGTA_GUUD;
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -382,6 +391,11 @@ export default function CustomerDetailPage() {
         return r.totalMaqalka > 0 || r.totalPaid > 0 || r.totalAdjustment > 0;
     });
 
+    // The card label must match the final line of the most recent receipt:
+    // "Reesto" = latest receipt HAS a payment (remaining balance after payment)
+    // "Lacagta Guud" = latest receipt has NO payment (full amount still owed)
+    const latestReceiptHasPayment = filteredReceipts.length > 0 ? filteredReceipts[0].totalPaid > 0 : false;
+
     return (
         <div className="max-w-2xl mx-auto space-y-3 pb-20">
             {/* 1. Header Navigation */}
@@ -511,7 +525,8 @@ export default function CustomerDetailPage() {
                                 ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
                             </p>
                             <span className={`text-[8px] uppercase font-bold ${summary.currentBalance > 0 ? 'text-destructive/70' : 'text-emerald-500/70'}`}>
-                                {summary.currentBalance > 0 ? 'Reesto' : 'Lacagta Guud'}
+                                {/* Driven by getBalanceLabel — single source of truth */}
+                                {getBalanceLabel(filteredReceipts[0]?.totalPaid ?? 0)}
                             </span>
                         </div>
                     </div>
@@ -660,23 +675,24 @@ export default function CustomerDetailPage() {
                                                         </div>
                                                     )}
 
-                                                    {/* 3b. Adjustment entries (also Reesto) */}
+                                                    {/* 3b. Adjustment entries (also Reesto — carried-over debt) */}
                                                     {receipt.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
                                                         <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                            <span>Reesto</span>
+                                                            <span>{LABEL_REESTO}</span>
                                                             <span>+${Math.round(e.amount).toLocaleString()}</span>
                                                         </div>
                                                     ))}
 
-                                                    {/* 4. Lacagta Guud (Maqalka + Reesto combined) */}
+                                                    {/* 4. Lacagta Guud — total owed (Maqalka + Reesto), shown only when no payment made */}
                                                     {(receipt.totalMaqalka > 0 || receipt.totalAdjustment > 0) && (
                                                         <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
-                                                            <span>Lacagta Guud</span>
+                                                            {/* Uses LABEL_LACAGTA_GUUD — single source of truth */}
+                                                            <span>{LABEL_LACAGTA_GUUD}</span>
                                                             <span>${Math.round(receipt.totalMaqalka + receipt.totalAdjustment + receipt.openingBalance).toLocaleString()}</span>
                                                         </div>
                                                     )}
 
-                                                    {/* 5. Lacagaha (Payments) */}
+                                                    {/* 5. Lacagaha (Payments list) */}
                                                     {receipt.entries.some(e => e.type === 'PAYMENT') && (
                                                         <>
                                                             <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
@@ -689,11 +705,12 @@ export default function CustomerDetailPage() {
                                                         </>
                                                     )}
 
-                                                    {/* 6. Final Balance */}
+                                                    {/* 6. Final Balance — only shown when payment was made */}
                                                     {receipt.totalPaid > 0 && (
                                                         <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
                                                             <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">
-                                                                Reesto
+                                                                {/* Uses LABEL_REESTO — single source of truth */}
+                                                                {LABEL_REESTO}
                                                             </span>
                                                             <span className={`text-lg font-black ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                                 ${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
