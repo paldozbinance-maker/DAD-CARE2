@@ -534,11 +534,22 @@ export default function CustomerDetailPage() {
             </Card>
 
             {/* Header for History */}
-            <div className="flex items-center border-b border-border/50 pb-2">
+            <div className="flex items-center justify-between border-b border-border/50 pb-2">
                 <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                     <History className="w-3 h-3 text-primary" />
                     Buuga Maqalka History
                 </h2>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[10px] font-black uppercase tracking-widest gap-1.5 rounded-full border-blue-500/20 bg-background hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                    onClick={() => {
+                        import('@/lib/export-pdf').then(m => m.downloadCustomerHistoryPDF(customer, transactions));
+                    }}
+                >
+                    <FileDown className="w-3 h-3" />
+                    Export PDF
+                </Button>
             </div>
 
             {/* 4. RECEIPT HISTORY LIST */}

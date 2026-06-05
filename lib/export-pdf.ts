@@ -1,0 +1,404 @@
+import jsPDF from 'jspdf';
+import { format } from 'date-fns';
+
+// Define types based on what's used
+interface Transaction {
+    id: string;
+    type: 'PRODUCT' | 'PAYMENT' | 'ADJUSTMENT';
+    reference_date: string;
+    kg?: number;
+    price_per_kg?: number;
+    amount: number;
+    previous_debt: number;
+    new_debt: number;
+    created_at: string;
+    note?: string;
+    receipt_id?: string | null;
+}
+
+interface ReceiptGroup {
+    id: string;
+    mainDate: string;
+    kind: 'TRANSACTION' | 'ADJUSTMENT';
+    entries: Transaction[];
+    totalKilos: number;
+    totalMaqalka: number;
+    totalAdjustment: number;
+    totalPaid: number;
+    openingBalance: number;
+    closingBalance: number;
+    note?: string;
+    titleString?: string;
+}
+
+// Reuse the exact grouping logic from the UI
+export function groupTransactionsInfoReceipts(txns: Transaction[]): ReceiptGroup[] {
+    if (!txns || txns.length === 0) return [];
+
+    const sortedTxns = [...txns].sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+        return a.id.localeCompare(b.id);
+    });
+
+    const withReceiptId = sortedTxns.filter(t => t.receipt_id);
+    const withoutReceiptId = sortedTxns.filter(t => !t.receipt_id);
+
+    const receiptGroups: Transaction[][] = [];
+
+    const groupedByReceiptId = withReceiptId.reduce((acc, t) => {
+        const rid = t.receipt_id!;
+        if (!acc[rid]) acc[rid] = [];
+        acc[rid].push(t);
+        return acc;
+    }, {} as Record<string, Transaction[]>);
+
+    Object.values(groupedByReceiptId).forEach(group => receiptGroups.push(group));
+
+    if (withoutReceiptId.length > 0) {
+        let currentGroup: Transaction[] = [];
+        withoutReceiptId.forEach((txn, i) => {
+            if (i === 0) {
+                currentGroup.push(txn);
+            } else {
+                const prev = withoutReceiptId[i - 1];
+                const diff = Math.abs(new Date(txn.created_at).getTime() - new Date(prev.created_at).getTime());
+                if (diff < 15000) {
+                    currentGroup.push(txn);
+                } else {
+                    receiptGroups.push(currentGroup);
+                    currentGroup = [txn];
+                }
+            }
+        });
+        if (currentGroup.length > 0) receiptGroups.push(currentGroup);
+    }
+
+    const processedReceipts = receiptGroups.map((group, idx) => {
+        const last = group[0];
+        const first = group[group.length - 1];
+
+        const totalKilos = group.reduce((sum, t) => sum + (t.kg || 0), 0);
+        const totalMaqalka = group.filter(t => t.type === 'PRODUCT').reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalPaid = group.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalAdjustment = group.filter(t => t.type === 'ADJUSTMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+        const isAdjustmentOnly = group.length === group.filter(t => t.type === 'ADJUSTMENT').length;
+
+        const productDates = group.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
+        let titleString = format(new Date(last.created_at), 'EEEE, MMMM dd, yyyy');
+
+        if (productDates.length > 0) {
+            productDates.sort((a, b) => a.getTime() - b.getTime());
+            const uniqueDates = Array.from(new Set(productDates.map(d => format(d, 'dd MMM'))));
+            if (uniqueDates.length === 1) titleString = `Maqalka Taariikhda ${uniqueDates[0]}`;
+            else if (uniqueDates.length === 2) titleString = `Maqalka Taariikhda ${uniqueDates[0]} iyo ${uniqueDates[1]}`;
+            else titleString = `Maqalka Taariikhda ${uniqueDates[0]} ila ${uniqueDates[uniqueDates.length - 1]}`;
+        }
+
+        return {
+            id: `group-${idx}-${last.id}`,
+            mainDate: last.reference_date,
+            kind: isAdjustmentOnly ? 'ADJUSTMENT' : 'TRANSACTION',
+            titleString: titleString,
+            entries: [...group].reverse(), 
+            totalKilos,
+            totalMaqalka,
+            totalPaid,
+            totalAdjustment,
+            openingBalance: first.previous_debt,
+            closingBalance: last.new_debt,
+            note: group.find(t => t.note)?.note
+        } as ReceiptGroup;
+    }).sort((a, b) => new Date(b.entries[0].created_at).getTime() - new Date(a.entries[0].created_at).getTime());
+
+    const oldestFirst = [...processedReceipts].sort((a, b) =>
+        new Date(a.entries[0].created_at).getTime() - new Date(b.entries[0].created_at).getTime()
+    );
+
+    const merged: ReceiptGroup[] = [];
+    for (const current of oldestFirst) {
+        const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
+
+        if (isPaymentOnly && merged.length > 0) {
+            let targetIdx = -1;
+            for (let k = merged.length - 1; k >= 0; k--) {
+                if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
+                    targetIdx = k;
+                    break;
+                }
+            }
+
+            if (targetIdx !== -1) {
+                const target = merged[targetIdx];
+                const mergedEntries = [...target.entries, ...current.entries].sort(
+                    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                );
+                const latestEntry = mergedEntries[mergedEntries.length - 1];
+                merged[targetIdx] = {
+                    ...target,
+                    entries: mergedEntries,
+                    totalPaid: target.totalPaid + current.totalPaid,
+                    closingBalance: latestEntry.new_debt,
+                };
+                continue; 
+            }
+        }
+        merged.push(current);
+    }
+
+    return merged.sort((a, b) =>
+        new Date(b.entries[b.entries.length - 1].created_at).getTime() -
+        new Date(a.entries[a.entries.length - 1].created_at).getTime()
+    );
+}
+
+function drawReceiptOnDoc(doc: jsPDF, customer: any, receipt: ReceiptGroup) {
+    const pageWidth = 80;
+    const margin = 5;
+    let y = 8;
+
+    // ===== HEADER =====
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DADCARE LEDGER', pageWidth / 2, y, { align: 'center' });
+    y += 5;
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Official Transaction Receipt', pageWidth / 2, y, { align: 'center' });
+    y += 3;
+
+    // Divider
+    doc.setDrawColor(180);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 4;
+
+    // ===== CUSTOMER INFO =====
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(customer.name.toUpperCase(), pageWidth / 2, y, { align: 'center' });
+    y += 4;
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`ID: ${customer.customer_code}`, pageWidth / 2, y, { align: 'center' });
+    y += 3;
+    doc.text(`Generated: ${format(new Date(), 'MMMM dd, yyyy')}`, pageWidth / 2, y, { align: 'center' });
+    y += 4;
+
+    // Divider
+    doc.setDrawColor(200);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 4;
+
+    // ===== TITLE =====
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text(receipt.titleString || 'Transaction Receipt', pageWidth / 2, y, { align: 'center' });
+    y += 5;
+
+    // ===== MAQALKA (Product Entries) =====
+    const productEntries = receipt.entries.filter(e => e.type === 'PRODUCT');
+    if (productEntries.length > 0) {
+        doc.setFontSize(6);
+        doc.setFont('helvetica', 'bold');
+        doc.text('MAQALKA', margin, y);
+        y += 3;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+
+        productEntries.forEach(entry => {
+            const dateStr = format(new Date(entry.reference_date), 'MMM dd');
+            const kgStr = `${Math.round(entry.kg || 0)}KG @ $${entry.price_per_kg}`;
+            const amountStr = `$${Math.round(entry.amount).toLocaleString()}`;
+
+            doc.text(`${dateStr} · ${kgStr}`, margin, y);
+            doc.text(amountStr, pageWidth - margin, y, { align: 'right' });
+            y += 3.5;
+        });
+    }
+
+    // Maqalka Total
+    doc.setDrawColor(180);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 3;
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Maqalka Total', margin, y);
+    doc.text(`$${Math.round(receipt.totalMaqalka).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
+    y += 4;
+
+    // ===== REESTO (Previous Balance) =====
+    if (receipt.openingBalance !== 0) {
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Reesto', margin, y);
+        const sign = receipt.openingBalance > 0 ? '+' : '';
+        doc.text(`${sign}$${Math.round(receipt.openingBalance).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
+        y += 4;
+    }
+
+    // ===== ADJUSTMENT entries =====
+    const adjustmentEntries = receipt.entries.filter(e => e.type === 'ADJUSTMENT');
+    adjustmentEntries.forEach(entry => {
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Reesto', margin, y);
+        doc.text(`+$${Math.round(entry.amount).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
+        y += 3.5;
+    });
+
+    // ===== SUBTOTAL =====
+    const subtotal = receipt.totalMaqalka + receipt.totalAdjustment + receipt.openingBalance;
+    if (receipt.totalMaqalka > 0 || receipt.totalAdjustment > 0) {
+        doc.setDrawColor(200);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 3;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Lacagta Guud', margin, y);
+        doc.text(`$${Math.round(subtotal).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
+        y += 5;
+    }
+
+    // ===== LACAGAHA (Payments) =====
+    const paymentEntries = receipt.entries.filter(e => e.type === 'PAYMENT');
+    if (paymentEntries.length > 0) {
+        doc.setFontSize(6);
+        doc.setFont('helvetica', 'bold');
+        doc.text('LACAGAHA (PAYMENTS)', margin, y);
+        y += 3;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+
+        paymentEntries.forEach(entry => {
+            const dateStr = format(new Date(entry.reference_date), 'MMM dd');
+            doc.text(`${dateStr} Payment`, margin, y);
+            doc.text(`-$${Math.round(entry.amount).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
+            y += 3.5;
+        });
+
+        y += 1;
+    }
+
+    // ===== LACAGTA GUUD (Final Balance - Only if payment was made) =====
+    if (receipt.totalPaid > 0) {
+        doc.setDrawColor(150);
+        doc.setLineWidth(0.5);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 0.5;
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 4;
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('REESTO', margin, y);
+        doc.text(`$${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}`, pageWidth - margin, y, { align: 'right' });
+        y += 3.5;
+
+        doc.setFontSize(6);
+        doc.setFont('helvetica', 'normal');
+        if (receipt.closingBalance > 0) {
+            doc.text('(Amount Owed)', pageWidth / 2, y, { align: 'center' });
+        } else {
+            doc.text('(Settled / Credit)', pageWidth / 2, y, { align: 'center' });
+        }
+        y += 6;
+    }
+
+    // ===== FOOTER =====
+    doc.setDrawColor(200);
+    doc.setLineWidth(0.2);
+    doc.line(margin + 10, y, pageWidth - margin - 10, y);
+    y += 3;
+
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text('This is an official document from Dadcare Ledger System.', pageWidth / 2, y, { align: 'center' });
+}
+
+export function downloadCustomerHistoryPDF(customer: any, txns: any[]) {
+    // We want a multi-page PDF where each page is an 80x200 receipt
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 200]
+    });
+
+    const receipts = groupTransactionsInfoReceipts(txns);
+
+    // Filter to show only receipts that have actual changes
+    const validReceipts = receipts.filter(r => r.totalMaqalka > 0 || r.totalPaid > 0 || r.totalAdjustment > 0);
+
+    if (validReceipts.length === 0) {
+        doc.setFontSize(12);
+        doc.text('No History Found', 40, 40, { align: 'center' });
+        doc.save(`history-${customer.customer_code}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+        return;
+    }
+
+    // Oldest to newest for reading like a history book? Or newest first? 
+    // They usually want to read history sequentially from oldest to newest when downloading.
+    const sortedReceipts = [...validReceipts].reverse();
+
+    sortedReceipts.forEach((receipt, index) => {
+        if (index > 0) {
+            doc.addPage();
+        }
+        drawReceiptOnDoc(doc, customer, receipt);
+    });
+
+    doc.save(`history-${customer.customer_code}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+}
+
+export function downloadSystemBackupPDF(customers: any[], txnsByCustomer: Record<string, any[]>) {
+    // Generate one massive PDF with receipt documents for all customers
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 200]
+    });
+
+    let isFirstPage = true;
+
+    // Draw cover page
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DADCARE LEDGER', 40, 60, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text('SYSTEM BACKUP', 40, 70, { align: 'center' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${format(new Date(), 'MMMM dd, yyyy HH:mm')}`, 40, 80, { align: 'center' });
+    doc.text(`Customers: ${customers.length}`, 40, 85, { align: 'center' });
+
+    customers.forEach((customer) => {
+        const txns = txnsByCustomer[customer.id] || [];
+        if (txns.length === 0) return;
+
+        const receipts = groupTransactionsInfoReceipts(txns);
+        const validReceipts = receipts.filter(r => r.totalMaqalka > 0 || r.totalPaid > 0 || r.totalAdjustment > 0);
+
+        if (validReceipts.length === 0) return;
+
+        const sortedReceipts = [...validReceipts].reverse(); // Oldest first
+
+        sortedReceipts.forEach((receipt) => {
+            if (!isFirstPage) {
+                doc.addPage();
+            } else {
+                doc.addPage(); // Start receipts after cover
+                isFirstPage = false;
+            }
+            drawReceiptOnDoc(doc, customer, receipt);
+        });
+    });
+
+    doc.save(`system-backup-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+}

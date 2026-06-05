@@ -150,36 +150,26 @@ export default function SettingsPage() {
     };
 
     // Backup/Export
-    const handleExportCSV = async () => {
+    const handleExportPDF = async () => {
         setLoading(true);
         try {
             const custRes = await fetch('/api/customers');
             const customers = await custRes.json();
 
-            let csvContent = 'Customer,Code,Date,Type,KG,Price,Amount,Balance After\n';
-
             if (Array.isArray(customers)) {
+                const txnsByCustomer: Record<string, any[]> = {};
                 for (const cust of customers) {
                     const ledgerRes = await fetch(`/api/ledger?customerId=${cust.id}&limit=10000`);
                     const ledgerData = await ledgerRes.json();
-                    const txns = ledgerData.transactions || [];
-
-                    txns.forEach((t: any) => {
-                        csvContent += `"${cust.name}","${cust.customer_code}","${t.reference_date}","${t.type}",${t.kg || 0},${t.price_per_kg || 0},${t.amount},${t.new_debt}\n`;
-                    });
+                    txnsByCustomer[cust.id] = ledgerData.transactions || [];
                 }
+                
+                const { downloadSystemBackupPDF } = await import('@/lib/export-pdf');
+                downloadSystemBackupPDF(customers, txnsByCustomer);
+                toast.success('Colorful PDF backup exported successfully');
             }
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `dadwork-ledger-full-${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-            toast.success('Excel-friendly CSV exported');
         } catch (e) {
-            toast.error('Failed to export CSV');
+            toast.error('Failed to export PDF');
         } finally {
             setLoading(false);
         }
@@ -651,16 +641,16 @@ export default function SettingsPage() {
                                             </div>
                                             <div>
                                                 <h3 className="text-sm font-bold text-foreground">Export Data</h3>
-                                                <p className="text-[10px] text-muted-foreground">Download full CSV backup</p>
+                                                <p className="text-[10px] text-muted-foreground">Download full PDF backup</p>
                                             </div>
                                         </div>
                                     </div>
                                     <div className="p-4">
                                         <p className="text-xs text-muted-foreground mb-3">
-                                            Download a complete Excel-friendly CSV backup of all customers and transactions.
+                                            Download a complete PDF backup of all customers and transactions with colors.
                                         </p>
                                         <Button
-                                            onClick={handleExportCSV}
+                                            onClick={handleExportPDF}
                                             disabled={loading}
                                             className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-amber-600/20 active:scale-[0.98] transition-all"
                                         >
