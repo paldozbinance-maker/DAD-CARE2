@@ -511,7 +511,7 @@ export default function CustomerDetailPage() {
                                 ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
                             </p>
                             <span className={`text-[8px] uppercase font-bold ${summary.currentBalance > 0 ? 'text-destructive/70' : 'text-emerald-500/70'}`}>
-                                {summary.currentBalance > 0 ? 'Lacagta Guud' : 'Reesto'}
+                                {summary.currentBalance > 0 ? 'Reesto' : 'Lacagta Guud'}
                             </span>
                         </div>
                     </div>

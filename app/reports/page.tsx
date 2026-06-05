@@ -415,7 +415,7 @@ export default function ReportsPage() {
                             <CardHeader className="pb-3 border-b border-border bg-gradient-to-r from-red-500/10 to-transparent">
                                 <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                                     <TrendingUp className="h-4 w-4 text-red-500" />
-                                    Highest Debt (Lacagta Guud)
+                                    Highest Debt (Reesto)
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-0 max-h-[500px] overflow-y-auto">
@@ -437,7 +437,7 @@ export default function ReportsPage() {
                             <CardHeader className="pb-3 border-b border-border">
                                 <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                                     <TrendingDown className="h-4 w-4 text-emerald-500" />
-                                    Lowest Debt (Lacagta Guud)
+                                    Lowest Debt (Reesto)
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-0 max-h-[500px] overflow-y-auto">

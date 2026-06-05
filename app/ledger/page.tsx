@@ -980,7 +980,7 @@ export default function LedgerPage() {
                 <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border p-4 md:hidden z-50 animate-in slide-in-from-bottom duration-500 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
                     <div className="flex items-center gap-4 max-w-lg mx-auto">
                         <div className="flex-1">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">{finalLacagtaGuud > 0 ? 'Lacagta Guud' : 'Reesto'}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">{finalLacagtaGuud > 0 ? 'Reesto' : 'Lacagta Guud'}</p>
                             <p className={`text-xl font-black leading-none ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                 ${Math.round(finalLacagtaGuud).toLocaleString()}
                             </p>
