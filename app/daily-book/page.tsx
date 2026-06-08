@@ -254,7 +254,7 @@ export default function DailyBookPage() {
                         <div className="p-2.5 rounded-xl bg-primary/20 text-primary shadow-inner">
                             <BookOpen className="w-6 h-6" />
                         </div>
-                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Daily Book</h2>
+                        <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Buuga Maalinlaha</h2>
                     </div>
                     <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
                         Record and manage daily product entries, attendance, and notes for all customers in one centralized location.
@@ -487,7 +487,7 @@ export default function DailyBookPage() {
                             </div>
                         </div>
 
-                        {/* WISER MOBILE: Sticky Save Bar for Daily Book */}
+                        {/* WISER MOBILE: Sticky Save Bar for Buuga Maalinlaha */}
                         {!saving && totalKg > 0 && viewMode === 'edit' && (
                             <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border md:hidden z-50 animate-in slide-in-from-bottom duration-500">
                                 <Button

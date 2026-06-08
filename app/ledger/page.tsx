@@ -60,7 +60,7 @@ export default function LedgerPage() {
     const SESSION_KEY = 'dadwork_ledger_session_active';
 
     // Data state
-    const [allCustomers, setAllCustomers] = useState<{ id: string, name: string, customer_code: string }[]>([]);
+    const [allCustomers, setAllCustomers] = useState<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number }[]>([]);
     const [history, setHistory] = useState<Transaction[]>([]);
     const [summary, setSummary] = useState<CustomerSummary>({ totalKg: 0, totalPaid: 0, currentBalance: 0 });
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -330,7 +330,7 @@ export default function LedgerPage() {
                     }
 
                     if (matchingDaily.kg > 0) {
-                        toast.success(`Found ${matchingDaily.kg} KG in Daily Book for this date!`);
+                        toast.success(`Found ${matchingDaily.kg} KG in Buuga Maalinlaha for this date!`);
                         return { ...entry, date: value, kg: matchingDaily.kg.toString() };
                     }
                 }
@@ -451,6 +451,13 @@ export default function LedgerPage() {
 
             // 4. Refresh data (full sync)
             await handleCustomerChange(selectedCustomerId);
+            
+            // Re-fetch customers to update warning/correct symbols in real-time
+            const custRes = await fetch('/api/customers');
+            const custData = await custRes.json();
+            if (Array.isArray(custData)) {
+                setAllCustomers(custData);
+            }
 
         } catch (err: any) {
             toast.error(err.message || 'Failed to save receipt');
@@ -543,14 +550,14 @@ export default function LedgerPage() {
                                                 <optgroup label="⭐ PRIORITY CUSTOMERS">
                                                     {sortedCustomers.filter(c => currentUser.assigned_customer_ids.includes(c.id)).map(c => (
                                                         <option key={c.id} value={c.id}>
-                                                            ⭐ {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                            ⭐ {c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')}{c.name.toUpperCase()} (ID: {c.customer_code})
                                                         </option>
                                                     ))}
                                                 </optgroup>
                                                 <optgroup label="OTHER CUSTOMERS">
                                                     {sortedCustomers.filter(c => !currentUser.assigned_customer_ids.includes(c.id)).map(c => (
                                                         <option key={c.id} value={c.id}>
-                                                            {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                            {c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')}{c.name.toUpperCase()} (ID: {c.customer_code})
                                                         </option>
                                                     ))}
                                                 </optgroup>
@@ -558,7 +565,7 @@ export default function LedgerPage() {
                                         ) : (
                                             sortedCustomers.map(c => (
                                                 <option key={c.id} value={c.id}>
-                                                    {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                    {c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')}{c.name.toUpperCase()} (ID: {c.customer_code})
                                                 </option>
                                             ))
                                         )}
@@ -753,10 +760,33 @@ export default function LedgerPage() {
                                                                             onSelect={(val) => val && updateDateEntry(entry.id, 'date', format(val, 'yyyy-MM-dd'))}
                                                                             disabled={(date) => {
                                                                                 const dStr = format(date, 'yyyy-MM-dd');
+                                                                                if (entry.date === dStr) return false;
+
+                                                                                const dailyBook = customerDailyDates.find(d => d.date === dStr);
+                                                                                if (!dailyBook) return true; // Only allow dates in daily books
+                                                                                if (dailyBook.processed) return true; // Disallow already processed ones
                                                                                 const inHist = history.some(h => h.reference_date === dStr && h.type === 'PRODUCT');
-                                                                                const isProc = customerDailyDates.find(d => d.date === dStr)?.processed;
-                                                                                const isFuture = date > new Date();
-                                                                                return !!(inHist || isProc || isFuture);
+                                                                                if (inHist) return true; // Disallow if already in history
+
+                                                                                // Enforce Sequence: Only allow the OLDEST available date
+                                                                                const unprocessedDates = customerDailyDates
+                                                                                    .filter(d => !d.processed && !history.some(h => h.reference_date === d.date && h.type === 'PRODUCT'))
+                                                                                    .map(d => d.date)
+                                                                                    .sort((a, b) => a.localeCompare(b));
+
+                                                                                // Exclude dates picked in OTHER rows
+                                                                                const selectedByOthers = dateEntries
+                                                                                    .filter(e => e.id !== entry.id && e.date)
+                                                                                    .map(e => e.date);
+
+                                                                                const availableDates = unprocessedDates.filter(d => !selectedByOthers.includes(d));
+
+                                                                                // The date is ONLY allowed if it is the FIRST date in the available sequence
+                                                                                if (availableDates.length > 0 && availableDates[0] === dStr) {
+                                                                                    return false;
+                                                                                }
+
+                                                                                return true;
                                                                             }}
                                                                             initialFocus
                                                                             className="rounded-xl"
