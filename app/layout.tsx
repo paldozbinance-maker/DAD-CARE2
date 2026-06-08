@@ -26,7 +26,14 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'DadCare',
   },
+};
+
+export const viewport: import('next').Viewport = {
   themeColor: '#2563EB',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -36,9 +43,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-      </head>
+      <head />
       <body className={`${inter.className} h-full antialiased`}>
         <ThemeProvider
           attribute="class"

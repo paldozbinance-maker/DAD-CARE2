@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
-import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare } from 'lucide-react';
+import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare, Maximize2, Minimize2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 
@@ -52,9 +52,14 @@ export default function DailyBookPage() {
     const [viewMode, setViewMode] = useState<'edit' | 'details'>('edit');
     const [editingDate, setEditingDate] = useState<string | null>(null);
     const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+    const [focusedEntry, setFocusedEntry] = useState<SavedEntry | null>(null);
     const [searchDate, setSearchDate] = useState<Date | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
     const [latestSavedDateStr, setLatestSavedDateStr] = useState<string | null>(null);
+    const [isFullScreen, setIsFullScreen] = useState(false);
+    const [processedCustomerIds, setProcessedCustomerIds] = useState<Set<string>>(new Set());
+    const [loadingLedgerStatus, setLoadingLedgerStatus] = useState(false);
+    const [historyLedgerStatus, setHistoryLedgerStatus] = useState<Record<string, Set<string>>>({});
 
     const loadCustomers = async () => {
         try {
@@ -121,7 +126,24 @@ export default function DailyBookPage() {
 
     useEffect(() => {
         loadDailyBook(date);
+        fetchLedgerStatusForDate(date);
     }, [date]);
+
+    const fetchLedgerStatusForDate = async (selectedDate: Date) => {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        setLoadingLedgerStatus(true);
+        try {
+            const res = await fetch(`/api/ledger-by-date?date=${dateStr}`);
+            if (res.ok) {
+                const ids: string[] = await res.json();
+                setProcessedCustomerIds(new Set(ids));
+            }
+        } catch (e) {
+            console.error('Failed to fetch ledger status', e);
+        } finally {
+            setLoadingLedgerStatus(false);
+        }
+    };
 
     const loadSavedEntries = async () => {
         try {
@@ -178,6 +200,7 @@ export default function DailyBookPage() {
         } finally {
             setSaving(false);
             fetchLatestDate(); // Refresh sequence after save
+            fetchLedgerStatusForDate(date); // Refresh ledger indicators after save
         }
     };
 
@@ -282,6 +305,105 @@ export default function DailyBookPage() {
             </div>
 
             {viewMode === 'edit' ? (
+                <>
+                {/* TRUE FULLSCREEN OVERLAY — covers sidebar + everything */}
+                {isFullScreen && (
+                    <div className="fixed inset-0 z-[9999] bg-background flex flex-col animate-in fade-in duration-150">
+                        {/* Fullscreen Top Bar */}
+                        <div className="shrink-0 flex items-center justify-between gap-3 px-3 py-2 border-b border-border bg-card/90 backdrop-blur-sm">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <BookOpen className="w-4 h-4 text-primary shrink-0" />
+                                <span className="font-black text-sm uppercase tracking-tight truncate text-foreground">{format(date, 'MMM dd, yyyy')}</span>
+                                {totalKg > 0 && <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">{Math.round(totalKg)} KG</span>}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                {editingDate && (
+                                    <Button variant="ghost" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-8 px-3 text-[10px] font-bold uppercase text-muted-foreground">Cancel</Button>
+                                )}
+                                <Button onClick={handleSave} disabled={saving || totalKg === 0} size="sm" className="h-8 px-4 text-[10px] font-black uppercase bg-primary text-primary-foreground shadow-md">
+                                    {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
+                                    {editingDate ? 'Update' : 'Save'}
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => setIsFullScreen(false)} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                    <Minimize2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Search bar */}
+                        <div className="shrink-0 px-3 py-2 border-b border-border bg-card/50">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <Input placeholder="Search customers..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 h-10 bg-background border-input focus:border-primary shadow-sm w-full" autoFocus />
+                            </div>
+                        </div>
+
+                        {/* Scrollable customer table — fills all remaining space */}
+                        <div className="flex-1 overflow-hidden relative">
+                            <div className="h-full bg-[#fcf8f1] dark:bg-slate-900 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                                {/* Vertical Ledger Margin Line */}
+                                <div className="absolute left-[50px] md:left-[70px] top-0 bottom-0 w-[1px] bg-red-400 dark:bg-red-900/50 pointer-events-none z-20" />
+                                {/* Sticky col headers */}
+                                <div className="sticky top-0 z-30 grid grid-cols-12 px-2 md:px-4 py-2 bg-[#f4ece0] dark:bg-slate-950 border-b-2 border-slate-300 dark:border-slate-700 shadow-sm">
+                                    <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">ID</div>
+                                    <div className="col-span-5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter pl-4">Customer Name</div>
+                                    <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-center">Status</div>
+                                    <div className="col-span-3 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-right">KG</div>
+                                </div>
+                                <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
+                                    {sortedCustomers.map((customer, index) => (
+                                        <div key={customer.id} className="grid grid-cols-12 items-center px-2 md:px-4 py-1.5 transition-colors hover:bg-blue-100/20 dark:hover:bg-slate-800/30 group border-b border-blue-50/50 dark:border-slate-800/30 last:border-0">
+                                            <div className="col-span-2 flex items-center justify-start">
+                                                <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">#{customer.customer_code}</span>
+                                            </div>
+                                            <div className="col-span-5 flex flex-col justify-center pl-4 border-l border-red-200/50 dark:border-red-900/30">
+                                                <div className="relative inline-flex items-center gap-1.5 w-fit max-w-full">
+                                                    <span className="font-bold text-[11px] md:text-sm text-slate-700 dark:text-slate-300 uppercase truncate">{customer.name}</span>
+                                                    {entries[customer.id]?.kg > 0 && (
+                                                        processedCustomerIds.has(customer.id) ? (
+                                                            <span title="Processed in Buuga Maqalka" className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[8px] font-black leading-none">✓</span>
+                                                        ) : (
+                                                            <span title="Not yet in Buuga Maqalka" className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[8px] font-black leading-none animate-pulse">!</span>
+                                                        )
+                                                    )}
+                                                    <div className="absolute -bottom-0.5 left-0 w-full h-[1px] bg-blue-200/50 dark:bg-slate-700 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            <div className="col-span-2 flex items-center justify-center gap-1.5 px-1">
+                                                <button onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })} className={`h-5 w-5 md:h-6 md:w-6 rounded flex items-center justify-center text-[10px] md:text-[11px] font-black transition-colors border ${entries[customer.id]?.present !== false ? 'bg-green-100/50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400' : 'bg-red-100/50 border-red-200 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400'}`}>
+                                                    {entries[customer.id]?.present !== false ? 'P' : 'A'}
+                                                </button>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" size="sm" className={`h-5 w-5 md:h-6 md:w-6 p-0 rounded-md hover:bg-blue-100 dark:hover:bg-slate-800 ${entries[customer.id]?.note ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                            <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl">
+                                                        <div className="space-y-2">
+                                                            <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
+                                                            <Input placeholder="Add a remark..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                            <div className="col-span-3 flex items-center justify-end gap-1">
+                                                <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
+                                                {(entries[customer.id]?.kg > 0 || entries[customer.id]?.present === false || entries[customer.id]?.note) && (
+                                                    <Button variant="ghost" size="sm" onClick={() => { const n = { ...entries }; delete n[customer.id]; setEntries(n); }} className="h-8 w-8 md:h-6 md:w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                        <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* NORMAL CARD (shown when not fullscreen) */}
                 <Card className="glass-card">
                     <CardHeader className="border-b border-border bg-muted/20">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -303,86 +425,63 @@ export default function DailyBookPage() {
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0 bg-popover border-border shadow-xl">
-                                        <Calendar
-                                            mode="single"
-                                            selected={date}
-                                            onSelect={(newDate) => newDate && handleDateChange(newDate)}
-                                            className="rounded-md border-0"
-                                        />
+                                        <Calendar mode="single" selected={date} onSelect={(newDate) => newDate && handleDateChange(newDate)} className="rounded-md border-0" />
                                     </PopoverContent>
                                 </Popover>
-                                <AddCustomerDialog
-                                    onSuccess={loadCustomers}
-                                    nextId={(Math.max(...customers.map(c => parseInt(c.customer_code.replace(/\D/g, '')) || 0), 0) + 1).toString()}
-                                />
+                                <AddCustomerDialog onSuccess={loadCustomers} nextId={(Math.max(...customers.map(c => parseInt(c.customer_code.replace(/\D/g, '')) || 0), 0) + 1).toString()} />
+                                <Button variant="outline" size="icon" onClick={() => setIsFullScreen(true)} className="h-10 w-10 text-muted-foreground hover:text-primary border-border" title="Enter Full Screen">
+                                    <Maximize2 className="h-4 w-4" />
+                                </Button>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                        {/* 1. COMPACT Search bar */}
-                        <div className="p-3 border-b border-border bg-card/50">
-                            <div className="relative w-full">
+                        {/* Search bar */}
+                        <div className="p-3 border-b border-border bg-card/50 flex items-center gap-2">
+                            <div className="relative flex-1">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search customers..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-9 h-11 bg-background border-input focus:border-primary"
-                                />
+                                <Input placeholder="Search customers..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 h-10 bg-background border-input focus:border-primary shadow-sm" />
                             </div>
                         </div>
 
                         {customers.length === 0 ? (
                             <div className="text-center py-12 text-muted-foreground">
-                                <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <BookOpen className="w-8 h-8 text-primary" />
-                                </div>
+                                <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><BookOpen className="w-8 h-8 text-primary" /></div>
                                 <p className="font-medium">No customers found</p>
                                 <p className="text-sm mt-1">Add a new customer to start recording entries</p>
                             </div>
                         ) : (
-                            <div className="bg-[#fcf8f1] dark:bg-slate-900 relative overflow-hidden rounded-sm border border-slate-300 dark:border-slate-800 shadow-inner h-[65vh] md:h-[500px] pb-24 md:pb-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
-                                {/* Vertical Ledger Margin Line */}
+                            <div className="bg-[#fcf8f1] dark:bg-slate-900 relative overflow-hidden rounded-sm border border-slate-300 dark:border-slate-800 shadow-inner pb-24 md:pb-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent h-[60vh] md:h-[480px]">
                                 <div className="absolute left-[50px] md:left-[70px] top-0 bottom-0 w-[1px] bg-red-400 dark:bg-red-900/50 pointer-events-none z-20" />
-
-                                {/* Sticky Header */}
                                 <div className="sticky top-0 z-30 grid grid-cols-12 px-2 md:px-4 py-2 bg-[#f4ece0] dark:bg-slate-950 border-b-2 border-slate-300 dark:border-slate-700 shadow-sm">
                                     <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">ID</div>
                                     <div className="col-span-5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter pl-4">Customer Name</div>
                                     <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-center">Status</div>
                                     <div className="col-span-3 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-right">KG</div>
                                 </div>
-
-                                {/* Ledger Rows */}
                                 <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
                                     {sortedCustomers.map((customer, index) => (
                                         <div key={customer.id} className="grid grid-cols-12 items-center px-2 md:px-4 py-1 transition-colors hover:bg-blue-100/20 dark:hover:bg-slate-800/30 group border-b border-blue-50/50 dark:border-slate-800/30 last:border-0 relative">
-                                            {/* ID Tag */}
                                             <div className="col-span-2 flex items-center justify-start">
                                                 <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">#{customer.customer_code}</span>
                                             </div>
-
-                                            {/* Customer Name - With Short Underline */}
                                             <div className="col-span-5 flex flex-col justify-center pl-4 border-l border-red-200/50 dark:border-red-900/30">
-                                                <div className="relative inline-block w-fit">
-                                                    <span className="font-bold text-[11px] md:text-sm text-slate-700 dark:text-slate-300 uppercase truncate pr-4">{customer.name}</span>
+                                                <div className="relative inline-flex items-center gap-1.5 w-fit max-w-full">
+                                                    <span className="font-bold text-[11px] md:text-sm text-slate-700 dark:text-slate-300 uppercase truncate">{customer.name}</span>
+                                                    {entries[customer.id]?.kg > 0 && (
+                                                        processedCustomerIds.has(customer.id) ? (
+                                                            <span title="Processed in Buuga Maqalka" className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[8px] font-black leading-none">✓</span>
+                                                        ) : (
+                                                            <span title="Not yet in Buuga Maqalka" className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[8px] font-black leading-none animate-pulse">!</span>
+                                                        )
+                                                    )}
                                                     <div className="absolute -bottom-0.5 left-0 w-full h-[1px] bg-blue-200/50 dark:bg-slate-700 pointer-events-none" />
                                                 </div>
                                             </div>
-
-                                            {/* Status & Note Area */}
                                             <div className="col-span-2 flex items-center justify-center gap-1.5 px-1">
-                                                <button
-                                                    onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })}
-                                                    className={`h-5 w-5 md:h-6 md:w-6 rounded flex items-center justify-center text-[10px] md:text-[11px] font-black transition-colors border ${
-                                                        entries[customer.id]?.present !== false 
-                                                        ? 'bg-green-100/50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400' 
-                                                        : 'bg-red-100/50 border-red-200 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400'
-                                                    }`}
-                                                >
+                                                <button onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })} className={`h-5 w-5 md:h-6 md:w-6 rounded flex items-center justify-center text-[10px] md:text-[11px] font-black transition-colors border ${entries[customer.id]?.present !== false ? 'bg-green-100/50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400' : 'bg-red-100/50 border-red-200 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400'}`}>
                                                     {entries[customer.id]?.present !== false ? 'P' : 'A'}
                                                 </button>
-                                                
                                                 <Popover>
                                                     <PopoverTrigger asChild>
                                                         <Button variant="ghost" size="sm" className={`h-5 w-5 md:h-6 md:w-6 p-0 rounded-md hover:bg-blue-100 dark:hover:bg-slate-800 ${entries[customer.id]?.note ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 dark:text-slate-600'}`}>
@@ -392,47 +491,17 @@ export default function DailyBookPage() {
                                                     <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl">
                                                         <div className="space-y-2">
                                                             <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
-                                                            <Input
-                                                                placeholder="Add a remark..."
-                                                                value={entries[customer.id]?.note || ''}
-                                                                onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })}
-                                                                className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none"
-                                                                autoFocus
-                                                            />
+                                                            <Input placeholder="Add a remark..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
                                                         </div>
                                                     </PopoverContent>
                                                 </Popover>
                                             </div>
-
-                                            {/* Input Area */}
                                             <div className="col-span-3 flex items-center justify-end gap-1">
                                                 <div className="relative inline-block">
-                                                    <Input
-                                                        type="number"
-                                                        step="1"
-                                                        placeholder="0"
-                                                        inputMode="decimal"
-                                                        value={entries[customer.id]?.kg || ''}
-                                                        disabled={entries[customer.id]?.present === false}
-                                                        onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })}
-                                                        onKeyDown={(e) => handleKeyPress(e, index)}
-                                                        className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0
-                                                            ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10'
-                                                            : 'text-slate-400 dark:text-slate-500'
-                                                            } ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`}
-                                                    />
+                                                    <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
                                                 </div>
                                                 {(entries[customer.id]?.kg > 0 || entries[customer.id]?.present === false || entries[customer.id]?.note) && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            const newEntries = { ...entries };
-                                                            delete newEntries[customer.id];
-                                                            setEntries(newEntries);
-                                                        }}
-                                                        className="h-8 w-8 md:h-6 md:w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                                    >
+                                                    <Button variant="ghost" size="sm" onClick={() => { const n = { ...entries }; delete n[customer.id]; setEntries(n); }} className="h-8 w-8 md:h-6 md:w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
                                                         <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
                                                     </Button>
                                                 )}
@@ -443,13 +512,11 @@ export default function DailyBookPage() {
                             </div>
                         )}
 
-                        {/* 5. TIGHT Totals Section - COMPACT DESIGN */}
+                        {/* Totals Section */}
                         <div className="mt-2 pt-2 border-t-[2px] border-double border-primary/20 bg-primary/5 dark:bg-primary/10 rounded-sm p-2 shadow-inner">
                             <div className="flex flex-col md:flex-row items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 bg-background dark:bg-slate-900 px-2 py-1.5 rounded-sm border border-primary/10 shadow-sm w-full md:w-auto">
-                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/10">
-                                        <Package className="h-4 w-4 text-primary" />
-                                    </div>
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/10"><Package className="h-4 w-4 text-primary" /></div>
                                     <div>
                                         <p className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground leading-none mb-0.5">Summary</p>
                                         <div className="flex items-baseline gap-2">
@@ -458,28 +525,11 @@ export default function DailyBookPage() {
                                         </div>
                                     </div>
                                 </div>
-
                                 <div className="flex gap-2 w-full md:w-auto">
                                     {editingDate && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                setEntries({});
-                                                setEditingDate(null);
-                                                setDate(new Date());
-                                            }}
-                                            className="h-8 md:h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50"
-                                        >
-                                            Cancel
-                                        </Button>
+                                        <Button variant="outline" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-8 md:h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50">Cancel</Button>
                                     )}
-                                    <Button
-                                        onClick={handleSave}
-                                        disabled={saving || totalKg === 0}
-                                        size="sm"
-                                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-tight text-[10px] h-8 md:h-10 flex-1 md:flex-none md:px-8 shadow-md shadow-primary/20 active:translate-y-0.5 transition-all"
-                                    >
+                                    <Button onClick={handleSave} disabled={saving || totalKg === 0} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-tight text-[10px] h-8 md:h-10 flex-1 md:flex-none md:px-8 shadow-md shadow-primary/20 active:translate-y-0.5 transition-all">
                                         {saving ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Save className="mr-2 h-3 w-3" />}
                                         {editingDate ? 'Update' : 'Save Entry'}
                                     </Button>
@@ -487,13 +537,10 @@ export default function DailyBookPage() {
                             </div>
                         </div>
 
-                        {/* WISER MOBILE: Sticky Save Bar for Buuga Maalinlaha */}
+                        {/* Mobile sticky save bar */}
                         {!saving && totalKg > 0 && viewMode === 'edit' && (
                             <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border md:hidden z-50 animate-in slide-in-from-bottom duration-500">
-                                <Button
-                                    onClick={handleSave}
-                                    className="w-full h-16 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-xl shadow-primary/30"
-                                >
+                                <Button onClick={handleSave} className="w-full h-16 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-xl shadow-primary/30">
                                     <div className="flex items-center justify-between w-full px-4">
                                         <div className="text-left">
                                             <p className="text-[10px] opacity-60 leading-none mb-1">Total Quantity</p>
@@ -509,7 +556,115 @@ export default function DailyBookPage() {
                         )}
                     </CardContent>
                 </Card>
+                </>
             ) : (
+                <>
+                {/* ── HISTORY FOCUS OVERLAY ── */}
+                {focusedEntry && (() => {
+                    const entry = focusedEntry;
+                    const ledgerSet = historyLedgerStatus[entry.date];
+                    const withKg = entry.items.filter(i => i.kg > 0);
+                    const processedCount = ledgerSet ? withKg.filter(i => ledgerSet.has(i.customer_id)).length : 0;
+                    const totalWithKg = withKg.length;
+                    const allProcessed = ledgerSet && processedCount === totalWithKg && totalWithKg > 0;
+                    return (
+                        <div className="fixed inset-0 z-[9999] bg-background flex flex-col animate-in fade-in duration-150">
+                            {/* Top bar */}
+                            <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-card/90 backdrop-blur-sm">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                                        <BookOpen className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground leading-none mb-0.5">Buuga Maalinlaha</p>
+                                        <p className="font-black text-base text-foreground tracking-tight leading-none">{format(new Date(entry.date), 'MMMM dd, yyyy')}</p>
+                                    </div>
+                                    {ledgerSet && (
+                                        allProcessed ? (
+                                            <span className="hidden sm:flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border border-emerald-500/20">✓ All in Maqalka</span>
+                                        ) : (
+                                            <span className="hidden sm:flex items-center gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border border-amber-500/20 animate-pulse">⚠ {processedCount}/{totalWithKg} Maqalka</span>
+                                        )
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 px-3 text-[10px] font-bold uppercase border-border text-foreground"
+                                        onClick={(e) => { e.stopPropagation(); handleEditEntry(entry); setFocusedEntry(null); }}
+                                    >
+                                        <Edit className="w-3 h-3 mr-1" /> Edit
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={() => setFocusedEntry(null)} className="h-9 w-9 text-muted-foreground hover:text-foreground rounded-full">
+                                        <span className="text-lg font-bold leading-none">✕</span>
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Stats row */}
+                            <div className="shrink-0 flex items-center gap-4 px-4 py-2.5 border-b border-border bg-muted/20">
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                    <span className="font-bold">{entry.items.length}</span> customers
+                                </div>
+                                <div className="h-3 w-px bg-border" />
+                                <div className="flex items-center gap-1.5">
+                                    <span className="font-black text-primary text-sm">{Math.round(entry.totalKg)}</span>
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Total KG</span>
+                                </div>
+                            </div>
+
+                            {/* Scrollable content — book style */}
+                            <div className="flex-1 overflow-y-auto bg-[#fcf8f1] dark:bg-slate-900 relative">
+                                {/* Vertical margin line */}
+                                <div className="absolute left-[50px] md:left-[70px] top-0 bottom-0 w-[1px] bg-red-400 dark:bg-red-900/50 pointer-events-none z-10" />
+                                {/* Sticky header */}
+                                <div className="sticky top-0 z-20 grid grid-cols-12 px-3 md:px-5 py-2 bg-[#f4ece0] dark:bg-slate-950 border-b-2 border-slate-300 dark:border-slate-700 shadow-sm">
+                                    <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">ID</div>
+                                    <div className="col-span-6 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter pl-4">Customer Name</div>
+                                    <div className="col-span-4 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-right">KG / Status</div>
+                                </div>
+                                <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
+                                    {entry.items.map((item) => {
+                                        const isProcessed = ledgerSet ? ledgerSet.has(item.customer_id) : null;
+                                        return (
+                                            <div key={item.customer_id} className="grid grid-cols-12 items-center px-3 md:px-5 py-2 hover:bg-blue-100/20 dark:hover:bg-slate-800/30">
+                                                <div className="col-span-2">
+                                                    <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">#{item.customer?.customer_code || '—'}</span>
+                                                </div>
+                                                <div className="col-span-6 pl-4 border-l border-red-200/50 dark:border-red-900/30 flex items-center gap-1.5">
+                                                    <span className="font-bold text-[11px] md:text-sm text-slate-700 dark:text-slate-300 uppercase truncate">{item.customer?.name || 'Unknown'}</span>
+                                                    {item.kg > 0 && isProcessed !== null && (
+                                                        isProcessed ? (
+                                                            <span title="In Buuga Maqalka" className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[8px] font-black">✓</span>
+                                                        ) : (
+                                                            <span title="Not in Buuga Maqalka yet" className="shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[8px] font-black animate-pulse">!</span>
+                                                        )
+                                                    )}
+                                                </div>
+                                                <div className="col-span-4 text-right">
+                                                    {item.present === false ? (
+                                                        <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase">Absent</span>
+                                                    ) : (
+                                                        <span className="font-black text-primary text-sm md:text-base">{Math.round(item.kg)} <span className="text-[9px] opacity-60">KG</span></span>
+                                                    )}
+                                                    {item.note && <div className="text-[9px] text-muted-foreground truncate max-w-[90px] ml-auto">{item.note}</div>}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {/* Footer total */}
+                                <div className="sticky bottom-0 bg-[#f4ece0]/95 dark:bg-slate-950/95 border-t-2 border-double border-primary/20 backdrop-blur-sm flex items-center justify-between px-4 md:px-6 py-3">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Quantity</span>
+                                    <span className="font-black text-primary text-xl">{Math.round(entry.totalKg)} <span className="text-xs opacity-60">KG</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 <Card className="glass-card">
                     <CardHeader className="border-b border-border">
                         <div className="flex items-center justify-between">
@@ -559,6 +714,21 @@ export default function DailyBookPage() {
                                     <div
                                         key={entry.date}
                                         className="group transition-all hover:bg-muted/30"
+                                        onClick={async () => {
+                                            // Fetch ledger status for this date if not already cached
+                                            if (!historyLedgerStatus[entry.date]) {
+                                                try {
+                                                    const res = await fetch(`/api/ledger-by-date?date=${entry.date}`);
+                                                    if (res.ok) {
+                                                        const ids: string[] = await res.json();
+                                                        setHistoryLedgerStatus(prev => ({ ...prev, [entry.date]: new Set(ids) }));
+                                                    }
+                                                } catch (e) {
+                                                    console.error('Failed to fetch history ledger status', e);
+                                                }
+                                            }
+                                            setFocusedEntry(entry);
+                                        }}
                                     >
                                         {/* Entry Header - Clickable */}
                                             <div className="flex flex-col md:flex-row md:items-center justify-between p-4 cursor-pointer">
@@ -583,6 +753,21 @@ export default function DailyBookPage() {
                                                             <span className="font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full ml-2 md:ml-0">
                                                                 {Math.round(entry.totalKg)} KG
                                                             </span>
+                                                            {/* Ledger status summary badge */}
+                                                            {historyLedgerStatus[entry.date] ? (() => {
+                                                                const withKg = entry.items.filter(i => i.kg > 0);
+                                                                const processed = withKg.filter(i => historyLedgerStatus[entry.date].has(i.customer_id)).length;
+                                                                const total = withKg.length;
+                                                                return processed === total && total > 0 ? (
+                                                                    <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border border-emerald-500/20">
+                                                                        ✓ All in Maqalka
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="flex items-center gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border border-amber-500/20 animate-pulse">
+                                                                        ⚠ {processed}/{total} Maqalka
+                                                                    </span>
+                                                                );
+                                                            })() : null}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -626,20 +811,36 @@ export default function DailyBookPage() {
                                             <div className="bg-muted/10 p-4 border-t border-border animate-in slide-in-from-top-2 duration-200">
                                                 <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
                                                     <div className="divide-y divide-border">
-                                                        {entry.items.map((item) => (
-                                                            <div key={item.customer_id} className="flex items-center justify-between p-3 hover:bg-muted/30">
+                                                        {entry.items.map((item) => {
+                                                            const ledgerSet = historyLedgerStatus[entry.date];
+                                                            const isProcessed = ledgerSet ? ledgerSet.has(item.customer_id) : null;
+                                                            return (
+                                                            <div key={item.customer_id} className={`flex items-center justify-between p-3 hover:bg-muted/30 ${isProcessed === true ? 'bg-emerald-500/3' : isProcessed === false && item.kg > 0 ? 'bg-amber-500/3' : ''}`}>
                                                                 <div className="flex items-center gap-3 overflow-hidden">
                                                                     <Avatar className="h-8 w-8 md:h-10 md:w-10 border border-border/50 shrink-0">
                                                                         <AvatarImage src={item.customer?.avatar_url || ''} alt={item.customer?.name || 'Customer'} />
-                                                                        <AvatarFallback className={`${item.customer?.gender === 'Male' ? 'bg-blue-500/10 text-blue-500' :
+                                                                        <AvatarFallback className={`${
+                                                                            isProcessed === true ? 'bg-emerald-500/10 text-emerald-600' :
+                                                                            isProcessed === false && item.kg > 0 ? 'bg-amber-500/10 text-amber-600' :
+                                                                            item.customer?.gender === 'Male' ? 'bg-blue-500/10 text-blue-500' :
                                                                             item.customer?.gender === 'Female' ? 'bg-pink-500/10 text-pink-500' :
-                                                                                'bg-slate-500/10 text-slate-500'
-                                                                            }`}>
+                                                                            'bg-slate-500/10 text-slate-500'
+                                                                        }`}>
                                                                             <User className="h-4 w-4" />
                                                                         </AvatarFallback>
                                                                     </Avatar>
                                                                     <div className="flex flex-col overflow-hidden">
-                                                                        <span className="font-semibold text-sm text-foreground truncate">{item.customer?.name || 'Unknown'}</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="font-semibold text-sm text-foreground truncate">{item.customer?.name || 'Unknown'}</span>
+                                                                            {/* Per-customer ledger status in history */}
+                                                                            {item.kg > 0 && isProcessed !== null && (
+                                                                                isProcessed ? (
+                                                                                    <span title="In Buuga Maqalka" className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[9px] font-black">✓</span>
+                                                                                ) : (
+                                                                                    <span title="Not in Buuga Maqalka yet" className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[9px] font-black animate-pulse">!</span>
+                                                                                )
+                                                                            )}
+                                                                        </div>
                                                                         <span className="text-xs text-muted-foreground font-mono">#{item.customer?.customer_code || 'N/A'}</span>
                                                                     </div>
                                                                 </div>
@@ -654,7 +855,8 @@ export default function DailyBookPage() {
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                         
                                                         {/* Summary Footer */}
                                                         <div className="bg-primary/5 p-4 flex items-center justify-between border-t-2 border-primary/10">
@@ -671,6 +873,7 @@ export default function DailyBookPage() {
                         )}
                     </CardContent>
                 </Card>
+                </>
             )}
         </div>
     );
