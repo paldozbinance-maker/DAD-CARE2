@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
-import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare, Maximize2, Minimize2 } from 'lucide-react';
+import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare, Maximize2, Minimize2, Download, ShieldAlert, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 
@@ -60,6 +60,9 @@ export default function DailyBookPage() {
     const [processedCustomerIds, setProcessedCustomerIds] = useState<Set<string>>(new Set());
     const [loadingLedgerStatus, setLoadingLedgerStatus] = useState(false);
     const [historyLedgerStatus, setHistoryLedgerStatus] = useState<Record<string, Set<string>>>({});
+    const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
+    const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const loadCustomers = async () => {
         try {
@@ -214,6 +217,34 @@ export default function DailyBookPage() {
         setEntries(loadedEntries);
         setEditingDate(entry.date);
         setViewMode('edit');
+    };
+
+    const handleDeleteEntry = async () => {
+        if (!deleteConfirmDate || deleteConfirmInput !== 'PALDOZ') return;
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`/api/daily-book?date=${deleteConfirmDate}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error(await res.text());
+            setSavedEntries(prev => prev.filter(e => e.date !== deleteConfirmDate));
+            toast.success('Entry deleted successfully');
+            setDeleteConfirmDate(null);
+            setDeleteConfirmInput('');
+        } catch (err: any) {
+            toast.error('Failed to delete: ' + (err.message || 'Server error'));
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleExportBackup = async () => {
+        try {
+            const { downloadDailyBookBackupPDF } = await import('@/lib/export-pdf');
+            downloadDailyBookBackupPDF(savedEntries);
+            toast.success('Buuga Maalinlaha PDF backup downloaded successfully');
+        } catch (e) {
+            toast.error('Failed to generate PDF backup');
+            console.error(e);
+        }
     };
 
     const handleDateChange = (newDate: Date) => {
@@ -665,6 +696,77 @@ export default function DailyBookPage() {
                     );
                 })()}
 
+                {/* ── PALDOZ DELETE CONFIRMATION MODAL ── */}
+                {deleteConfirmDate && (
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+                        <div className="bg-card border border-destructive/30 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+                            {/* Modal Header */}
+                            <div className="flex items-start gap-3 mb-5">
+                                <div className="p-2.5 rounded-xl bg-destructive/10 text-destructive shrink-0">
+                                    <ShieldAlert className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="font-black text-base text-foreground tracking-tight">Delete Entry?</h3>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        This will permanently delete the entry for <span className="font-bold text-foreground">{format(new Date(deleteConfirmDate), 'MMMM dd, yyyy')}</span>. This action cannot be undone.
+                                    </p>
+                                </div>
+                                <button onClick={() => { setDeleteConfirmDate(null); setDeleteConfirmInput(''); }} className="shrink-0 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Confirm word input */}
+                            <div className="space-y-2 mb-5">
+                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Type <span className="text-destructive font-black">PALDOZ</span> to confirm deletion</p>
+                                <input
+                                    type="text"
+                                    value={deleteConfirmInput}
+                                    onChange={e => setDeleteConfirmInput(e.target.value)}
+                                    placeholder="Type PALDOZ here..."
+                                    autoFocus
+                                    className={`w-full h-11 px-4 rounded-xl border text-sm font-black tracking-widest transition-all outline-none bg-background ${
+                                        deleteConfirmInput === 'PALDOZ'
+                                            ? 'border-destructive text-destructive bg-destructive/5 ring-2 ring-destructive/20'
+                                            : 'border-border text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20'
+                                    }`}
+                                />
+                                {deleteConfirmInput.length > 0 && deleteConfirmInput !== 'PALDOZ' && (
+                                    <p className="text-[11px] text-destructive/70 font-bold">⚠ Must type exactly: PALDOZ</p>
+                                )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => { setDeleteConfirmDate(null); setDeleteConfirmInput(''); }}
+                                    className="flex-1 h-10 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:bg-muted/50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDeleteEntry}
+                                    disabled={deleteConfirmInput !== 'PALDOZ' || isDeleting}
+                                    className={`flex-1 h-10 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 ${
+                                        deleteConfirmInput === 'PALDOZ' && !isDeleting
+                                            ? 'bg-destructive text-white hover:bg-destructive/90 shadow-lg shadow-destructive/25 active:scale-95'
+                                            : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                                    }`}
+                                >
+                                    {isDeleting ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Trash2 className="w-4 h-4" />
+                                            Delete
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <Card className="glass-card">
                     <CardHeader className="border-b border-border">
                         <div className="flex items-center justify-between">
@@ -672,31 +774,45 @@ export default function DailyBookPage() {
                                 <FileText className="w-5 h-5 text-primary" />
                                 Saved Entries
                             </CardTitle>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="border-border text-primary hover:bg-accent hover:text-accent-foreground">
-                                        <Search className="mr-2 h-4 w-4" />
-                                        {searchDate ? format(searchDate, 'MMM dd') : 'Filter Date'}
+                            <div className="flex items-center gap-2">
+                                {savedEntries.length > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleExportBackup}
+                                        className="h-8 px-3 text-[11px] font-bold border-border text-muted-foreground hover:text-primary hover:border-primary/40 gap-1.5"
+                                        title="Download full backup as PDF"
+                                    >
+                                        <Download className="w-3.5 h-3.5" />
+                                        Backup
                                     </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 bg-popover border-border shadow-lg">
-                                    <Calendar
-                                        mode="single"
-                                        selected={searchDate}
-                                        onSelect={setSearchDate}
-                                    />
-                                    <div className="p-2 border-t border-border">
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => setSearchDate(undefined)}
-                                            className="w-full text-muted-foreground hover:text-primary"
-                                        >
-                                            Clear Filter
+                                )}
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="border-border text-primary hover:bg-accent hover:text-accent-foreground">
+                                            <Search className="mr-2 h-4 w-4" />
+                                            {searchDate ? format(searchDate, 'MMM dd') : 'Filter Date'}
                                         </Button>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 bg-popover border-border shadow-lg">
+                                        <Calendar
+                                            mode="single"
+                                            selected={searchDate}
+                                            onSelect={setSearchDate}
+                                        />
+                                        <div className="p-2 border-t border-border">
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => setSearchDate(undefined)}
+                                                className="w-full text-muted-foreground hover:text-primary"
+                                            >
+                                                Clear Filter
+                                            </Button>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -786,16 +902,8 @@ export default function DailyBookPage() {
                                                 <Button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        if (confirm('Delete this entry?')) {
-                                                            fetch(`/api/daily-book?date=${entry.date}`, { method: 'DELETE' })
-                                                                .then(async (res) => {
-                                                                    if (!res.ok) throw new Error(await res.text());
-                                                                    const updated = savedEntries.filter(e => e.date !== entry.date);
-                                                                    setSavedEntries(updated);
-                                                                    toast.success('Entry deleted');
-                                                                })
-                                                                .catch(err => toast.error('Failed to delete: ' + (err.message || 'Server error')));
-                                                        }
+                                                        setDeleteConfirmDate(entry.date);
+                                                        setDeleteConfirmInput('');
                                                     }}
                                                     variant="destructive"
                                                     size="sm"

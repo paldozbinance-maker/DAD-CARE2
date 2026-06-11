@@ -402,3 +402,162 @@ export function downloadSystemBackupPDF(customers: any[], txnsByCustomer: Record
 
     doc.save(`system-backup-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
 }
+
+export function downloadDailyBookBackupPDF(savedEntries: any[]) {
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+    });
+
+    let isFirstPage = true;
+
+    // Draw cover page
+    doc.setFillColor(253, 251, 247); // Light notebook background
+    doc.rect(0, 0, 210, 297, 'F');
+
+    // Draw lines on cover page for notebook theme
+    doc.setDrawColor(180, 210, 240); // Blue lines
+    doc.setLineWidth(0.3);
+    for (let l = 20; l < 280; l += 10) {
+        doc.line(10, l, 200, l);
+    }
+    // Red margin line
+    doc.setDrawColor(230, 100, 100);
+    doc.setLineWidth(0.5);
+    doc.line(35, 0, 35, 297);
+
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    doc.text('BUUGA MAALINLAHA', 45, 60);
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text('Daily Book Ledger System Backup', 45, 72);
+
+    doc.setFontSize(10);
+    doc.text(`Total Logged Days: ${savedEntries.length}`, 45, 90);
+    doc.text(`Generated: ${format(new Date(), 'MMMM dd, yyyy HH:mm')}`, 45, 96);
+
+    const sortedDays = [...savedEntries].sort((a, b) => b.date.localeCompare(a.date));
+
+    sortedDays.forEach((day) => {
+        if (!isFirstPage) {
+            doc.addPage();
+        } else {
+            isFirstPage = false;
+        }
+
+        // Draw notebook background
+        doc.setFillColor(253, 251, 247);
+        doc.rect(0, 0, 210, 297, 'F');
+
+        // Draw notebook vertical margin line
+        doc.setDrawColor(230, 100, 100);
+        doc.setLineWidth(0.6);
+        doc.line(30, 0, 30, 297);
+
+        // Header Title
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        
+        let dateObj = new Date();
+        try {
+            dateObj = new Date(day.date);
+        } catch (e) {}
+        
+        doc.text(`TAARIIKHDA: ${format(dateObj, 'MMMM dd, yyyy').toUpperCase()}`, 35, 20);
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Total Quantity: ${Math.round(day.totalKg)} KG`, 35, 26);
+
+        // Draw columns headers
+        let y = 38;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(60, 60, 60);
+        
+        doc.text('ID', 15, y);
+        doc.text('CUSTOMER NAME', 35, y);
+        doc.text('STATUS', 125, y);
+        doc.text('KG', 145, y);
+        doc.text('NOTE', 165, y);
+
+        y += 2;
+        doc.setDrawColor(180, 210, 240);
+        doc.setLineWidth(0.4);
+        doc.line(10, y, 200, y);
+        y += 5;
+
+        // Sort items by customer code numeric
+        const sortedItems = [...day.items].sort((a, b) => {
+            const codeA = parseInt(a.customer?.customer_code?.replace(/\D/g, '') || '0') || 0;
+            const codeB = parseInt(b.customer?.customer_code?.replace(/\D/g, '') || '0') || 0;
+            return codeA - codeB;
+        });
+
+        sortedItems.forEach((item) => {
+            // Check page overflow
+            if (y > 280) {
+                doc.addPage();
+                // Redraw notebook lines and margin
+                doc.setFillColor(253, 251, 247);
+                doc.rect(0, 0, 210, 297, 'F');
+                doc.setDrawColor(230, 100, 100);
+                doc.setLineWidth(0.6);
+                doc.line(30, 0, 30, 297);
+                
+                y = 20;
+            }
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(50, 50, 50);
+
+            // Customer Code
+            doc.text(`#${item.customer?.customer_code || '—'}`, 15, y);
+            
+            // Name
+            const nameStr = (item.customer?.name || item.customer_id || 'Unknown').toUpperCase();
+            doc.text(nameStr, 35, y);
+
+            // Status
+            if (item.present === false) {
+                doc.setTextColor(220, 50, 50);
+                doc.text('ABSENT', 125, y);
+                doc.setTextColor(50, 50, 50);
+            } else {
+                doc.setTextColor(50, 150, 50);
+                doc.text('PRESENT', 125, y);
+                doc.setTextColor(50, 50, 50);
+            }
+
+            // KG
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${Math.round(item.kg || 0)} KG`, 145, y);
+            doc.setFont('helvetica', 'normal');
+
+            // Note
+            if (item.note) {
+                doc.setFontSize(7.5);
+                doc.text(item.note, 165, y, { maxWidth: 35 });
+                doc.setFontSize(8.5);
+            }
+
+            y += 4;
+            // Draw horizontal thin notebook line
+            doc.setDrawColor(220, 230, 245);
+            doc.setLineWidth(0.25);
+            doc.line(10, y, 200, y);
+            y += 4.5;
+        });
+    });
+
+    doc.save(`buuga-maalinlaha-backup-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+}
+

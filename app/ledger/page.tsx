@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info, BookOpen, RefreshCw } from 'lucide-react';
+import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info, BookOpen, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,8 @@ interface DateEntry {
     date: string;
     kg: string;
     pricePerKg: string;
+    extraKg?: string;
+    extraPricePerKg?: string;
 }
 
 interface PaymentEntry {
@@ -74,6 +76,7 @@ export default function LedgerPage() {
     const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
     const [adjustmentAmount, setAdjustmentAmount] = useState('');
     const [adjustmentNote, setAdjustmentNote] = useState('');
+    const [expandedExtraEntryIds, setExpandedExtraEntryIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         const savedPrice = localStorage.getItem('dadwork_price_per_kg');
@@ -178,7 +181,7 @@ export default function LedgerPage() {
 
     const handleCustomerChange = (customerId: string) => {
         setSelectedCustomerId(customerId);
-        setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice }]);
+        setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice }]);
         setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
         setHistory([]);
         setCustomerDailyDates([]);
@@ -298,7 +301,9 @@ export default function LedgerPage() {
             id: Date.now().toString(),
             date: '',
             kg: '',
-            pricePerKg: defaultPrice
+            pricePerKg: defaultPrice,
+            extraKg: '',
+            extraPricePerKg: defaultPrice
         };
         setDateEntries([...dateEntries, newEntry]);
     };
@@ -351,7 +356,9 @@ export default function LedgerPage() {
     const productGrandTotal = dateEntries.reduce((sum, p) => {
         const kg = parseFloat(p.kg) || 0;
         const price = parseFloat(p.pricePerKg) || 0;
-        return sum + (kg * price);
+        const extraKg = parseFloat(p.extraKg || '') || 0;
+        const extraPrice = parseFloat(p.extraPricePerKg || '') || 0;
+        return sum + (kg * price) + (extraKg * extraPrice);
     }, 0);
 
     const activePaymentAmount = paymentEntries.reduce((sum, pay) => {
@@ -411,6 +418,15 @@ export default function LedgerPage() {
                 kg: entry.kg,
                 price: entry.pricePerKg
             });
+            if (entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0) {
+                items.push({
+                    type: 'PRODUCT',
+                    date: entry.date,
+                    kg: entry.extraKg,
+                    price: entry.extraPricePerKg,
+                    note: "Notebook"
+                });
+            }
         }
 
         // Payment entries
@@ -445,7 +461,7 @@ export default function LedgerPage() {
             toast.success('Receipt saved successfully!');
 
             // 3. Reset form
-            setDateEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), kg: '', pricePerKg: defaultPrice }]);
+            setDateEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice }]);
             setPaymentEntries([{ id: (Date.now() + 1).toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
             setAdjustmentAmount('');
 
@@ -735,99 +751,177 @@ export default function LedgerPage() {
 
                                             <div className="space-y-4">
                                                 {dateEntries.map((entry, index) => (
-                                                    <div key={entry.id} className="relative p-4 md:p-5 bg-background shadow-sm border border-border/60 rounded-2xl group transition-all hover:shadow-md">
-                                                        <div className="flex flex-col md:grid md:grid-cols-3 gap-3 md:gap-4">
-                                                            {/* Date Picker - Full width on mobile, 1 col on desktop */}
-                                                            <div className="space-y-1.5 md:space-y-2">
-                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Date</Label>
-                                                                <Popover>
-                                                                    <PopoverTrigger asChild>
-                                                                        <Button
-                                                                            variant={"outline"}
-                                                                            className={cn(
-                                                                                "w-full h-12 md:h-12 justify-start text-left font-bold text-sm md:text-base rounded-xl border-border/80 bg-muted/10 hover:bg-muted/30 transition-colors",
-                                                                                !entry.date && "text-muted-foreground"
-                                                                            )}
-                                                                        >
-                                                                            <CalendarIcon className="mr-3 h-4 w-4 md:h-5 md:w-5 text-primary" />
-                                                                            {entry.date ? format(parseISO(entry.date), "PPP") : <span>Pick a date</span>}
-                                                                        </Button>
-                                                                    </PopoverTrigger>
-                                                                    <PopoverContent className="w-auto p-0 rounded-xl shadow-xl border-border" align="start">
-                                                                        <Calendar
-                                                                            mode="single"
-                                                                            selected={entry.date ? parseISO(entry.date) : undefined}
-                                                                            onSelect={(val) => val && updateDateEntry(entry.id, 'date', format(val, 'yyyy-MM-dd'))}
-                                                                            disabled={(date) => {
-                                                                                const dStr = format(date, 'yyyy-MM-dd');
-                                                                                if (entry.date === dStr) return false;
+                                                    <div key={entry.id} className="relative p-3 md:p-4 bg-background shadow-sm border border-border/60 rounded-2xl group transition-all hover:shadow-md">
+                                                        <div className="flex flex-col gap-2">
+                                                            {/* Date Row + Toggle */}
+                                                            <div className="flex items-end gap-2">
+                                                                <div className="flex-1 space-y-1.5">
+                                                                    <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Date</Label>
+                                                                    <Popover>
+                                                                        <PopoverTrigger asChild>
+                                                                            <Button
+                                                                                variant={"outline"}
+                                                                                className={cn(
+                                                                                    "w-full h-11 md:h-12 justify-start text-left font-bold text-sm md:text-base rounded-xl border-border/80 bg-muted/10 hover:bg-muted/30 transition-colors",
+                                                                                    !entry.date && "text-muted-foreground"
+                                                                                )}
+                                                                            >
+                                                                                <CalendarIcon className="mr-3 h-4 w-4 md:h-5 md:w-5 text-primary" />
+                                                                                {entry.date ? format(parseISO(entry.date), "PPP") : <span>Pick a date</span>}
+                                                                            </Button>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-auto p-0 rounded-xl shadow-xl border-border" align="start">
+                                                                            <Calendar
+                                                                                mode="single"
+                                                                                selected={entry.date ? parseISO(entry.date) : undefined}
+                                                                                onSelect={(val) => val && updateDateEntry(entry.id, 'date', format(val, 'yyyy-MM-dd'))}
+                                                                                disabled={(date) => {
+                                                                                    const dStr = format(date, 'yyyy-MM-dd');
+                                                                                    if (entry.date === dStr) return false;
 
-                                                                                const dailyBook = customerDailyDates.find(d => d.date === dStr);
-                                                                                if (!dailyBook) return true; // Only allow dates in daily books
-                                                                                if (dailyBook.processed) return true; // Disallow already processed ones
-                                                                                const inHist = history.some(h => h.reference_date === dStr && h.type === 'PRODUCT');
-                                                                                if (inHist) return true; // Disallow if already in history
+                                                                                    const dailyBook = customerDailyDates.find(d => d.date === dStr);
+                                                                                    if (!dailyBook) return true; // Only allow dates in daily books
+                                                                                    if (dailyBook.processed) return true; // Disallow already processed ones
+                                                                                    const inHist = history.some(h => h.reference_date === dStr && h.type === 'PRODUCT');
+                                                                                    if (inHist) return true; // Disallow if already in history
 
-                                                                                // Enforce Sequence: Only allow the OLDEST available date
-                                                                                const unprocessedDates = customerDailyDates
-                                                                                    .filter(d => !d.processed && !history.some(h => h.reference_date === d.date && h.type === 'PRODUCT'))
-                                                                                    .map(d => d.date)
-                                                                                    .sort((a, b) => a.localeCompare(b));
+                                                                                    // Enforce Sequence: Only allow the OLDEST available date
+                                                                                    const unprocessedDates = customerDailyDates
+                                                                                        .filter(d => !d.processed && !history.some(h => h.reference_date === d.date && h.type === 'PRODUCT'))
+                                                                                        .map(d => d.date)
+                                                                                        .sort((a, b) => a.localeCompare(b));
 
-                                                                                // Exclude dates picked in OTHER rows
-                                                                                const selectedByOthers = dateEntries
-                                                                                    .filter(e => e.id !== entry.id && e.date)
-                                                                                    .map(e => e.date);
+                                                                                    // Exclude dates picked in OTHER rows
+                                                                                    const selectedByOthers = dateEntries
+                                                                                        .filter(e => e.id !== entry.id && e.date)
+                                                                                        .map(e => e.date);
 
-                                                                                const availableDates = unprocessedDates.filter(d => !selectedByOthers.includes(d));
+                                                                                    const availableDates = unprocessedDates.filter(d => !selectedByOthers.includes(d));
 
-                                                                                // The date is ONLY allowed if it is the FIRST date in the available sequence
-                                                                                if (availableDates.length > 0 && availableDates[0] === dStr) {
-                                                                                    return false;
-                                                                                }
+                                                                                    // The date is ONLY allowed if it is the FIRST date in the available sequence
+                                                                                    if (availableDates.length > 0 && availableDates[0] === dStr) {
+                                                                                        return false;
+                                                                                    }
 
-                                                                                return true;
-                                                                            }}
-                                                                            initialFocus
-                                                                            className="rounded-xl"
-                                                                        />
-                                                                    </PopoverContent>
-                                                                </Popover>
+                                                                                    return true;
+                                                                                }}
+                                                                                initialFocus
+                                                                                className="rounded-xl"
+                                                                            />
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                </div>
+
+                                                                {/* Main inputs + Extra Toggle inputs */}
                                                             </div>
 
-                                                            {/* KG and Price Side-by-Side on Mobile */}
-                                                            <div className="grid grid-cols-2 md:col-span-2 gap-3 md:gap-4">
-                                                                <div className="space-y-1.5 md:space-y-2">
-                                                                    <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">KG</Label>
+                                                            {/* Main KG and Price/KG inputs (Always visible) */}
+                                                            <div className="grid grid-cols-2 gap-3 mt-2">
+                                                                <div className="space-y-1.5">
+                                                                    <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-wider ml-1">KG</Label>
                                                                     <div className="relative group/input">
-                                                                        <Scale className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary/70 group-focus-within/input:text-primary transition-colors" />
+                                                                        <Scale className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/70 group-focus-within/input:text-primary transition-colors" />
                                                                         <Input
                                                                             type="number"
                                                                             step="1"
                                                                             value={entry.kg}
                                                                             onChange={e => updateDateEntry(entry.id, 'kg', e.target.value)}
                                                                             inputMode="decimal"
-                                                                            className="h-12 pl-10 md:pl-12 text-base md:text-lg font-black bg-muted/10 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none"
+                                                                            className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none"
                                                                             placeholder="0"
                                                                         />
                                                                     </div>
                                                                 </div>
-                                                                <div className="space-y-1.5 md:space-y-2">
-                                                                    <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Price</Label>
+                                                                <div className="space-y-1.5">
+                                                                    <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-wider ml-1">Price / KG</Label>
                                                                     <div className="relative group/input">
-                                                                        <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary/70 group-focus-within/input:text-primary transition-colors" />
+                                                                        <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/70 group-focus-within/input:text-primary transition-colors" />
                                                                         <Input
                                                                             type="number"
                                                                             step="1"
                                                                             value={entry.pricePerKg}
                                                                             onChange={e => updateDateEntry(entry.id, 'pricePerKg', e.target.value)}
                                                                             inputMode="decimal"
-                                                                            className="h-12 pl-10 md:pl-12 text-base md:text-lg font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
+                                                                            className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
                                                                             placeholder="35"
                                                                         />
                                                                     </div>
                                                                 </div>
                                                             </div>
+
+                                                            {/* Notebook extra entries toggle button & badge */}
+                                                            <div className="flex items-center gap-2 mt-2">
+                                                                <Button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setExpandedExtraEntryIds(prev => {
+                                                                            const next = new Set(prev);
+                                                                            if (next.has(entry.id)) next.delete(entry.id);
+                                                                            else next.add(entry.id);
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className={cn(
+                                                                        "h-8 text-[10px] font-bold rounded-lg border-border/80 bg-muted/5 hover:bg-muted/15 flex items-center gap-1",
+                                                                        expandedExtraEntryIds.has(entry.id) && "border-primary/30 text-primary bg-primary/5"
+                                                                    )}
+                                                                >
+                                                                    {expandedExtraEntryIds.has(entry.id) ? (
+                                                                        <>
+                                                                            <ChevronUp className="w-3.5 h-3.5" />
+                                                                            Hide Notebook KG
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <ChevronDown className="w-3.5 h-3.5" />
+                                                                            Add Notebook KG
+                                                                        </>
+                                                                    )}
+                                                                </Button>
+                                                                {entry.extraKg && entry.extraPricePerKg && !expandedExtraEntryIds.has(entry.id) && (
+                                                                    <span className="text-[10px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
+                                                                        📔 {entry.extraKg}kg @ ${entry.extraPricePerKg} (Notebook)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Collapsible Notebook entries inputs */}
+                                                            {expandedExtraEntryIds.has(entry.id) && (
+                                                                <div className="grid grid-cols-2 gap-3 mt-2 p-3 bg-muted/5 border border-dashed border-border/60 rounded-xl animate-in slide-in-from-top-1 duration-150 w-full">
+                                                                    <div className="space-y-1.5">
+                                                                        <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-wider ml-1">Notebook KG</Label>
+                                                                        <div className="relative group/input">
+                                                                            <Scale className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/70 group-focus-within/input:text-primary transition-colors" />
+                                                                            <Input
+                                                                                type="number"
+                                                                                step="1"
+                                                                                value={entry.extraKg || ''}
+                                                                                onChange={e => updateDateEntry(entry.id, 'extraKg', e.target.value)}
+                                                                                inputMode="decimal"
+                                                                                className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none"
+                                                                                placeholder="0"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-1.5">
+                                                                        <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-wider ml-1">Notebook Price / KG</Label>
+                                                                        <div className="relative group/input">
+                                                                            <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/70 group-focus-within/input:text-primary transition-colors" />
+                                                                            <Input
+                                                                                type="number"
+                                                                                step="1"
+                                                                                value={entry.extraPricePerKg || ''}
+                                                                                onChange={e => updateDateEntry(entry.id, 'extraPricePerKg', e.target.value)}
+                                                                                inputMode="decimal"
+                                                                                className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
+                                                                                placeholder="36"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         {dateEntries.length > 1 && (
                                                             <button
@@ -918,9 +1012,17 @@ export default function LedgerPage() {
 
                                                 {/* Maqalka breakdown lines */}
                                                 {dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0).map((entry, idx) => (
-                                                    <div key={`rec-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-muted-foreground">
-                                                        <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
-                                                        <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
+                                                    <div key={`rec-${idx}`} className="space-y-1 py-1 border-b border-border/30 text-muted-foreground">
+                                                        <div className="flex justify-between">
+                                                            <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
+                                                            <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
+                                                        </div>
+                                                        {entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0 && (
+                                                            <div className="flex justify-between pl-3 text-[10px] text-muted-foreground/80">
+                                                                <span>↳ {entry.extraKg}KG × ${entry.extraPricePerKg} (Notebook)</span>
+                                                                <span className="font-bold text-foreground">${Math.round(parseFloat(entry.extraKg) * parseFloat(entry.extraPricePerKg)).toLocaleString()}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))}
 
