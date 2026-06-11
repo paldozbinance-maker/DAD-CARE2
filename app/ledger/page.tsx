@@ -19,6 +19,7 @@ interface DateEntry {
     pricePerKg: string;
     extraKg?: string;
     extraPricePerKg?: string;
+    extraNote?: string;
 }
 
 interface PaymentEntry {
@@ -38,6 +39,7 @@ interface Transaction {
     new_debt: number;
     created_at?: string;
     receipt_id?: string;
+    note?: string;
 }
 
 interface CustomerSummary {
@@ -181,7 +183,7 @@ export default function LedgerPage() {
 
     const handleCustomerChange = (customerId: string) => {
         setSelectedCustomerId(customerId);
-        setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice }]);
+        setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
         setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
         setHistory([]);
         setCustomerDailyDates([]);
@@ -303,7 +305,8 @@ export default function LedgerPage() {
             kg: '',
             pricePerKg: defaultPrice,
             extraKg: '',
-            extraPricePerKg: defaultPrice
+            extraPricePerKg: defaultPrice,
+            extraNote: 'Notebook'
         };
         setDateEntries([...dateEntries, newEntry]);
     };
@@ -424,7 +427,7 @@ export default function LedgerPage() {
                     date: entry.date,
                     kg: entry.extraKg,
                     price: entry.extraPricePerKg,
-                    note: "Notebook"
+                    note: entry.extraNote || "Notebook"
                 });
             }
         }
@@ -461,7 +464,7 @@ export default function LedgerPage() {
             toast.success('Receipt saved successfully!');
 
             // 3. Reset form
-            setDateEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice }]);
+            setDateEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
             setPaymentEntries([{ id: (Date.now() + 1).toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
             setAdjustmentAmount('');
 
@@ -663,7 +666,11 @@ export default function LedgerPage() {
                                                 {/* 1. Maqalka entries (products) */}
                                                 {lastReceiptGroup.entries.filter(e => e.type === 'PRODUCT').map(e => (
                                                     <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium">
-                                                        <span>{format(new Date(e.reference_date), 'MMM dd')} · {Math.round(e.kg || 0)}KG @ ${e.price_per_kg}</span>
+                                                        <span>
+                                                            {e.note ? '↳ ' : ''}
+                                                            {format(new Date(e.reference_date), 'MMM dd')} · {Math.round(e.kg || 0)}KG @ ${e.price_per_kg}
+                                                            {e.note ? ` (${e.note})` : ''}
+                                                        </span>
                                                         <span className="font-bold">${Math.round(e.amount).toLocaleString()}</span>
                                                     </div>
                                                 ))}
@@ -882,7 +889,7 @@ export default function LedgerPage() {
                                                                 </Button>
                                                                 {entry.extraKg && entry.extraPricePerKg && !expandedExtraEntryIds.has(entry.id) && (
                                                                     <span className="text-[10px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
-                                                                        📔 {entry.extraKg}kg @ ${entry.extraPricePerKg} (Notebook)
+                                                                        📔 {entry.extraKg}kg @ ${entry.extraPricePerKg} ({entry.extraNote || 'Notebook'})
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -917,6 +924,19 @@ export default function LedgerPage() {
                                                                                 inputMode="decimal"
                                                                                 className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
                                                                                 placeholder="36"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-1.5 col-span-2">
+                                                                        <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-wider ml-1">Note / Name</Label>
+                                                                        <div className="relative group/input">
+                                                                            <Info className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/70 group-focus-within/input:text-primary transition-colors" />
+                                                                            <Input
+                                                                                type="text"
+                                                                                value={entry.extraNote !== undefined ? entry.extraNote : 'Notebook'}
+                                                                                onChange={e => updateDateEntry(entry.id, 'extraNote', e.target.value)}
+                                                                                className="h-12 pl-10 text-sm font-bold bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
+                                                                                placeholder="Notebook"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -1019,7 +1039,7 @@ export default function LedgerPage() {
                                                         </div>
                                                         {entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0 && (
                                                             <div className="flex justify-between pl-3 text-[10px] text-muted-foreground/80">
-                                                                <span>↳ {entry.extraKg}KG × ${entry.extraPricePerKg} (Notebook)</span>
+                                                                <span>↳ {entry.extraKg}KG × ${entry.extraPricePerKg} ({entry.extraNote || 'Notebook'})</span>
                                                                 <span className="font-bold text-foreground">${Math.round(parseFloat(entry.extraKg) * parseFloat(entry.extraPricePerKg)).toLocaleString()}</span>
                                                             </div>
                                                         )}
