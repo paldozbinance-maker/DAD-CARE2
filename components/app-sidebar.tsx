@@ -44,9 +44,11 @@ export function AppSidebar() {
 
     const handleLogout = async () => {
         localStorage.removeItem('currentUser');
+        localStorage.removeItem('dadwork_session_token');
         await supabase.auth.signOut();
         router.push('/login');
     };
+
 
     return (
         <div className="flex h-full w-[260px] flex-col bg-sidebar/80 backdrop-blur-xl border-r border-sidebar-border/50 z-20 transition-colors duration-300">

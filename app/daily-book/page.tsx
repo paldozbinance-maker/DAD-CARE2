@@ -64,21 +64,23 @@ export default function DailyBookPage() {
     const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const loadCustomers = async () => {
+    // ⚡ Single merged init call — replaces 3 separate API calls
+    const loadInit = async () => {
         try {
-            const res = await fetch('/api/customers/basic');
+            const res = await fetch('/api/daily-book-init');
             const data = await res.json();
+            if (!res.ok) { console.error('Init failed:', data.error); return; }
 
-            if (!res.ok) {
-                console.error('Failed to load customers:', data.error);
-                return;
-            }
-
-            if (Array.isArray(data)) {
-                setCustomers(data);
+            if (Array.isArray(data.customers)) setCustomers(data.customers);
+            if (Array.isArray(data.history)) setSavedEntries(data.history);
+            if (data.latestDate) {
+                setLatestSavedDateStr(data.latestDate);
+                if (!editingDate) {
+                    setDate(addDays(parseISO(data.latestDate), 1));
+                }
             }
         } catch (e) {
-            console.error('Failed to load customers:', e);
+            console.error('Failed to load daily book init:', e);
         }
     };
 
@@ -110,7 +112,6 @@ export default function DailyBookPage() {
             if (Array.isArray(data) && data.length > 0) {
                 const latest = data[0].date;
                 setLatestSavedDateStr(latest);
-                // IF NOT EDITING: Default to next allowed date
                 if (!editingDate) {
                     const nextDate = addDays(parseISO(latest), 1);
                     setDate(nextDate);
@@ -122,9 +123,7 @@ export default function DailyBookPage() {
     };
 
     useEffect(() => {
-        loadCustomers();
-        loadSavedEntries();
-        fetchLatestDate();
+        loadInit(); // ⚡ One call instead of three
     }, []);
 
     useEffect(() => {
@@ -159,6 +158,7 @@ export default function DailyBookPage() {
             console.error('Failed to load history', e);
         }
     };
+
 
     const handleSave = async () => {
         setSaving(true);

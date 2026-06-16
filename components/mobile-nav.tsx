@@ -44,6 +44,7 @@ export function MobileNav() {
 
     const handleLogout = async () => {
         localStorage.removeItem('currentUser');
+        localStorage.removeItem('dadwork_session_token');
         await supabase.auth.signOut();
         router.push('/login');
     };

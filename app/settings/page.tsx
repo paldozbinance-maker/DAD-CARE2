@@ -87,16 +87,20 @@ export default function SettingsPage() {
         assigned_customer_ids: [] as string[]
     });
 
-    // Auto trigger DB migration on Settings page load
+    // Auto trigger DB migration on Settings page load — ONCE ONLY
     useEffect(() => {
+        const alreadyMigrated = localStorage.getItem('dadwork_db_migrated_v2');
+        if (alreadyMigrated) return; // ⚡ Skip if already done
+
         const runMigration = async () => {
             try {
                 const res = await fetch('/api/fix-db');
                 const data = await res.json();
                 if (data.success) {
-                    console.log('✅ Auto migration check succeeded:', data.message);
+                    localStorage.setItem('dadwork_db_migrated_v2', 'true'); // Never run again
+                    console.log('✅ One-time migration done');
                 } else {
-                    console.error('❌ Auto migration check failed:', data.error);
+                    console.error('❌ Migration failed:', data.error);
                 }
             } catch (e) {
                 console.error('Failed to run migration:', e);

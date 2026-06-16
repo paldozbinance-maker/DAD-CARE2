@@ -35,7 +35,12 @@ export default function LoginPage() {
             const data = await res.json();
 
             if (res.ok) {
-                localStorage.setItem('currentUser', JSON.stringify(data));
+                // Save user profile and session token
+                const { sessionToken, ...userProfile } = data;
+                localStorage.setItem('currentUser', JSON.stringify(userProfile));
+                if (sessionToken) {
+                    localStorage.setItem('dadwork_session_token', sessionToken);
+                }
                 toast.success(`Welcome back, ${data.name || data.username}!`);
                 setTimeout(() => {
                     router.push('/dashboard');
