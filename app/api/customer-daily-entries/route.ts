@@ -1,8 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { requireSession } from '@/lib/require-session';
 
 // Get all daily book entries for a specific customer (dates with KG values)
 export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
 

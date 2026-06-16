@@ -19,7 +19,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createClient } from '@/lib/supabase/client';
+import { logout } from '@/lib/session';
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -37,14 +39,22 @@ export function AppSidebar() {
     const { theme, setTheme } = useTheme();
     const supabase = createClient();
     const [mounted, setMounted] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
 
     useEffect(() => {
         setMounted(true);
+        const storedUser = localStorage.getItem('currentUser');
+        if (storedUser) {
+            try {
+                setCurrentUser(JSON.parse(storedUser));
+            } catch (e) {
+                console.error("Failed to parse currentUser", e);
+            }
+        }
     }, []);
 
     const handleLogout = async () => {
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('dadwork_session_token');
+        await logout();
         await supabase.auth.signOut();
         router.push('/login');
     };
@@ -52,18 +62,22 @@ export function AppSidebar() {
 
     return (
         <div className="flex h-full w-[260px] flex-col bg-sidebar/80 backdrop-blur-xl border-r border-sidebar-border/50 z-20 transition-colors duration-300">
-            {/* Header - Premium Logo */}
-            <div className="flex h-16 items-center px-5 border-b border-sidebar-border/50">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shadow-primary/25 transition-transform hover:scale-105">
-                        <span className="text-primary-foreground font-black text-base">D</span>
-                    </div>
-                    <div>
-                        <h1 className="text-base font-black tracking-tight text-sidebar-foreground">
-                            DADWORK
+            {/* Header - Current Admin Profile */}
+            <div className="flex h-16 items-center px-4 border-b border-sidebar-border/50">
+                <div className="flex items-center gap-3 w-full">
+                    <Avatar className="w-10 h-10 rounded-xl border-2 border-primary/20 shadow-sm transition-transform hover:scale-105 shrink-0">
+                        {currentUser?.avatar_url && <AvatarImage src={currentUser.avatar_url} alt={currentUser.name} className="object-cover" />}
+                        <AvatarFallback className="bg-gradient-to-br from-primary to-blue-600 text-primary-foreground font-black text-sm rounded-xl">
+                            {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'D'}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col overflow-hidden">
+                        <h1 className="text-sm font-black tracking-tight text-sidebar-foreground truncate uppercase">
+                            {currentUser?.name || 'DADWORK'}
                         </h1>
-                        <p className="text-[10px] text-muted-foreground font-medium tracking-wider uppercase">
-                            Business Ledger
+                        <p className="text-[9px] text-muted-foreground font-bold tracking-widest uppercase truncate flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                            {currentUser?.role ? currentUser.role.replace('_', ' ') : 'Business Ledger'}
                         </p>
                     </div>
                 </div>

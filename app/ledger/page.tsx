@@ -475,7 +475,10 @@ export default function LedgerPage() {
             // 2. Single ATOMIC Post
             const res = await fetch('/api/ledger', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-session-token': localStorage.getItem('dadwork_session_token') || ''
+                },
                 body: JSON.stringify({
                     customerId: selectedCustomerId,
                     receipt_id: receiptId,
@@ -804,26 +807,50 @@ export default function LedgerPage() {
                                                                             )}
                                                                         >
                                                                             <option value="" disabled>Pick a date</option>
-                                                                            {customerDailyDates.map((d) => {
-                                                                                const isSelectedByOthers = dateEntries.some(e => e.id !== entry.id && e.date === d.date);
-                                                                                const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
-                                                                                const isProcessed = d.processed || inHistory;
-                                                                                
-                                                                                let label = format(parseISO(d.date), "MMM dd, yyyy");
-                                                                                if (isProcessed) label += " ✅ Solved";
-                                                                                else if (!d.kg || d.kg === 0) label += " ❌ Absent";
-                                                                                else label += ` 📦 ${d.kg} KG`;
+                                                                            {(() => {
+                                                                                // 1. Identify all solved dates
+                                                                                const solvedRecords = customerDailyDates.filter(d => {
+                                                                                    const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
+                                                                                    return d.processed || inHistory;
+                                                                                });
 
-                                                                                return (
-                                                                                    <option 
-                                                                                        key={d.date} 
-                                                                                        value={d.date} 
-                                                                                        disabled={isSelectedByOthers}
-                                                                                    >
-                                                                                        {label}
-                                                                                    </option>
-                                                                                );
-                                                                            })}
+                                                                                // 2. Find the most recent (max) solved date
+                                                                                let latestSolvedDate: string | null = null;
+                                                                                if (solvedRecords.length > 0) {
+                                                                                    latestSolvedDate = solvedRecords.reduce((max, d) => d.date > max ? d.date : max, solvedRecords[0].date);
+                                                                                }
+
+                                                                                // 3. Filter daily dates list
+                                                                                return customerDailyDates.filter(d => {
+                                                                                    const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
+                                                                                    const isProcessed = d.processed || inHistory;
+
+                                                                                    // Keep the option if it's:
+                                                                                    // - Unsolved (unprocessed)
+                                                                                    // - The most recent solved date
+                                                                                    // - The currently selected option in this row
+                                                                                    return !isProcessed || d.date === latestSolvedDate || entry.date === d.date;
+                                                                                }).map((d) => {
+                                                                                    const isSelectedByOthers = dateEntries.some(e => e.id !== entry.id && e.date === d.date);
+                                                                                    const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
+                                                                                    const isProcessed = d.processed || inHistory;
+                                                                                    
+                                                                                    let label = format(parseISO(d.date), "MMM dd, yyyy");
+                                                                                    if (isProcessed) label += " ✅ Solved";
+                                                                                    else if (!d.kg || d.kg === 0) label += " ❌ Absent";
+                                                                                    else label += ` 📦 ${d.kg} KG`;
+
+                                                                                    return (
+                                                                                        <option 
+                                                                                            key={d.date} 
+                                                                                            value={d.date} 
+                                                                                            disabled={isSelectedByOthers}
+                                                                                        >
+                                                                                            {label}
+                                                                                        </option>
+                                                                                    );
+                                                                                });
+                                                                            })()}
                                                                         </select>
                                                                         <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary pointer-events-none" />
                                                                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />

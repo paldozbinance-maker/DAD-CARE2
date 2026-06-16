@@ -1,10 +1,24 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { validateSession } from '@/lib/sessions-store';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    // Double-check auth even though middleware already guards this route
+    const cookieHeader = request.headers.get('cookie') || '';
+    const cookieToken = cookieHeader.match(/dadwork_session=([^;]+)/)?.[1];
+    const token = cookieToken || request.headers.get('x-session-token');
+    if (!token) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const session = await validateSession(token);
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
+
         const today = new Date().toISOString().split('T')[0];
 
         // Run queries in parallel

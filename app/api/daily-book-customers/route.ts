@@ -1,8 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { requireSession } from '@/lib/require-session';
 
 // Get customers with their KG for a specific date
 export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get('date');
 

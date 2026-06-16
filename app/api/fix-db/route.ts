@@ -1,7 +1,10 @@
 import { Pool } from 'pg';
 import { NextResponse } from 'next/server';
+import { requireSuperAdmin } from '@/lib/require-session';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
     const pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: { rejectUnauthorized: false },

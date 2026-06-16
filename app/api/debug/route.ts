@@ -1,9 +1,12 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { requireSuperAdmin } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
     try {
         const query = `
             SELECT 

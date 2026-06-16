@@ -21,6 +21,7 @@ import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { logout } from '@/lib/session';
 
 const mainTabs = [
     { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
@@ -43,8 +44,7 @@ export function MobileNav() {
     const supabase = createClient();
 
     const handleLogout = async () => {
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('dadwork_session_token');
+        await logout();
         await supabase.auth.signOut();
         router.push('/login');
     };

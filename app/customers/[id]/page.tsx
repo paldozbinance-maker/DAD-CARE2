@@ -343,7 +343,8 @@ export default function CustomerDetailPage() {
         setUpdating(true);
         try {
             const res = await fetch(`/api/ledger?customerId=${customerId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'x-session-token': localStorage.getItem('dadwork_session_token') || '' }
             });
             if (!res.ok) throw new Error('Failed to clear history');
             toast.success('All history cleared. Balance is now $0.');

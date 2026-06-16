@@ -1,8 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
+import { requireSession } from '@/lib/require-session';
 
 export async function POST(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const supabase = await createClient();
 
     try {
@@ -121,6 +124,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -183,6 +188,8 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const customerId = searchParams.get('customerId');

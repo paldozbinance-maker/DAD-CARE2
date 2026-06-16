@@ -2,10 +2,13 @@ import pool from '@/lib/db';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
+import { requireSession } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     try {
         const query = `
             SELECT 
@@ -70,6 +73,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const body = await request.json();
     const { name, gender, phone, customer_code } = body;
     const supabase = await createClient();
@@ -117,6 +122,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const supabase = await createClient();
@@ -159,6 +166,8 @@ export async function DELETE(request: Request) {
     }
 }
 export async function PATCH(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const body = await request.json();

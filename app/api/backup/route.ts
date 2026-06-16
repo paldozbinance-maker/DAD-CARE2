@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { format } from 'date-fns';
 import fs from 'fs';
 import path from 'path';
+import { requireSuperAdmin } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -285,7 +286,9 @@ function buildMaalinlahaHTML(entries: any[]) {
 // ──────────────────────────────────────────────
 // MAIN API: Generate and Save Backups
 // ──────────────────────────────────────────────
-export async function POST() {
+export async function POST(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
     const supabase = await createClient();
     const backupDir = path.join('C:', 'Users', 'abdiq', 'OneDrive', 'Desktop', 'dadcare app', 'Backups');
     const dateStr = format(new Date(), 'yyyy-MM-dd');
@@ -419,7 +422,9 @@ export async function POST() {
     }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
     const backupDir = path.join('C:', 'Users', 'abdiq', 'OneDrive', 'Desktop', 'dadcare app', 'Backups');
 
     try {

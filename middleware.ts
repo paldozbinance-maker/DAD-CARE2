@@ -1,40 +1,60 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Public routes that do NOT require authentication
-const PUBLIC_ROUTES = [
-    '/api/auth/login',
-    '/api/auth/logout',
-    '/login',
-];
+export const SESSION_COOKIE = 'dadwork_session';
+
+// Routes that do NOT require authentication
+const PUBLIC_PAGE_ROUTES = ['/login'];
+const PUBLIC_API_ROUTES = ['/api/auth/login', '/api/temp-cleanup'];
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Only protect /api/* routes
-    if (!pathname.startsWith('/api/')) {
+    // Allow all public page routes
+    if (PUBLIC_PAGE_ROUTES.some(r => pathname === r || pathname.startsWith(r + '/'))) {
         return NextResponse.next();
     }
 
-    // Allow public API routes
-    if (PUBLIC_ROUTES.some(route => pathname.startsWith(route))) {
+    // Allow public API routes (login only – logout is intentionally excluded so it can clear the cookie)
+    if (PUBLIC_API_ROUTES.some(r => pathname.startsWith(r))) {
         return NextResponse.next();
     }
 
-    // Check for session token in header
-    const token = request.headers.get('x-session-token');
+    // Read session token from httpOnly cookie (set on login) OR legacy header
+    const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
+    const headerToken = request.headers.get('x-session-token');
+    const token = cookieToken || headerToken;
 
-    if (!token || token.length < 10) {
-        // Also allow requests from the same origin browser (no token = old session)
-        // We use a soft-fail approach: log but don't block, so existing sessions work
-        // This avoids breaking the app for already-logged-in users
-        // To enforce strictly: return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const isAuthenticated = !!token && token.length >= 10;
+
+    // ── API routes ────────────────────────────────────────────────────────────
+    if (pathname.startsWith('/api/')) {
+        // Allow logout even without a valid token (idempotent operation)
+        if (pathname.startsWith('/api/auth/logout')) {
+            return NextResponse.next();
+        }
+
+        if (!isAuthenticated) {
+            return NextResponse.json(
+                { error: 'Unauthorized – please log in' },
+                { status: 401 }
+            );
+        }
         return NextResponse.next();
+    }
+
+    // ── Page routes ───────────────────────────────────────────────────────────
+    if (!isAuthenticated) {
+        const loginUrl = new URL('/login', request.url);
+        return NextResponse.redirect(loginUrl);
     }
 
     return NextResponse.next();
 }
 
 export const config = {
-    matcher: ['/api/:path*'],
+    // Run on every route EXCEPT Next.js internals, static files, and public assets
+    matcher: [
+        '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.ico|.*\\.webp).*)',
+    ],
 };

@@ -29,6 +29,16 @@ export function clearSession(): void {
     localStorage.removeItem(USER_KEY);
 }
 
+/** Log out from server and clear local session */
+export async function logout(): Promise<void> {
+    try {
+        await authFetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+        console.error('Logout API failed:', e);
+    }
+    clearSession();
+}
+
 /** Make an authenticated fetch request (adds token header automatically) */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
     const token = getToken();

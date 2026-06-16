@@ -1,10 +1,13 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
+import { requireSession } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     try {
         // Create table if not exists
         await pool.query(`
@@ -28,6 +31,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     try {
         const body = await request.json();
         const { key, value } = body;

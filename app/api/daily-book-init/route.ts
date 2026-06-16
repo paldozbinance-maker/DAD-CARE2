@@ -1,12 +1,15 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireSession } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
 // Merged init endpoint: returns customers + history + latest date in ONE request
 // This replaces 3 separate API calls on Daily Book page load
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     try {
         const supabase = await createClient();
 

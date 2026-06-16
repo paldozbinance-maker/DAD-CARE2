@@ -1,38 +1,168 @@
 /**
- * Server-side in-memory session store
- * Tokens are stored in memory — they reset on server restart (safe: forces re-login)
- * This is a simple but effective guard against direct API access
+ * Database-backed session store.
+ * Sessions are stored in the AdminSession table (Postgres via pg pool).
+ * This means:
+ *   - Sessions survive server restarts
+ *   - Every device/browser that logs in is visible across all servers
+ *   - SUPER_ADMIN can see exactly who is online from any device in real-time
+ *
+ * Online threshold: 5 minutes without a heartbeat = OFFLINE
  */
 
-// Token → user data map stored in global memory
-const globalStore = global as any;
-if (!globalStore.__dadwork_sessions) {
-    globalStore.__dadwork_sessions = new Map<string, { userId: string; username: string; role: string; createdAt: number }>();
+import pool from './db';
+
+export interface SessionData {
+    userId: string;
+    username: string;
+    role: string;
+    name?: string;
+    avatarUrl?: string;
+    createdAt: number;
+    lastSeenAt: number;
+    loginAt: string;
+    ipAddress?: string;
+    userAgent?: string;
 }
 
-const sessions: Map<string, { userId: string; username: string; role: string; createdAt: number }> = globalStore.__dadwork_sessions;
+const SESSION_TTL_HOURS = 12;
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+// ─── Table bootstrap ────────────────────────────────────────────────────────
 
-export function createSession(token: string, userId: string, username: string, role: string): void {
-    sessions.set(token, { userId, username, role, createdAt: Date.now() });
+let tableReady = false;
+
+async function ensureTable() {
+    if (tableReady) return;
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS "AdminSession" (
+            token        TEXT PRIMARY KEY,
+            user_id      TEXT,
+            username     TEXT NOT NULL,
+            name         TEXT,
+            role         TEXT NOT NULL,
+            avatar_url   TEXT,
+            ip_address   TEXT,
+            user_agent   TEXT,
+            login_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at   TIMESTAMPTZ NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_adminsession_username ON "AdminSession"(username);
+        CREATE INDEX IF NOT EXISTS idx_adminsession_last_seen ON "AdminSession"(last_seen_at);
+    `);
+    tableReady = true;
 }
 
-export function validateSession(token: string): { userId: string; username: string; role: string } | null {
-    const session = sessions.get(token);
-    if (!session) return null;
-    // Check expiry
-    if (Date.now() - session.createdAt > SESSION_TTL_MS) {
-        sessions.delete(token);
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+export async function createSession(
+    token: string,
+    userId: string,
+    username: string,
+    role: string,
+    options?: { name?: string; avatarUrl?: string; ipAddress?: string; userAgent?: string }
+): Promise<void> {
+    await ensureTable();
+    const now = new Date();
+    const expires = new Date(now.getTime() + SESSION_TTL_HOURS * 3600 * 1000);
+    await pool.query(
+        `INSERT INTO "AdminSession" (token, user_id, username, name, role, avatar_url, ip_address, user_agent, login_at, last_seen_at, expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10)
+         ON CONFLICT (token) DO UPDATE
+         SET last_seen_at = NOW(), expires_at = $10`,
+        [
+            token,
+            userId,
+            username,
+            options?.name || null,
+            role,
+            options?.avatarUrl || null,
+            options?.ipAddress || null,
+            options?.userAgent || null,
+            now,
+            expires,
+        ]
+    );
+}
+
+export async function validateSession(token: string): Promise<{ userId: string; username: string; role: string } | null> {
+    try {
+        await ensureTable();
+        const { rows } = await pool.query(
+            `SELECT * FROM "AdminSession" WHERE token = $1 AND expires_at > NOW() LIMIT 1`,
+            [token]
+        );
+        if (!rows.length) return null;
+        // Touch last_seen_at
+        await pool.query(`UPDATE "AdminSession" SET last_seen_at = NOW() WHERE token = $1`, [token]);
+        const r = rows[0];
+        return { userId: r.user_id, username: r.username, role: r.role };
+    } catch {
         return null;
     }
-    return session;
 }
 
-export function deleteSession(token: string): void {
-    sessions.delete(token);
+export async function touchSession(token: string): Promise<void> {
+    try {
+        await ensureTable();
+        await pool.query(`UPDATE "AdminSession" SET last_seen_at = NOW() WHERE token = $1 AND expires_at > NOW()`, [token]);
+    } catch { /* non-fatal */ }
 }
 
-export function getSessionCount(): number {
-    return sessions.size;
+export async function deleteSession(token: string): Promise<void> {
+    try {
+        await ensureTable();
+        await pool.query(`DELETE FROM "AdminSession" WHERE token = $1`, [token]);
+    } catch { /* non-fatal */ }
+}
+
+export async function getSessionCount(): Promise<number> {
+    try {
+        await ensureTable();
+        const { rows } = await pool.query(`SELECT COUNT(*) as c FROM "AdminSession" WHERE expires_at > NOW()`);
+        return parseInt(rows[0]?.c || '0', 10);
+    } catch { return 0; }
+}
+
+/** All sessions whose last_seen_at is within the last 5 minutes (ONLINE). */
+export async function getOnlineSessions(): Promise<SessionData[]> {
+    try {
+        await ensureTable();
+        const cutoff = new Date(Date.now() - ONLINE_THRESHOLD_MS);
+        const { rows } = await pool.query(
+            `SELECT * FROM "AdminSession"
+             WHERE expires_at > NOW() AND last_seen_at >= $1
+             ORDER BY last_seen_at DESC`,
+            [cutoff]
+        );
+        return rows.map(rowToSession);
+    } catch { return []; }
+}
+
+/** All sessions that haven't expired (regardless of last_seen_at). */
+export async function getAllSessions(): Promise<SessionData[]> {
+    try {
+        await ensureTable();
+        const { rows } = await pool.query(
+            `SELECT * FROM "AdminSession" WHERE expires_at > NOW() ORDER BY last_seen_at DESC`
+        );
+        return rows.map(rowToSession);
+    } catch { return []; }
+}
+
+// ─── Private helper ──────────────────────────────────────────────────────────
+
+function rowToSession(r: any): SessionData {
+    return {
+        userId: r.user_id,
+        username: r.username,
+        name: r.name,
+        role: r.role,
+        avatarUrl: r.avatar_url,
+        createdAt: new Date(r.login_at).getTime(),
+        lastSeenAt: new Date(r.last_seen_at).getTime(),
+        loginAt: new Date(r.login_at).toISOString(),
+        ipAddress: r.ip_address,
+        userAgent: r.user_agent,
+    };
 }

@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { requireSession } from '@/lib/require-session';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const customerId = searchParams.get('customerId');
@@ -52,9 +56,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const body = await request.json();
-        const { customerId, amount, note, date } = body;
-        const supabase = await createClient();
+    const { customerId, amount, note, date } = body;
+    const supabase = await createClient();
 
         try {
             if (!customerId || !amount) {
@@ -89,6 +95,9 @@ export async function POST(request: Request) {
             });
 
         if (insertError) throw insertError;
+
+        // Log to permanent audit trail
+        await logAudit(request, 'ADD_PAYMENT', `Payment of ${paymentAmount} recorded for customer ID: ${customerId}`);
 
         return NextResponse.json({ success: true, newDebt });
     } catch (error: any) {

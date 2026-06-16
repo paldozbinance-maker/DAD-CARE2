@@ -1,8 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
+import { requireSuperAdmin } from '@/lib/require-session';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
     const supabase = await createClient();
     try {
         const { data, error } = await supabase
@@ -18,6 +21,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
     const body = await request.json();
     const { username, name, password, role, gender, phone, avatar_url, assigned_customer_ids } = body;
     const supabase = await createClient();
@@ -66,6 +71,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const supabase = await createClient();

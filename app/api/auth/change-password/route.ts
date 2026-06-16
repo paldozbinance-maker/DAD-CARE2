@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { requireSession } from '@/lib/require-session';
 
 export async function POST(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const body = await request.json();
     const { username, currentPassword, newPassword } = body;
     const supabase = await createClient();

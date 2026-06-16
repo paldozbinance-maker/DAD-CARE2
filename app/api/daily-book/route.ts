@@ -1,8 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
+import { requireSession } from '@/lib/require-session';
 
 export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get('date');
     if (!dateStr) return NextResponse.json({ error: 'Date required' }, { status: 400 });
@@ -41,6 +44,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const body = await request.json();
     const { date: dateStr, items } = body;
     const supabase = await createClient();
@@ -93,6 +98,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get('date');
     if (!dateStr) return NextResponse.json({ error: 'Date required' }, { status: 400 });
