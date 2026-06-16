@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { logAudit } from '@/lib/audit';
 
 export async function GET() {
     const supabase = await createClient();
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
             .single();
 
         if (error) throw error;
+        await logAudit(request, 'CREATE_USER', `Created user ${username} with role ${role || 'CUSTOMER'}`);
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Create User Error:', error);
@@ -79,6 +81,7 @@ export async function DELETE(request: Request) {
             .eq('id', id);
 
         if (error) throw error;
+        await logAudit(request, 'DELETE_USER', `Deleted user ID: ${id}`);
         return NextResponse.json({ success: true });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

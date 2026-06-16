@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { logAudit } from '@/lib/audit';
 
 export async function POST(request: Request) {
     const supabase = await createClient();
@@ -110,6 +111,8 @@ export async function POST(request: Request) {
 
         if (insertError) throw insertError;
 
+        await logAudit(request, 'ADD_LEDGER_ENTRIES', `Added ${entriesToInsert.length} ledger entries for customer ${customer.name}`);
+
         return NextResponse.json({ success: true, finalDebt: runningDebt, count: entriesToInsert.length });
     } catch (error: any) {
         console.error('Ledger Error:', error);
@@ -199,6 +202,9 @@ export async function DELETE(request: Request) {
         const { error } = await query;
 
         if (error) throw error;
+
+        await logAudit(request, 'DELETE_LEDGER_ENTRIES', `Deleted ledger entry (ID: ${id || 'ALL'}, Customer: ${customerId || 'UNKNOWN'})`);
+
         return NextResponse.json({ success: true });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
             }
         }
 
+        await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${itemsToInsert?.length || 0} items`);
         return NextResponse.json({ success: true, bookId: book.id });
     } catch (error: any) {
         console.error('Save DailyBook Error:', error);
@@ -116,6 +118,7 @@ export async function DELETE(request: Request) {
         const { error: bookError } = await supabase.from('DailyBook').delete().eq('id', book.id);
         if (bookError) throw bookError;
 
+        await logAudit(request, 'DELETE_DAILY_BOOK', `Deleted daily book entry for ${dateStr}`);
         return NextResponse.json({ success: true });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

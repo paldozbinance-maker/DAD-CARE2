@@ -1,6 +1,7 @@
 import pool from '@/lib/db';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { logAudit } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,6 +108,7 @@ export async function POST(request: Request) {
             .single();
 
         if (error) throw error;
+        await logAudit(request, 'CREATE_CUSTOMER', `Created customer ${name} (${customer_code})`);
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Create Customer Error:', error);
@@ -149,6 +151,7 @@ export async function DELETE(request: Request) {
             .eq('id', id);
 
         if (error) throw error;
+        await logAudit(request, 'DELETE_CUSTOMER', `Deleted customer ID: ${id}`);
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Delete Customer Error:', error);
@@ -176,6 +179,7 @@ export async function PATCH(request: Request) {
             .single();
 
         if (error) throw error;
+        await logAudit(request, 'UPDATE_CUSTOMER', `Updated customer ${name} (${customer_code})`);
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Update Customer Error:', error);

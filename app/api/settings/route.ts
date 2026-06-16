@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { logAudit } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,8 @@ export async function POST(request: Request) {
             `INSERT INTO "Settings" (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
             [key, value.toString()]
         );
+
+        await logAudit(request, 'UPDATE_SETTING', `Updated setting ${key} to ${value}`);
 
         return NextResponse.json({ success: true });
     } catch (error: any) {

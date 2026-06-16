@@ -459,7 +459,7 @@ export default function DailyBookPage() {
                                         <Calendar mode="single" selected={date} onSelect={(newDate) => newDate && handleDateChange(newDate)} className="rounded-md border-0" />
                                     </PopoverContent>
                                 </Popover>
-                                <AddCustomerDialog onSuccess={loadCustomers} nextId={(Math.max(...customers.map(c => parseInt(c.customer_code.replace(/\D/g, '')) || 0), 0) + 1).toString()} />
+                                <AddCustomerDialog onSuccess={loadInit} nextId={(Math.max(...customers.map(c => parseInt(c.customer_code.replace(/\D/g, '')) || 0), 0) + 1).toString()} />
                                 <Button variant="outline" size="icon" onClick={() => setIsFullScreen(true)} className="h-10 w-10 text-muted-foreground hover:text-primary border-border" title="Enter Full Screen">
                                     <Maximize2 className="h-4 w-4" />
                                 </Button>

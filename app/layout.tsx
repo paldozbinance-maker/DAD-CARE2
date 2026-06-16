@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { LayoutWrapper } from '@/components/layout-wrapper';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
+import { FetchInterceptor } from '@/components/fetch-interceptor';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -56,6 +57,7 @@ export default function RootLayout({
           </LayoutWrapper>
           <Toaster />
           <ServiceWorkerRegistration />
+          <FetchInterceptor />
         </ThemeProvider>
       </body>
     </html>

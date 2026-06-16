@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { logAudit } from '@/lib/audit';
 
 export async function PUT(
     request: Request,
@@ -18,6 +19,7 @@ export async function PUT(
             .single();
 
         if (error) throw error;
+        await logAudit(request, 'UPDATE_USER', `Updated user ID: ${id}`);
         return NextResponse.json(data);
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -39,6 +39,7 @@ import {
     Palette,
     HardDrive,
     Pencil,
+    Activity,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -74,6 +75,10 @@ export default function SettingsPage() {
     const [searchCustomer, setSearchCustomer] = useState('');
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+
+    // Audit Logs state
+    const [auditLogs, setAuditLogs] = useState<any[]>([]);
+    const [auditLoading, setAuditLoading] = useState(false);
 
     // User Form State
     const [userForm, setUserForm] = useState({
@@ -127,11 +132,30 @@ export default function SettingsPage() {
 
         const storedUser = localStorage.getItem('currentUser');
         if (storedUser) {
-            setCurrentUser(JSON.parse(storedUser));
+            const parsedUser = JSON.parse(storedUser);
+            setCurrentUser(parsedUser);
+            if (parsedUser.role === 'SUPER_ADMIN') {
+                loadAuditLogs();
+            }
         }
         loadUsers();
         loadCustomers();
     }, []);
+
+    const loadAuditLogs = async () => {
+        setAuditLoading(true);
+        try {
+            const res = await fetch('/api/audit-logs');
+            if (res.ok) {
+                const data = await res.json();
+                setAuditLogs(data);
+            }
+        } catch (e) {
+            console.error('Failed to load audit logs:', e);
+        } finally {
+            setAuditLoading(false);
+        }
+    };
 
     const loadUsers = async () => {
         setUsersLoading(true);
@@ -442,6 +466,16 @@ export default function SettingsPage() {
                                 <HardDrive className="w-3.5 h-3.5 text-amber-500" />
                                 <span className="hidden xs:inline">Backup</span>
                                 <span className="xs:hidden">💾</span>
+                            </TabsTrigger>
+                        )}
+                        {isSuperAdmin && (
+                            <TabsTrigger
+                                value="audit"
+                                className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
+                            >
+                                <Activity className="w-3.5 h-3.5 text-red-500" />
+                                <span className="hidden xs:inline">Audit</span>
+                                <span className="xs:hidden">🔍</span>
                             </TabsTrigger>
                         )}
                     </TabsList>
@@ -792,6 +826,58 @@ export default function SettingsPage() {
                                             </div>
                                         ))}
                                     </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    )}
+
+                    {/* ── Audit Logs ── */}
+                    {isSuperAdmin && (
+                        <TabsContent value="audit" className="mt-3">
+                            <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-red-500/5 to-transparent flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-1.5 rounded-lg bg-red-500/15">
+                                            <Activity className="w-4 h-4 text-red-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-foreground">Audit Logs</h3>
+                                            <p className="text-[10px] text-muted-foreground">Track all system activities</p>
+                                        </div>
+                                    </div>
+                                    <Button size="sm" variant="outline" onClick={loadAuditLogs} className="h-8 rounded-xl text-xs active:scale-95">Refresh</Button>
+                                </div>
+                                <div className="p-0">
+                                    {auditLoading ? (
+                                        <div className="flex justify-center items-center py-12">
+                                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                        </div>
+                                    ) : auditLogs.length === 0 ? (
+                                        <div className="text-center py-12 text-muted-foreground text-sm">No activities logged yet.</div>
+                                    ) : (
+                                        <div className="divide-y divide-border/30 max-h-[60vh] overflow-y-auto">
+                                            {auditLogs.map((log) => (
+                                                <div key={log.id} className="p-4 hover:bg-muted/10 transition-colors flex gap-4 items-start">
+                                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                                                        <span className="text-xs font-bold text-primary">{log.username.charAt(0).toUpperCase()}</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex justify-between items-start gap-2">
+                                                            <p className="text-sm font-bold text-foreground truncate">@{log.username}</p>
+                                                            <span className="text-[10px] text-muted-foreground shrink-0 mt-0.5">
+                                                                {new Date(log.created_at).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <span className="text-[10px] uppercase font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded shrink-0">{log.action}</span>
+                                                            <span className="text-[11px] text-muted-foreground font-medium">{log.role}</span>
+                                                        </div>
+                                                        <p className="text-xs text-foreground mt-1.5 bg-muted/30 p-2 rounded-lg border border-border/40 inline-block">{log.details}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </TabsContent>
