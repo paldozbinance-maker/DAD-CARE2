@@ -84,7 +84,7 @@ export async function POST(request: Request) {
             }
         }
 
-        await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${itemsToInsert?.length || 0} items`);
+        await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${items?.length || 0} items`);
         return NextResponse.json({ success: true, bookId: book.id });
     } catch (error: any) {
         console.error('Save DailyBook Error:', error);
