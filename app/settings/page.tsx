@@ -105,10 +105,22 @@ export default function SettingsPage() {
         runMigration();
     }, []);
 
-    // Load saved price
     useEffect(() => {
-        const saved = localStorage.getItem('dadwork_price_per_kg');
-        if (saved) setPricePerKg(saved);
+        // Load global settings
+        const loadSettings = async () => {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                if (data && data.dadwork_price_per_kg) {
+                    setPricePerKg(data.dadwork_price_per_kg);
+                    localStorage.setItem('dadwork_price_per_kg', data.dadwork_price_per_kg); // fallback for quick load
+                }
+            } catch (e) {
+                console.error('Failed to load global settings:', e);
+            }
+        };
+        loadSettings();
+
         const storedUser = localStorage.getItem('currentUser');
         if (storedUser) {
             setCurrentUser(JSON.parse(storedUser));
@@ -144,9 +156,25 @@ export default function SettingsPage() {
         }
     };
 
-    const handleSavePrice = () => {
-        localStorage.setItem('dadwork_price_per_kg', pricePerKg);
-        toast.success(`Price per KG set to $${pricePerKg}`);
+    const handleSavePrice = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'dadwork_price_per_kg', value: pricePerKg })
+            });
+            if (res.ok) {
+                localStorage.setItem('dadwork_price_per_kg', pricePerKg);
+                toast.success(`Global Price per KG set to $${pricePerKg}`);
+            } else {
+                toast.error('Failed to save global price');
+            }
+        } catch (e) {
+            toast.error('Network error');
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Backup/Export
@@ -356,6 +384,7 @@ export default function SettingsPage() {
     }
 
     const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+    const isAnyAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'ADMIN';
 
     return (
         <div className="space-y-4 max-w-4xl mx-auto w-full pb-24" suppressHydrationWarning>
@@ -401,7 +430,7 @@ export default function SettingsPage() {
                             <Palette className="w-3.5 h-3.5 text-violet-500" />
                             Theme
                         </TabsTrigger>
-                        {isSuperAdmin && (
+                        {isAnyAdmin && (
                             <TabsTrigger
                                 value="backup"
                                 className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
@@ -465,14 +494,16 @@ export default function SettingsPage() {
                                         className="pl-9 bg-background/50 border-border/50 rounded-xl h-11 text-sm"
                                     />
                                 </div>
-                                <Button
-                                    onClick={handleOpenCreateDialog}
-                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 shrink-0 h-11 rounded-xl px-3 active:scale-95 transition-all"
-                                >
-                                    <UserPlus className="w-4 h-4 mr-1.5" />
-                                    <span className="hidden sm:inline">Add User</span>
-                                    <span className="sm:hidden">Add</span>
-                                </Button>
+                                {isSuperAdmin && (
+                                    <Button
+                                        onClick={handleOpenCreateDialog}
+                                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 shrink-0 h-11 rounded-xl px-3 active:scale-95 transition-all"
+                                    >
+                                        <UserPlus className="w-4 h-4 mr-1.5" />
+                                        <span className="hidden sm:inline">Add User</span>
+                                        <span className="sm:hidden">Add</span>
+                                    </Button>
+                                )}
                             </div>
 
                             {/* User Cards */}
@@ -499,9 +530,11 @@ export default function SettingsPage() {
                                         </div>
                                         <p className="text-foreground font-bold text-sm">No Users Yet</p>
                                         <p className="text-muted-foreground text-xs mt-1 mb-4">Create user accounts for your team</p>
-                                        <Button onClick={handleOpenCreateDialog} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 active:scale-95">
-                                            <Plus className="w-3.5 h-3.5 mr-1.5" /> Create User
-                                        </Button>
+                                        {isSuperAdmin && (
+                                            <Button onClick={handleOpenCreateDialog} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 active:scale-95">
+                                                <Plus className="w-3.5 h-3.5 mr-1.5" /> Create User
+                                            </Button>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="divide-y divide-border/30">
@@ -548,22 +581,24 @@ export default function SettingsPage() {
                                                     </div>
 
                                                     {/* Actions */}
-                                                    <div className="flex items-center gap-1.5 shrink-0">
-                                                        <button
-                                                            onClick={() => handleOpenEditDialog(user)}
-                                                            className="p-2 rounded-xl border border-border/50 hover:bg-muted/50 active:scale-90 transition-all"
-                                                        >
-                                                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                                                        </button>
-                                                        {user.username !== 'admin' && (
+                                                    {isSuperAdmin && (
+                                                        <div className="flex items-center gap-1.5 shrink-0">
                                                             <button
-                                                                onClick={() => handleDeleteUser(user.id, user.username)}
-                                                                className="p-2 rounded-xl border border-destructive/20 hover:bg-destructive/10 active:scale-90 transition-all"
+                                                                onClick={() => handleOpenEditDialog(user)}
+                                                                className="p-2 rounded-xl border border-border/50 hover:bg-muted/50 active:scale-90 transition-all"
                                                             >
-                                                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                                                             </button>
-                                                        )}
-                                                    </div>
+                                                            {user.username !== 'admin' && (
+                                                                <button
+                                                                    onClick={() => handleDeleteUser(user.id, user.username)}
+                                                                    className="p-2 rounded-xl border border-destructive/20 hover:bg-destructive/10 active:scale-90 transition-all"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -629,10 +664,70 @@ export default function SettingsPage() {
                     </TabsContent>
 
                     {/* ── Backup ── */}
-                    {isSuperAdmin && (
+                    {isAnyAdmin && (
                         <TabsContent value="backup" className="mt-3">
                             <div className="space-y-3">
-                                {/* Export Card */}
+                                {/* ★ OneDrive Backup — NEW */}
+                                <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                    <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-blue-500/5 to-transparent">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 rounded-lg bg-blue-500/15">
+                                                <HardDrive className="w-4 h-4 text-blue-500" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-bold text-foreground">☁️ Save to OneDrive</h3>
+                                                <p className="text-[10px] text-muted-foreground">Buuga Maqalka + Buuga Maalinlaha — saved to your OneDrive folder</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 space-y-3">
+                                        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50 dark:border-blue-800/30 rounded-xl p-3 text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                                            <p className="font-bold">📁 Files saved to:</p>
+                                            <p className="font-mono text-[10px] opacity-80">OneDrive/Desktop/dadcare app/Backups/</p>
+                                            <p>Each backup includes:</p>
+                                            <ul className="list-disc list-inside text-[11px] space-y-0.5 ml-1 opacity-90">
+                                                <li><strong>Buuga Maqalka</strong> — Full ledger history for every customer</li>
+                                                <li><strong>Buuga Maalinlaha</strong> — Complete daily book record</li>
+                                                <li><strong>Beautiful HTML</strong> — Open in any browser to print</li>
+                                                <li><strong>Text files</strong> — Readable on any device forever</li>
+                                            </ul>
+                                        </div>
+                                        <Button
+                                            onClick={async () => {
+                                                setLoading(true);
+                                                try {
+                                                    const res = await fetch('/api/backup', { method: 'POST' });
+                                                    const data = await res.json();
+                                                    if (res.ok && data.success) {
+                                                        toast.success(`✅ Backup saved! ${data.stats.filesGenerated} files saved to OneDrive`);
+                                                    } else {
+                                                        toast.error('Backup failed: ' + (data.error || 'Unknown error'));
+                                                    }
+                                                } catch (e) {
+                                                    toast.error('Network error during backup');
+                                                } finally {
+                                                    setLoading(false);
+                                                }
+                                            }}
+                                            disabled={loading}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-blue-600/20 active:scale-[0.98] transition-all"
+                                        >
+                                            {loading ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    Generating backup...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <HardDrive className="w-4 h-4 mr-2" />
+                                                    ☁️ Generate OneDrive Backup Now
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Export PDF Card (existing) */}
                                 <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
                                     <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-amber-500/5 to-transparent">
                                         <div className="flex items-center gap-2.5">
@@ -640,15 +735,12 @@ export default function SettingsPage() {
                                                 <Download className="w-4 h-4 text-amber-500" />
                                             </div>
                                             <div>
-                                                <h3 className="text-sm font-bold text-foreground">Export Data</h3>
-                                                <p className="text-[10px] text-muted-foreground">Download full PDF backup</p>
+                                                <h3 className="text-sm font-bold text-foreground">PDF Download</h3>
+                                                <p className="text-[10px] text-muted-foreground">Download a PDF receipt backup to your device</p>
                                             </div>
                                         </div>
                                     </div>
                                     <div className="p-4">
-                                        <p className="text-xs text-muted-foreground mb-3">
-                                            Download a complete PDF backup of all customers and transactions with colors.
-                                        </p>
                                         <Button
                                             onClick={handleExportPDF}
                                             disabled={loading}
@@ -662,7 +754,7 @@ export default function SettingsPage() {
                                             ) : (
                                                 <>
                                                     <Download className="w-4 h-4 mr-2" />
-                                                    Download Backup
+                                                    Download PDF Backup
                                                 </>
                                             )}
                                         </Button>
@@ -681,8 +773,8 @@ export default function SettingsPage() {
                                     </div>
                                     <div className="p-4 space-y-3">
                                         {[
-                                            { title: 'Cloud Persistence', desc: 'Data stored in Supabase with 99.9% uptime.' },
-                                            { title: 'Auto Backups', desc: 'Daily automatic backups keep your data safe.' },
+                                            { title: 'Cloud Database', desc: 'All data stored in Supabase (99.9% uptime) — never lost.' },
+                                            { title: 'OneDrive Sync', desc: 'Backups auto-sync to Microsoft cloud via OneDrive.' },
                                             { title: 'Proof of Record', desc: 'Every transaction logged with timestamp & ID.' },
                                         ].map((item, i) => (
                                             <div key={i} className="flex gap-3 items-start">

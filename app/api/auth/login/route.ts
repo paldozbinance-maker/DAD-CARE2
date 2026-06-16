@@ -26,7 +26,7 @@ export async function POST(request: Request) {
                 id: 'admin-hardcoded',
                 username: 'admin',
                 name: 'Administrator',
-                role: 'ADMIN',
+                role: 'SUPER_ADMIN',
                 is_active: true,
                 assigned_customer_ids: []
             });
@@ -34,6 +34,11 @@ export async function POST(request: Request) {
 
         if (!user) {
             return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
+        }
+
+        // Intercept existing database 'admin' user and enforce SUPER_ADMIN role
+        if (user.username === 'admin') {
+            user.role = 'SUPER_ADMIN';
         }
 
         // Compare password directly (plain text as approved and aligned with existing DB setup)

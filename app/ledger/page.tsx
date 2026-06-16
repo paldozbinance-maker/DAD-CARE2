@@ -81,8 +81,22 @@ export default function LedgerPage() {
     const [expandedExtraEntryIds, setExpandedExtraEntryIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        const savedPrice = localStorage.getItem('dadwork_price_per_kg');
-        if (savedPrice) setDefaultPrice(savedPrice);
+        const loadSettings = async () => {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                if (data && data.dadwork_price_per_kg) {
+                    setDefaultPrice(data.dadwork_price_per_kg);
+                } else {
+                    const savedPrice = localStorage.getItem('dadwork_price_per_kg');
+                    if (savedPrice) setDefaultPrice(savedPrice);
+                }
+            } catch (e) {
+                const savedPrice = localStorage.getItem('dadwork_price_per_kg');
+                if (savedPrice) setDefaultPrice(savedPrice);
+            }
+        };
+        loadSettings();
 
         const storedUser = localStorage.getItem('currentUser');
         if (storedUser) {
@@ -340,7 +354,12 @@ export default function LedgerPage() {
                     if (matchingDaily.kg > 0) {
                         toast.success(`Found ${matchingDaily.kg} KG in Buuga Maalinlaha for this date!`);
                         return { ...entry, date: value, kg: matchingDaily.kg.toString() };
+                    } else {
+                        toast.info(`Absent not working that day`);
+                        return { ...entry, date: value, kg: '0' };
                     }
+                } else {
+                    return { ...entry, date: value, kg: '0' };
                 }
             }
 
@@ -361,7 +380,11 @@ export default function LedgerPage() {
         const price = parseFloat(p.pricePerKg) || 0;
         const extraKg = parseFloat(p.extraKg || '') || 0;
         const extraPrice = parseFloat(p.extraPricePerKg || '') || 0;
-        return sum + (kg * price) + (extraKg * extraPrice);
+        
+        let itemSum = 0;
+        if (kg > 0 && price > 0) itemSum += (kg * price);
+        if (extraKg > 0 && extraPrice > 0) itemSum += (extraKg * extraPrice);
+        return sum + itemSum;
     }, 0);
 
     const activePaymentAmount = paymentEntries.reduce((sum, pay) => {
@@ -374,7 +397,7 @@ export default function LedgerPage() {
     const finalLacagtaGuud = subtotal - activePaymentAmount;
 
     const activeDatesForHeader = dateEntries
-        .filter(e => e.date && parseFloat(e.kg) > 0)
+        .filter(e => e.date && (parseFloat(e.kg) > 0 || parseFloat(e.extraKg || '0') > 0))
         .map(e => format(new Date(e.date), 'dd MMM'));
 
     const dynamicMaqalLabel = 'Maqalka';
@@ -387,7 +410,12 @@ export default function LedgerPage() {
             return;
         }
 
-        const validEntries = dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0);
+        const validEntries = dateEntries.filter(e => 
+            e.date && (
+                (parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0) || 
+                (parseFloat(e.extraKg || '0') > 0 && parseFloat(e.extraPricePerKg || '0') > 0)
+            )
+        );
         const validPayments = paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0);
 
         if (validEntries.length === 0 && validPayments.length === 0 && !(summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) {
@@ -415,12 +443,14 @@ export default function LedgerPage() {
 
         // Product entries
         for (const entry of validEntries) {
-            items.push({
-                type: 'PRODUCT',
-                date: entry.date,
-                kg: entry.kg,
-                price: entry.pricePerKg
-            });
+            if (parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0) {
+                items.push({
+                    type: 'PRODUCT',
+                    date: entry.date,
+                    kg: entry.kg,
+                    price: entry.pricePerKg
+                });
+            }
             if (entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0) {
                 items.push({
                     type: 'PRODUCT',
@@ -764,59 +794,40 @@ export default function LedgerPage() {
                                                             <div className="flex items-end gap-2">
                                                                 <div className="flex-1 space-y-1.5">
                                                                     <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Date</Label>
-                                                                    <Popover>
-                                                                        <PopoverTrigger asChild>
-                                                                            <Button
-                                                                                variant={"outline"}
-                                                                                className={cn(
-                                                                                    "w-full h-11 md:h-12 justify-start text-left font-bold text-sm md:text-base rounded-xl border-border/80 bg-muted/10 hover:bg-muted/30 transition-colors",
-                                                                                    !entry.date && "text-muted-foreground"
-                                                                                )}
-                                                                            >
-                                                                                <CalendarIcon className="mr-3 h-4 w-4 md:h-5 md:w-5 text-primary" />
-                                                                                {entry.date ? format(parseISO(entry.date), "PPP") : <span>Pick a date</span>}
-                                                                            </Button>
-                                                                        </PopoverTrigger>
-                                                                        <PopoverContent className="w-auto p-0 rounded-xl shadow-xl border-border" align="start">
-                                                                            <Calendar
-                                                                                mode="single"
-                                                                                selected={entry.date ? parseISO(entry.date) : undefined}
-                                                                                onSelect={(val) => val && updateDateEntry(entry.id, 'date', format(val, 'yyyy-MM-dd'))}
-                                                                                disabled={(date) => {
-                                                                                    const dStr = format(date, 'yyyy-MM-dd');
-                                                                                    if (entry.date === dStr) return false;
+                                                                    <div className="relative">
+                                                                        <select
+                                                                            value={entry.date || ""}
+                                                                            onChange={(e) => updateDateEntry(entry.id, 'date', e.target.value)}
+                                                                            className={cn(
+                                                                                "w-full h-11 md:h-12 pl-10 pr-8 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-muted/10 hover:bg-muted/30 transition-colors appearance-none cursor-pointer focus:ring-2 focus:ring-primary/20",
+                                                                                !entry.date && "text-muted-foreground"
+                                                                            )}
+                                                                        >
+                                                                            <option value="" disabled>Pick a date</option>
+                                                                            {customerDailyDates.map((d) => {
+                                                                                const isSelectedByOthers = dateEntries.some(e => e.id !== entry.id && e.date === d.date);
+                                                                                const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
+                                                                                const isProcessed = d.processed || inHistory;
+                                                                                
+                                                                                let label = format(parseISO(d.date), "MMM dd, yyyy");
+                                                                                if (isProcessed) label += " ✅ Solved";
+                                                                                else if (!d.kg || d.kg === 0) label += " ❌ Absent";
+                                                                                else label += ` 📦 ${d.kg} KG`;
 
-                                                                                    const dailyBook = customerDailyDates.find(d => d.date === dStr);
-                                                                                    if (!dailyBook) return true; // Only allow dates in daily books
-                                                                                    if (dailyBook.processed) return true; // Disallow already processed ones
-                                                                                    const inHist = history.some(h => h.reference_date === dStr && h.type === 'PRODUCT');
-                                                                                    if (inHist) return true; // Disallow if already in history
-
-                                                                                    // Enforce Sequence: Only allow the OLDEST available date
-                                                                                    const unprocessedDates = customerDailyDates
-                                                                                        .filter(d => !d.processed && !history.some(h => h.reference_date === d.date && h.type === 'PRODUCT'))
-                                                                                        .map(d => d.date)
-                                                                                        .sort((a, b) => a.localeCompare(b));
-
-                                                                                    // Exclude dates picked in OTHER rows
-                                                                                    const selectedByOthers = dateEntries
-                                                                                        .filter(e => e.id !== entry.id && e.date)
-                                                                                        .map(e => e.date);
-
-                                                                                    const availableDates = unprocessedDates.filter(d => !selectedByOthers.includes(d));
-
-                                                                                    // The date is ONLY allowed if it is the FIRST date in the available sequence
-                                                                                    if (availableDates.length > 0 && availableDates[0] === dStr) {
-                                                                                        return false;
-                                                                                    }
-
-                                                                                    return true;
-                                                                                }}
-                                                                                initialFocus
-                                                                                className="rounded-xl"
-                                                                            />
-                                                                        </PopoverContent>
-                                                                    </Popover>
+                                                                                return (
+                                                                                    <option 
+                                                                                        key={d.date} 
+                                                                                        value={d.date} 
+                                                                                        disabled={isSelectedByOthers}
+                                                                                    >
+                                                                                        {label}
+                                                                                    </option>
+                                                                                );
+                                                                            })}
+                                                                        </select>
+                                                                        <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary pointer-events-none" />
+                                                                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                                                    </div>
                                                                 </div>
 
                                                                 {/* Main inputs + Extra Toggle inputs */}
@@ -832,9 +843,9 @@ export default function LedgerPage() {
                                                                             type="number"
                                                                             step="1"
                                                                             value={entry.kg}
-                                                                            onChange={e => updateDateEntry(entry.id, 'kg', e.target.value)}
+                                                                            readOnly
                                                                             inputMode="decimal"
-                                                                            className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none"
+                                                                            className="h-12 pl-10 text-base font-black bg-muted/5 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none cursor-not-allowed opacity-90"
                                                                             placeholder="0"
                                                                         />
                                                                     </div>

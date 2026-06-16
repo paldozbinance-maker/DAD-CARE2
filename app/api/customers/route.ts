@@ -14,7 +14,7 @@ export async function GET() {
                 COALESCE(p.total_paid, 0)::float as total_paid,
                 COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
                 COALESCE(dbk.total_books_count, 0) as total_books_count,
-                COALESCE(dbk.unprocessed_books_count, 0) as unprocessed_books_count
+                CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count
             FROM "Customer" c
             LEFT JOIN (
                 SELECT DISTINCT ON (customer_id) 
@@ -43,14 +43,20 @@ export async function GET() {
             LEFT JOIN (
                 SELECT 
                     dbi.customer_id,
-                    COUNT(*) as total_books_count,
-                    SUM(CASE WHEN l3.id IS NULL THEN 1 ELSE 0 END) as unprocessed_books_count
+                    COUNT(DISTINCT dbi.id) as total_books_count,
+                    SUM(dbi.kg) as total_daily_kg
                 FROM "DailyBookItem" dbi
-                JOIN "DailyBook" db ON dbi.daily_book_id = db.id
-                LEFT JOIN "Ledger" l3 ON l3.customer_id = dbi.customer_id AND l3.type = 'PRODUCT' AND l3.reference_date = db.date
                 WHERE dbi.kg > 0
                 GROUP BY dbi.customer_id
             ) dbk ON c.id = dbk.customer_id
+            LEFT JOIN (
+                SELECT 
+                    customer_id,
+                    SUM(kg) as total_ledger_kg
+                FROM "Ledger"
+                WHERE type = 'PRODUCT'
+                GROUP BY customer_id
+            ) lk ON c.id = lk.customer_id
             ORDER BY c.name ASC;
         `;
 

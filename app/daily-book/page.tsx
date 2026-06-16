@@ -66,7 +66,7 @@ export default function DailyBookPage() {
 
     const loadCustomers = async () => {
         try {
-            const res = await fetch('/api/customers');
+            const res = await fetch('/api/customers/basic');
             const data = await res.json();
 
             if (!res.ok) {
