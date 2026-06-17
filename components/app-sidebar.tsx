@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createClient } from '@/lib/supabase/client';
 import { logout } from '@/lib/session';
+import { subscribeToDailyDates } from '@/lib/hijri-date';
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -53,13 +54,10 @@ export function AppSidebar() {
             }
         }
 
-        const todayDate = new Date();
-        const standardDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
-        const hijriDateFull = new Intl.DateTimeFormat('en-GB-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
-        setDates({ 
-            standard: standardDate, 
-            hijri: hijriDateFull.replace(/ AH$/, '').replace(/,/, '') 
+        const unsub = subscribeToDailyDates((standard, hijri) => {
+            setDates({ standard, hijri });
         });
+        return () => unsub();
     }, []);
 
     const handleLogout = async () => {

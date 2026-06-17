@@ -7,6 +7,7 @@ import { MobileNav } from './mobile-nav';
 import { LogOut, ChevronDown } from 'lucide-react';
 import { logout } from '@/lib/session';
 import { createClient } from '@/lib/supabase/client';
+import { subscribeToDailyDates } from '@/lib/hijri-date';
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -34,14 +35,11 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
             router.replace('/dashboard');
         }
 
-        // Compute dates once on client
-        const todayDate = new Date();
-        const standardDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
-        const hijriDateFull = new Intl.DateTimeFormat('en-GB-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
-        setDates({
-            standard: standardDate,
-            hijri: hijriDateFull.replace(/ AH$/, '').replace(/,/, '')
+        // Compute dates — updates automatically at midnight
+        const unsub = subscribeToDailyDates((standard, hijri) => {
+            setDates({ standard, hijri });
         });
+        return () => unsub();
     }, [pathname, router]);
 
     // Close popup when clicking outside
