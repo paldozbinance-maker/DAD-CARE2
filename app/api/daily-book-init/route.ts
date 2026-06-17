@@ -5,48 +5,48 @@ import { requireSession } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
-// Merged init endpoint: returns customers + history + latest date in ONE request
-// This replaces 3 separate API calls on Daily Book page load
-export async function GET(request: Request) {
-    const { errorResponse } = await requireSession(request);
-    if (errorResponse) return errorResponse;
-    try {
-        const supabase = await createClient();
+import { unstable_cache } from 'next/cache';
 
-        // Run all 3 queries in parallel
+const getCachedDailyBookInit = unstable_cache(
+    async () => {
         const [customersResult, historyResult] = await Promise.all([
-            // 1. Customers (basic info only - fast)
             pool.query(`
                 SELECT id, name, customer_code, gender, avatar_url, phone
                 FROM "Customer"
                 ORDER BY name ASC
             `),
-
-            // 2. Full daily book history with items
-            supabase
-                .from('DailyBook')
-                .select(`
-                    id,
-                    date,
-                    items:DailyBookItem (
-                        id,
-                        kg,
-                        present,
-                        note,
-                        customer:Customer (
-                            id,
-                            name,
-                            customer_code,
-                            gender,
-                            avatar_url
+            pool.query(`
+                SELECT 
+                    db.id, 
+                    db.date,
+                    COALESCE((
+                        SELECT json_agg(
+                            json_build_object(
+                                'id', dbi.id,
+                                'kg', dbi.kg,
+                                'present', dbi.present,
+                                'note', dbi.note,
+                                'customer', (
+                                    SELECT json_build_object(
+                                        'id', c.id,
+                                        'name', c.name,
+                                        'customer_code', c.customer_code,
+                                        'gender', c.gender,
+                                        'avatar_url', c.avatar_url
+                                    )
+                                    FROM "Customer" c WHERE c.id = dbi.customer_id
+                                )
+                            )
                         )
-                    )
-                `)
-                .order('date', { ascending: false })
+                        FROM "DailyBookItem" dbi 
+                        WHERE dbi.daily_book_id = db.id
+                    ), '[]'::json) as items
+                FROM "DailyBook" db
+                ORDER BY db.date DESC;
+            `)
         ]);
 
-        // Process history
-        const history = (historyResult.data || []).map((book: any) => {
+        const history = (historyResult.rows || []).map((book: any) => {
             const totalKg = book.items.reduce((sum: number, item: any) => sum + (item.kg || 0), 0);
             return {
                 id: book.id,
@@ -62,14 +62,24 @@ export async function GET(request: Request) {
             };
         });
 
-        // Latest date (first in descending-ordered list)
         const latestDate = history.length > 0 ? history[0].date : null;
 
-        return NextResponse.json({
+        return {
             customers: customersResult.rows,
             history,
             latestDate,
-        });
+        };
+    },
+    ['daily-book-init'],
+    { revalidate: 2, tags: ['daily-book'] }
+);
+
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    try {
+        const data = await getCachedDailyBookInit();
+        return NextResponse.json(data);
     } catch (error: any) {
         console.error('Daily Book Init Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -119,8 +119,15 @@ export default function CustomerDetailPage() {
     const [receipts, setReceipts] = useState<ReceiptGroup[]>([]);
     const [summary, setSummary] = useState<Summary>({ totalKg: 0, totalPaid: 0, currentBalance: 0 });
     const [loading, setLoading] = useState(true);
-    const [activeFilter, setActiveFilter] = useState<'all' | 'maqalka' | 'lacagaha'>('all');
     const [expandedReceipts, setExpandedReceipts] = useState<Set<string>>(new Set());
+
+    // Pagination & Filter State
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [searchTitle, setSearchTitle] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [filterActive, setFilterActive] = useState(false);
 
     // Edit State
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -272,25 +279,62 @@ export default function CustomerDetailPage() {
         );
     };
 
-    const loadCustomerData = async () => {
+    const loadCustomerData = async (reset = false) => {
+        if (reset) {
+            setTransactions([]);
+            setReceipts([]);
+            setHasMore(true);
+        }
+        setLoading(true);
         try {
             const custRes = await fetch('/api/customers');
             const allCustomers = await custRes.json();
             const foundCustomer = allCustomers.find((c: Customer) => c.id === customerId);
             setCustomer(foundCustomer);
 
-            const ledgerRes = await fetch(`/api/ledger?customerId=${customerId}&limit=200&t=${Date.now()}`);
+            let url = `/api/ledger?customerId=${customerId}&limit=200&offset=0&t=${Date.now()}`;
+            if (startDate) url += `&startDate=${startDate}`;
+            if (endDate) url += `&endDate=${endDate}`;
+
+            const ledgerRes = await fetch(url);
             const ledgerData = await ledgerRes.json();
 
             const allTxns = ledgerData.transactions || [];
             setTransactions(allTxns);
             setReceipts(groupTransactionsInfoReceipts(allTxns));
             setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
+            setHasMore(allTxns.length === 200);
         } catch (error) {
             console.error('Failed to load profile:', error);
             toast.error('Failed to load customer profile');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadMore = async () => {
+        setLoadingMore(true);
+        try {
+            const nextOffset = transactions.length;
+            let url = `/api/ledger?customerId=${customerId}&limit=200&offset=${nextOffset}&t=${Date.now()}`;
+            if (startDate) url += `&startDate=${startDate}`;
+            if (endDate) url += `&endDate=${endDate}`;
+
+            const ledgerRes = await fetch(url);
+            const ledgerData = await ledgerRes.json();
+
+            if (ledgerData.transactions && ledgerData.transactions.length > 0) {
+                const newTxns = [...transactions, ...ledgerData.transactions];
+                setTransactions(newTxns);
+                setReceipts(groupTransactionsInfoReceipts(newTxns));
+                setHasMore(ledgerData.transactions.length === 200);
+            } else {
+                setHasMore(false);
+            }
+        } catch (error) {
+            toast.error('Failed to load more history');
+        } finally {
+            setLoadingMore(false);
         }
     };
 
@@ -390,6 +434,12 @@ export default function CustomerDetailPage() {
     const filteredReceipts = receipts.filter(r => {
         // Show receipts that have either Maqalka (products), payments, or adjustments
         return r.totalMaqalka > 0 || r.totalPaid > 0 || r.totalAdjustment > 0;
+    });
+
+    const finalReceipts = filteredReceipts.filter(r => {
+        if (!searchTitle) return true;
+        const title = r.titleString || format(new Date(r.mainDate), 'MMM dd, yyyy');
+        return title.toLowerCase().includes(searchTitle.toLowerCase());
     });
 
     // The card label must match the final line of the most recent receipt:
@@ -540,22 +590,53 @@ export default function CustomerDetailPage() {
                     <History className="w-3 h-3 text-primary" />
                     Buuga Maqalka History
                 </h2>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-[10px] font-black uppercase tracking-widest gap-1.5 rounded-full border-blue-500/20 bg-background hover:bg-blue-500 hover:text-white transition-all shadow-sm"
-                    onClick={() => {
-                        import('@/lib/export-pdf').then(m => m.downloadCustomerHistoryPDF(customer, transactions));
-                    }}
-                >
-                    <FileDown className="w-3 h-3" />
-                    Export PDF
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setFilterActive(!filterActive)} className="h-7 px-3 text-[10px] font-black uppercase tracking-widest gap-1.5 rounded-full hover:bg-muted shadow-sm border border-transparent hover:border-border">
+                        <Filter className="w-3 h-3" /> Filter
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[10px] font-black uppercase tracking-widest gap-1.5 rounded-full border-blue-500/20 bg-background hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                        onClick={() => {
+                            import('@/lib/export-pdf').then(m => m.downloadCustomerHistoryPDF(customer, transactions));
+                        }}
+                    >
+                        <FileDown className="w-3 h-3" />
+                        Export PDF
+                    </Button>
+                </div>
             </div>
+
+            {/* Filter Section */}
+            {filterActive && (
+                <div className="bg-card border border-border p-4 rounded-xl flex flex-col md:flex-row gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div className="flex-1 space-y-1.5">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-muted-foreground">Quick Search</Label>
+                        <Input 
+                            placeholder="e.g. 07 Jun" 
+                            className="h-10 text-xs font-bold bg-background shadow-inner" 
+                            value={searchTitle} 
+                            onChange={(e) => setSearchTitle(e.target.value)} 
+                        />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-muted-foreground">DB Start Date</Label>
+                        <Input type="date" className="h-10 text-xs font-bold bg-background shadow-inner" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                        <Label className="text-[9px] uppercase font-black tracking-widest text-muted-foreground">DB End Date</Label>
+                        <Input type="date" className="h-10 text-xs font-bold bg-background shadow-inner" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                    </div>
+                    <div className="flex items-end">
+                        <Button size="sm" className="h-10 w-full md:w-auto font-black uppercase tracking-widest text-[10px] px-6 shadow-md" onClick={() => loadCustomerData(true)}>Search</Button>
+                    </div>
+                </div>
+            )}
 
             {/* 4. RECEIPT HISTORY LIST */}
             <div className="space-y-3">
-                {filteredReceipts.length === 0 ? (
+                {finalReceipts.length === 0 ? (
                     <div className="py-20 text-center space-y-4">
                         <div className="w-20 h-20 bg-muted/30 rounded-full flex items-center justify-center mx-auto border-4 border-dashed border-border/50">
                             <History className="w-8 h-8 text-muted-foreground/30" />
@@ -566,7 +647,7 @@ export default function CustomerDetailPage() {
                         </div>
                     </div>
                 ) : (
-                    filteredReceipts.map((receipt) => {
+                    finalReceipts.map((receipt) => {
                         const isExpanded = expandedReceipts.has(receipt.id);
                         return (
                             <div key={receipt.id} className="rounded-lg border border-border/60 overflow-hidden bg-card">
@@ -739,6 +820,19 @@ export default function CustomerDetailPage() {
                     })
                 )}
             </div>
+
+            {/* Pagination Load More Button */}
+            {hasMore && finalReceipts.length > 0 && !searchTitle && (
+                <Button 
+                    variant="outline" 
+                    onClick={loadMore} 
+                    disabled={loadingMore} 
+                    className="w-full mt-6 h-12 font-black uppercase tracking-widest text-xs border-dashed border-2 hover:bg-muted shadow-sm text-muted-foreground hover:text-foreground"
+                >
+                    {loadingMore ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ChevronDown className="w-4 h-4 mr-2" />}
+                    Load Older History
+                </Button>
+            )}
         </div>
     );
 }

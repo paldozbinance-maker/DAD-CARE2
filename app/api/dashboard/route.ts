@@ -4,23 +4,10 @@ import { validateSession } from '@/lib/sessions-store';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
-    // Double-check auth even though middleware already guards this route
-    const cookieHeader = request.headers.get('cookie') || '';
-    const cookieToken = cookieHeader.match(/dadwork_session=([^;]+)/)?.[1];
-    const token = cookieToken || request.headers.get('x-session-token');
-    if (!token) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const session = await validateSession(token);
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+import { unstable_cache } from 'next/cache';
 
-    try {
-
-        const today = new Date().toISOString().split('T')[0];
-
+const getCachedDashboardData = unstable_cache(
+    async (today: string) => {
         // Run queries in parallel
         const [
             totalCustomersResult,
@@ -125,7 +112,7 @@ export async function GET(request: Request) {
             }
         }));
 
-        return NextResponse.json({
+        return {
             totalCustomers,
             totalDebt,
             totalPaid,
@@ -134,7 +121,32 @@ export async function GET(request: Request) {
             todayCustomerCount,
             topDebtors,
             recentTransactions
-        });
+        };
+    },
+    ['dashboard-data'],
+    { revalidate: 2, tags: ['dashboard'] }
+);
+
+export async function GET(request: Request) {
+    // Double-check auth even though middleware already guards this route
+    const cookieHeader = request.headers.get('cookie') || '';
+    const cookieToken = cookieHeader.match(/dadwork_session=([^;]+)/)?.[1];
+    const token = cookieToken || request.headers.get('x-session-token');
+    if (!token) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const session = await validateSession(token);
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    try {
+
+        const today = new Date().toISOString().split('T')[0];
+        
+        const data = await getCachedDashboardData(today);
+
+        return NextResponse.json(data);
 
     } catch (error: any) {
         console.error('Dashboard Fetch Error:', error);

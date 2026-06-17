@@ -129,6 +129,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
     const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     if (!customerId) {
         return NextResponse.json({ error: 'Customer ID required' }, { status: 400 });
@@ -137,13 +140,22 @@ export async function GET(request: Request) {
     const supabase = await createClient();
 
     try {
-        // Get last 10 transactions
-        const { data: transactions, error: txnError } = await supabase
+        let query = supabase
             .from('Ledger')
             .select('*')
             .eq('customer_id', customerId)
             .order('created_at', { ascending: false })
-            .limit(limit);
+            .order('id', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        if (startDate) {
+            query = query.gte('reference_date', startDate);
+        }
+        if (endDate) {
+            query = query.lte('reference_date', endDate);
+        }
+
+        const { data: transactions, error: txnError } = await query;
 
         if (txnError) throw txnError;
 

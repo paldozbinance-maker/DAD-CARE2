@@ -183,6 +183,24 @@ export default function LedgerPage() {
                 if (dailyRes.ok) {
                     const dailyData = await dailyRes.json();
                     setCustomerDailyDates(dailyData || []);
+                    setDateEntries(prev => {
+                        // If no dates, or just 1 empty row, initialize sequentially
+                        if (prev.length === 0 || (prev.length === 1 && !prev[0].date)) {
+                            if (dailyData && dailyData.length > 0) {
+                                return [{ id: Date.now().toString(), date: dailyData[0].date, kg: dailyData[0].kg.toString(), pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                            }
+                            return [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                        }
+                        // Re-sequence existing rows to strictly match unprocessed dates
+                        return prev.map((entry, idx) => {
+                            const d = dailyData[idx];
+                            return {
+                                ...entry,
+                                date: d ? d.date : '',
+                                kg: d ? d.kg.toString() : '0'
+                            };
+                        }).filter(e => e.date !== '');
+                    });
                 }
             } catch (err) {
                 console.error('Failed to fetch customer details:', err);
@@ -313,10 +331,16 @@ export default function LedgerPage() {
     }, [history]);
 
     const addDateEntry = () => {
+        const nextIndex = dateEntries.length;
+        if (nextIndex >= customerDailyDates.length) {
+            toast.error("No more unprocessed dates available!");
+            return;
+        }
+        const nextUnprocessed = customerDailyDates[nextIndex];
         const newEntry: DateEntry = {
             id: Date.now().toString(),
-            date: '',
-            kg: '',
+            date: nextUnprocessed.date,
+            kg: nextUnprocessed.kg.toString(),
             pricePerKg: defaultPrice,
             extraKg: '',
             extraPricePerKg: defaultPrice,
@@ -326,43 +350,8 @@ export default function LedgerPage() {
     };
 
     const updateDateEntry = (id: string, field: keyof DateEntry, value: string) => {
-        if (field === 'date') {
-            const isDuplicate = dateEntries.some(e => e.id !== id && e.date === value);
-            if (isDuplicate && value) {
-                toast.error('You cannot choose the same date twice!');
-                return;
-            }
-        }
-
         setDateEntries(entries => entries.map(entry => {
             if (entry.id !== id) return entry;
-
-            if (field === 'date') {
-                const inHistory = history.find(h => h.reference_date === value && h.type === 'PRODUCT');
-                if (inHistory) {
-                    toast.error(`Date ${format(new Date(value), 'MMM dd')} was already served in the Ledger!`);
-                    return { ...entry, date: '' };
-                }
-
-                const matchingDaily = customerDailyDates.find(d => d.date === value);
-                if (matchingDaily) {
-                    if (matchingDaily.processed) {
-                        toast.error(`Date ${format(new Date(value), 'MMM dd')} was already served (saved in ledger)!`);
-                        return { ...entry, date: '' };
-                    }
-
-                    if (matchingDaily.kg > 0) {
-                        toast.success(`Found ${matchingDaily.kg} KG in Buuga Maalinlaha for this date!`);
-                        return { ...entry, date: value, kg: matchingDaily.kg.toString() };
-                    } else {
-                        toast.info(`Absent not working that day`);
-                        return { ...entry, date: value, kg: '0' };
-                    }
-                } else {
-                    return { ...entry, date: value, kg: '0' };
-                }
-            }
-
             return { ...entry, [field]: value };
         }));
     };
@@ -372,7 +361,17 @@ export default function LedgerPage() {
     };
 
     const removeDateEntry = (id: string) => {
-        setDateEntries(entries => entries.filter(entry => entry.id !== id));
+        setDateEntries(entries => {
+            const filtered = entries.filter(entry => entry.id !== id);
+            return filtered.map((entry, idx) => {
+                const d = customerDailyDates[idx];
+                return {
+                    ...entry,
+                    date: d ? d.date : '',
+                    kg: d ? d.kg.toString() : '0'
+                };
+            });
+        });
     };
 
     const productGrandTotal = dateEntries.reduce((sum, p) => {
@@ -412,7 +411,7 @@ export default function LedgerPage() {
 
         const validEntries = dateEntries.filter(e => 
             e.date && (
-                (parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0) || 
+                (parseFloat(e.kg) >= 0 && parseFloat(e.pricePerKg) > 0) || 
                 (parseFloat(e.extraKg || '0') > 0 && parseFloat(e.extraPricePerKg || '0') > 0)
             )
         );
@@ -800,60 +799,21 @@ export default function LedgerPage() {
                                                                     <div className="relative">
                                                                         <select
                                                                             value={entry.date || ""}
-                                                                            onChange={(e) => updateDateEntry(entry.id, 'date', e.target.value)}
+                                                                            disabled
                                                                             className={cn(
-                                                                                "w-full h-11 md:h-12 pl-10 pr-8 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-muted/10 hover:bg-muted/30 transition-colors appearance-none cursor-pointer focus:ring-2 focus:ring-primary/20",
+                                                                                "w-full h-11 md:h-12 pl-10 pr-8 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-muted/30 appearance-none cursor-not-allowed focus:ring-0",
                                                                                 !entry.date && "text-muted-foreground"
                                                                             )}
                                                                         >
-                                                                            <option value="" disabled>Pick a date</option>
-                                                                            {(() => {
-                                                                                // 1. Identify all solved dates
-                                                                                const solvedRecords = customerDailyDates.filter(d => {
-                                                                                    const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
-                                                                                    return d.processed || inHistory;
-                                                                                });
-
-                                                                                // 2. Find the most recent (max) solved date
-                                                                                let latestSolvedDate: string | null = null;
-                                                                                if (solvedRecords.length > 0) {
-                                                                                    latestSolvedDate = solvedRecords.reduce((max, d) => d.date > max ? d.date : max, solvedRecords[0].date);
-                                                                                }
-
-                                                                                // 3. Filter daily dates list
-                                                                                return customerDailyDates.filter(d => {
-                                                                                    const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
-                                                                                    const isProcessed = d.processed || inHistory;
-
-                                                                                    // Keep the option if it's:
-                                                                                    // - Unsolved (unprocessed)
-                                                                                    // - The most recent solved date
-                                                                                    // - The currently selected option in this row
-                                                                                    return !isProcessed || d.date === latestSolvedDate || entry.date === d.date;
-                                                                                }).map((d) => {
-                                                                                    const isSelectedByOthers = dateEntries.some(e => e.id !== entry.id && e.date === d.date);
-                                                                                    const inHistory = history.some(h => h.reference_date === d.date && h.type === 'PRODUCT');
-                                                                                    const isProcessed = d.processed || inHistory;
-                                                                                    
-                                                                                    let label = format(parseISO(d.date), "MMM dd, yyyy");
-                                                                                    if (isProcessed) label += " ✅ Solved";
-                                                                                    else if (!d.kg || d.kg === 0) label += " ❌ Absent";
-                                                                                    else label += ` 📦 ${d.kg} KG`;
-
-                                                                                    return (
-                                                                                        <option 
-                                                                                            key={d.date} 
-                                                                                            value={d.date} 
-                                                                                            disabled={isSelectedByOthers}
-                                                                                        >
-                                                                                            {label}
-                                                                                        </option>
-                                                                                    );
-                                                                                });
-                                                                            })()}
+                                                                            {entry.date ? (
+                                                                                <option value={entry.date}>
+                                                                                    {format(parseISO(entry.date), "MMM dd, yyyy")} {parseFloat(entry.kg) === 0 ? "❌ Absent" : `📦 ${entry.kg} KG`}
+                                                                                </option>
+                                                                            ) : (
+                                                                                <option value="" disabled>No unprocessed dates</option>
+                                                                            )}
                                                                         </select>
-                                                                        <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary pointer-events-none" />
-                                                                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                                                        <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary pointer-events-none opacity-60" />
                                                                     </div>
                                                                 </div>
 

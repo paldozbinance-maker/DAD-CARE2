@@ -1,34 +1,44 @@
 import pool from './db';
 import { validateSession } from './sessions-store';
 
+let isAuditLogTableEnsured = false;
+
 /**
  * Ensures the AuditLog table exists with all required columns.
  * Safe to call repeatedly — uses CREATE TABLE IF NOT EXISTS + ALTER TABLE for migrations.
+ * Optimized: Only runs ONCE per serverless instance lifecycle to prevent DDL bottlenecks.
  */
 export async function ensureAuditLogTable() {
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS "AuditLog" (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id TEXT,
-            username TEXT NOT NULL,
-            name TEXT,
-            role TEXT NOT NULL,
-            action TEXT NOT NULL,
-            details TEXT NOT NULL,
-            ip_address TEXT,
-            user_agent TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-    `);
-    // Migrate: add columns if they don't exist yet (safe on existing tables)
-    const migrations = [
-        `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_id TEXT`,
-        `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS name TEXT`,
-        `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS ip_address TEXT`,
-        `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_agent TEXT`,
-    ];
-    for (const sql of migrations) {
-        try { await pool.query(sql); } catch (_) { /* column may already exist */ }
+    if (isAuditLogTableEnsured) return;
+
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS "AuditLog" (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT,
+                username TEXT NOT NULL,
+                name TEXT,
+                role TEXT NOT NULL,
+                action TEXT NOT NULL,
+                details TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+        `);
+        // Migrate: add columns if they don't exist yet (safe on existing tables)
+        const migrations = [
+            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_id TEXT`,
+            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS name TEXT`,
+            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS ip_address TEXT`,
+            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_agent TEXT`,
+        ];
+        for (const sql of migrations) {
+            try { await pool.query(sql); } catch (_) { /* column may already exist */ }
+        }
+        isAuditLogTableEnsured = true;
+    } catch (e) {
+        console.error("Failed to ensure AuditLog table", e);
     }
 }
 

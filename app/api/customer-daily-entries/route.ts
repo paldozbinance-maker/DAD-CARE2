@@ -37,12 +37,15 @@ export async function GET(request: Request) {
 
         const processedDates = new Set(ledgerEntries?.map(le => le.reference_date) || []);
 
-        // Transform to simpler format
-        const result = (items || []).map((item: any) => ({
-            date: item.daily_book?.date,
-            kg: item.kg,
-            processed: processedDates.has(item.daily_book?.date)
-        })).filter((item: any) => item.date);
+        // Transform to simpler format, filter out processed dates, and sort ascending
+        const result = (items || [])
+            .map((item: any) => ({
+                date: item.daily_book?.date,
+                kg: item.kg,
+                processed: processedDates.has(item.daily_book?.date)
+            }))
+            .filter((item: any) => item.date && !item.processed)
+            .sort((a: any, b: any) => a.date.localeCompare(b.date));
 
         return NextResponse.json(result);
     } catch (error: any) {

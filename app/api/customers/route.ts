@@ -6,10 +6,10 @@ import { requireSession } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
-    const { errorResponse } = await requireSession(request);
-    if (errorResponse) return errorResponse;
-    try {
+import { unstable_cache } from 'next/cache';
+
+const getCachedCustomers = unstable_cache(
+    async () => {
         const query = `
             SELECT 
                 c.*,
@@ -65,6 +65,17 @@ export async function GET(request: Request) {
         `;
 
         const { rows } = await pool.query(query);
+        return rows;
+    },
+    ['customers-list'],
+    { revalidate: 2, tags: ['customers'] }
+);
+
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    try {
+        const rows = await getCachedCustomers();
         return NextResponse.json(rows);
     } catch (error: any) {
         console.error('Fetch Error:', error);
