@@ -40,6 +40,7 @@ export function AppSidebar() {
     const supabase = createClient();
     const [mounted, setMounted] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [dates, setDates] = useState({ standard: '', hijri: '' });
 
     useEffect(() => {
         setMounted(true);
@@ -51,6 +52,14 @@ export function AppSidebar() {
                 console.error("Failed to parse currentUser", e);
             }
         }
+
+        const todayDate = new Date();
+        const standardDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
+        const hijriDateFull = new Intl.DateTimeFormat('en-GB-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
+        setDates({ 
+            standard: standardDate, 
+            hijri: hijriDateFull.replace(/ AH$/, '').replace(/,/, '') 
+        });
     }, []);
 
     const handleLogout = async () => {
@@ -63,9 +72,9 @@ export function AppSidebar() {
     return (
         <div className="flex h-full w-[260px] flex-col bg-sidebar/80 backdrop-blur-xl border-r border-sidebar-border/50 z-20 transition-colors duration-300">
             {/* Header - Current Admin Profile */}
-            <div className="flex h-16 items-center px-4 border-b border-sidebar-border/50">
+            <div className="flex py-4 items-center px-4 border-b border-sidebar-border/50">
                 <div className="flex items-center gap-3 w-full">
-                    <Avatar className="w-10 h-10 rounded-xl border-2 border-primary/20 shadow-sm transition-transform hover:scale-105 shrink-0">
+                    <Avatar className="w-11 h-11 rounded-xl border-2 border-primary/20 shadow-sm transition-transform hover:scale-105 shrink-0">
                         {currentUser?.avatar_url && <AvatarImage src={currentUser.avatar_url} alt={currentUser.name} className="object-cover" />}
                         <AvatarFallback className="bg-gradient-to-br from-primary to-blue-600 text-primary-foreground font-black text-sm rounded-xl">
                             {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'D'}
@@ -75,10 +84,20 @@ export function AppSidebar() {
                         <h1 className="text-sm font-black tracking-tight text-sidebar-foreground truncate uppercase">
                             {currentUser?.name || 'DADWORK'}
                         </h1>
-                        <p className="text-[9px] text-muted-foreground font-bold tracking-widest uppercase truncate flex items-center gap-1">
+                        <p className="text-[9px] text-muted-foreground font-bold tracking-widest uppercase truncate flex items-center gap-1 mt-0.5 mb-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
                             {currentUser?.role ? currentUser.role.replace('_', ' ') : 'Business Ledger'}
                         </p>
+                        {dates.standard && (
+                            <div className="flex flex-col gap-0.5">
+                                <p className="text-[9px] font-black tracking-widest uppercase text-primary/80 truncate">
+                                    {dates.standard}
+                                </p>
+                                <p className="text-[8.5px] font-bold tracking-widest uppercase text-emerald-600/80 dark:text-emerald-400/80 truncate">
+                                    {dates.hijri}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
