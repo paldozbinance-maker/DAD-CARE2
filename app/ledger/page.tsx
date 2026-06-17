@@ -976,7 +976,7 @@ export default function LedgerPage() {
                                                     <div key={pay.id} className="relative p-4 md:p-5 bg-emerald-500/5 shadow-sm border border-emerald-500/20 rounded-2xl group transition-all hover:shadow-md">
                                                         <div className="grid grid-cols-2 md:grid-cols-2 gap-3 md:gap-6 items-center">
                                                             <div className="space-y-1.5 md:space-y-2 col-span-2 md:col-span-1">
-                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-emerald-700/70 tracking-wider ml-1">Payment Date</Label>
+                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-emerald-700/70 tracking-wider ml-1">Taariikhada Lacagta</Label>
                                                                 <Input
                                                                     type="date"
                                                                     value={pay.date}
@@ -985,7 +985,7 @@ export default function LedgerPage() {
                                                                 />
                                                             </div>
                                                             <div className="space-y-1.5 md:space-y-2 col-span-2 md:col-span-1">
-                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-emerald-700/70 tracking-wider ml-1">Deposit Amount</Label>
+                                                                <Label className="text-[10px] md:text-xs uppercase font-black text-emerald-700/70 tracking-wider ml-1">Lacagta la dhiibay</Label>
                                                                 <div className="relative">
                                                                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
                                                                     <Input
@@ -1085,7 +1085,7 @@ export default function LedgerPage() {
                                                         <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-600/60 pt-1.5">Lacagaha</p>
                                                         {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
                                                             <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
-                                                                <span>{format(new Date(pay.date), 'MMM dd')} Payment</span>
+                                                                <span>{format(new Date(pay.date), 'MMM dd yyyy')} Lacagta</span>
                                                                 <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
                                                             </div>
                                                         ))}
