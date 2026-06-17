@@ -38,8 +38,18 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [sortOrder, setSortOrder] = useState<'largest' | 'smallest'>('largest');
     const [isExpanded, setIsExpanded] = useState(false);
+    const [dates, setDates] = useState({ standard: '', hijri: '' });
 
     useEffect(() => {
+        // Calculate dates safely on client to prevent hydration mismatch
+        const todayDate = new Date();
+        const standardDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
+        const hijriDateFull = new Intl.DateTimeFormat('en-GB-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
+        setDates({ 
+            standard: standardDate, 
+            hijri: hijriDateFull.replace(/ AH$/, '').replace(/,/, '') 
+        });
+
         const fetchDashboard = async () => {
             try {
                 const res = await fetch('/api/dashboard');
@@ -98,6 +108,17 @@ export default function DashboardPage() {
                         Business overview at a glance. Track customers, payments, debts, and daily operational volume.
                     </p>
                 </div>
+
+                {/* Dynamic Date Badge */}
+                {dates.standard && (
+                    <div className="relative z-10 flex flex-col md:items-end gap-1.5 shrink-0 bg-background/60 backdrop-blur-md px-4 py-3 rounded-xl border border-border/50 shadow-inner">
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                            <p className="text-[11px] font-black uppercase tracking-widest text-foreground">{dates.standard}</p>
+                        </div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-emerald-600/80 dark:text-emerald-400/80">{dates.hijri}</p>
+                    </div>
+                )}
             </div>
 
             {/* Stats Grid - Premium Cards */}
