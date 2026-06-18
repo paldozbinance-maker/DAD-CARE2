@@ -52,7 +52,94 @@ interface DailyBookRecord {
     date: string;
     kg: number;
     processed: boolean;
+    note?: string | null;
 }
+
+const parseVip = (note: string) => {
+    const fullMatch = note.match(/(\d+(?:\.\d+)?)\s*vip\s*(?:\*|x|@)?\s*(\d+(?:\.\d+)?)/i);
+    if (fullMatch) {
+        return {
+            kg: parseFloat(fullMatch[1]),
+            price: parseFloat(fullMatch[2])
+        };
+    }
+    const simpleMatch = note.match(/(\d+(?:\.\d+)?)\s*vip/i);
+    if (simpleMatch) {
+        return {
+            kg: parseFloat(simpleMatch[1]),
+            price: null
+        };
+    }
+    return null;
+};
+
+const parseHeshiish = (note: string) => {
+    const fullMatch = note.match(/(\d+(?:\.\d+)?)\s*(?:heshiish|heshish)\s*(?:\*|x|@)?\s*(\d+(?:\.\d+)?)/i);
+    if (fullMatch) {
+        return {
+            kg: parseFloat(fullMatch[1]),
+            price: parseFloat(fullMatch[2])
+        };
+    }
+    const simpleMatch = note.match(/(\d+(?:\.\d+)?)\s*(?:heshiish|heshish)/i);
+    if (simpleMatch) {
+        return {
+            kg: parseFloat(simpleMatch[1]),
+            price: null
+        };
+    }
+    return null;
+};
+
+const buildEntryFromDailyRecord = (
+    id: string,
+    record: DailyBookRecord,
+    defaultPrice: string
+): { entry: DateEntry; shouldExpandExtra: boolean } => {
+    let kg = record.kg ? record.kg.toString() : '0';
+    let pricePerKg = defaultPrice;
+    let extraKg = '';
+    let extraPricePerKg = defaultPrice;
+    let extraNote = 'Notebook';
+    let shouldExpandExtra = false;
+
+    if (record.note) {
+        const noteText = record.note.trim();
+        const vipData = parseVip(noteText);
+        const heshiishData = parseHeshiish(noteText);
+
+        if (vipData) {
+            extraKg = vipData.kg.toString();
+            if (vipData.price !== null) {
+                extraPricePerKg = vipData.price.toString();
+            }
+            extraNote = 'VIP';
+            shouldExpandExtra = true;
+            // Subtract VIP KG from main KG and cap at 0
+            const mainKgNum = Math.max(0, (record.kg || 0) - vipData.kg);
+            kg = mainKgNum.toString();
+        } else if (heshiishData) {
+            kg = heshiishData.kg.toString();
+            if (heshiishData.price !== null) {
+                pricePerKg = heshiishData.price.toString();
+            }
+        }
+    }
+
+    return {
+        entry: {
+            id,
+            date: record.date || '',
+            kg,
+            pricePerKg,
+            extraKg,
+            extraPricePerKg,
+            extraNote
+        },
+        shouldExpandExtra
+    };
+};
+
 
 export default function LedgerPage() {
     const [loading, setLoading] = useState(false);
@@ -119,7 +206,16 @@ export default function LedgerPage() {
                 try {
                     const parsed = JSON.parse(draft);
                     if (parsed.selectedCustomerId) setSelectedCustomerId(parsed.selectedCustomerId);
-                    if (parsed.dateEntries && parsed.dateEntries.length > 0) setDateEntries(parsed.dateEntries);
+                    if (parsed.dateEntries && parsed.dateEntries.length > 0) {
+                        setDateEntries(parsed.dateEntries);
+                        const expandedIds = new Set<string>();
+                        parsed.dateEntries.forEach((entry: DateEntry) => {
+                            if (entry.extraKg && parseFloat(entry.extraKg) > 0) {
+                                expandedIds.add(entry.id);
+                            }
+                        });
+                        setExpandedExtraEntryIds(expandedIds);
+                    }
                     if (parsed.paymentEntries && parsed.paymentEntries.length > 0) setPaymentEntries(parsed.paymentEntries);
                 } catch (e) {
                     console.error('Failed to parse draft', e);
@@ -184,22 +280,45 @@ export default function LedgerPage() {
                     const dailyData = await dailyRes.json();
                     setCustomerDailyDates(dailyData || []);
                     setDateEntries(prev => {
+                        const newExpandedIds = new Set<string>();
+                        let newEntries;
+
                         // If no dates, or just 1 empty row, initialize sequentially
                         if (prev.length === 0 || (prev.length === 1 && !prev[0].date)) {
                             if (dailyData && dailyData.length > 0) {
-                                return [{ id: Date.now().toString(), date: dailyData[0].date, kg: dailyData[0].kg.toString(), pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                                const entryId = Date.now().toString();
+                                const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, dailyData[0], defaultPrice);
+                                if (shouldExpandExtra) {
+                                    newExpandedIds.add(entryId);
+                                }
+                                newEntries = [entry];
+                            } else {
+                                newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
                             }
-                            return [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                        } else {
+                            // Re-sequence existing rows to strictly match unprocessed dates
+                            newEntries = prev.map((entry, idx) => {
+                                const d = dailyData[idx];
+                                if (!d) return { ...entry, date: '' };
+                                const { entry: parsedEntry, shouldExpandExtra } = buildEntryFromDailyRecord(entry.id, d, defaultPrice);
+                                if (shouldExpandExtra) {
+                                    newExpandedIds.add(entry.id);
+                                }
+                                return parsedEntry;
+                            }).filter(e => e.date !== '');
                         }
-                        // Re-sequence existing rows to strictly match unprocessed dates
-                        return prev.map((entry, idx) => {
-                            const d = dailyData[idx];
-                            return {
-                                ...entry,
-                                date: d ? d.date : '',
-                                kg: d ? d.kg.toString() : '0'
-                            };
-                        }).filter(e => e.date !== '');
+
+                        if (newExpandedIds.size > 0) {
+                            setTimeout(() => {
+                                setExpandedExtraEntryIds(prevExpanded => {
+                                    const combined = new Set(prevExpanded);
+                                    newExpandedIds.forEach(id => combined.add(id));
+                                    return combined;
+                                });
+                            }, 0);
+                        }
+
+                        return newEntries;
                     });
                 }
             } catch (err) {
@@ -221,6 +340,7 @@ export default function LedgerPage() {
         setCustomerDailyDates([]);
         setShowLastMaqal(false);
         setUpdateLastMaqal(false);
+        setExpandedExtraEntryIds(new Set());
     };
 
     const sortedCustomers = useMemo(() => {
@@ -337,16 +457,16 @@ export default function LedgerPage() {
             return;
         }
         const nextUnprocessed = customerDailyDates[nextIndex];
-        const newEntry: DateEntry = {
-            id: Date.now().toString(),
-            date: nextUnprocessed.date,
-            kg: nextUnprocessed.kg.toString(),
-            pricePerKg: defaultPrice,
-            extraKg: '',
-            extraPricePerKg: defaultPrice,
-            extraNote: 'Notebook'
-        };
-        setDateEntries([...dateEntries, newEntry]);
+        const newEntryId = Date.now().toString();
+        const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(newEntryId, nextUnprocessed, defaultPrice);
+        if (shouldExpandExtra) {
+            setExpandedExtraEntryIds(prev => {
+                const next = new Set(prev);
+                next.add(newEntryId);
+                return next;
+            });
+        }
+        setDateEntries([...dateEntries, entry]);
     };
 
     const updateDateEntry = (id: string, field: keyof DateEntry, value: string) => {
@@ -363,14 +483,18 @@ export default function LedgerPage() {
     const removeDateEntry = (id: string) => {
         setDateEntries(entries => {
             const filtered = entries.filter(entry => entry.id !== id);
-            return filtered.map((entry, idx) => {
+            const nextExpandedIds = new Set<string>();
+            const mapped = filtered.map((entry, idx) => {
                 const d = customerDailyDates[idx];
-                return {
-                    ...entry,
-                    date: d ? d.date : '',
-                    kg: d ? d.kg.toString() : '0'
-                };
+                if (!d) return { ...entry, date: '' };
+                const { entry: parsedEntry, shouldExpandExtra } = buildEntryFromDailyRecord(entry.id, d, defaultPrice);
+                if (shouldExpandExtra) {
+                    nextExpandedIds.add(entry.id);
+                }
+                return parsedEntry;
             });
+            setExpandedExtraEntryIds(nextExpandedIds);
+            return mapped;
         });
     };
 
@@ -573,9 +697,7 @@ export default function LedgerPage() {
                                                 <Button type="button" variant="outline" size="sm" onClick={() => {
                                                     const nextShow = !showLastMaqal;
                                                     setShowLastMaqal(nextShow);
-                                                    if (nextShow && lastReceiptGroup?.receiptId) {
-                                                        setUpdateLastMaqal(true);
-                                                    } else {
+                                                    if (!nextShow) {
                                                         setUpdateLastMaqal(false);
                                                     }
                                                 }} className="h-6 text-[10px] px-2 rounded font-bold border-primary/20 text-primary hover:bg-primary/5">
@@ -649,7 +771,97 @@ export default function LedgerPage() {
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => setUpdateLastMaqal(!updateLastMaqal)}
+                                                        onClick={() => {
+                                                            const nextUpdate = !updateLastMaqal;
+                                                            setUpdateLastMaqal(nextUpdate);
+                                                            
+                                                            if (nextUpdate && lastReceiptGroup) {
+                                                                // POPULATE FORM WITH lastReceiptGroup DATA
+                                                                const productEntries = lastReceiptGroup.entries.filter(t => t.type === 'PRODUCT');
+                                                                const paymentTxns = lastReceiptGroup.entries.filter(t => t.type === 'PAYMENT');
+                                                                const adjustmentTxn = lastReceiptGroup.entries.find(t => t.type === 'ADJUSTMENT');
+
+                                                                const dateMap = new Map<string, DateEntry>();
+                                                                const newExpandedIds = new Set<string>();
+
+                                                                productEntries.forEach(t => {
+                                                                    const dateKey = t.reference_date || '';
+                                                                    let existing = dateMap.get(dateKey);
+                                                                    if (!existing) {
+                                                                        existing = { id: Date.now().toString() + Math.random(), date: dateKey, kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' };
+                                                                        dateMap.set(dateKey, existing);
+                                                                    }
+                                                                    if (t.note) {
+                                                                        existing.extraKg = t.kg?.toString() || '';
+                                                                        existing.extraPricePerKg = t.price_per_kg?.toString() || '';
+                                                                        existing.extraNote = t.note || 'Notebook';
+                                                                        newExpandedIds.add(existing.id);
+                                                                    } else {
+                                                                        existing.kg = t.kg?.toString() || '';
+                                                                        existing.pricePerKg = t.price_per_kg?.toString() || defaultPrice;
+                                                                    }
+                                                                });
+
+                                                                const newDateEntries = Array.from(dateMap.values());
+                                                                if (newDateEntries.length > 0) {
+                                                                    setDateEntries(newDateEntries);
+                                                                } else {
+                                                                    setDateEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
+                                                                }
+
+                                                                setExpandedExtraEntryIds(newExpandedIds);
+
+                                                                if (paymentTxns.length > 0) {
+                                                                    setPaymentEntries(paymentTxns.map(t => ({
+                                                                        id: Date.now().toString() + Math.random(),
+                                                                        date: t.reference_date || format(new Date(), 'yyyy-MM-dd'),
+                                                                        amount: t.amount?.toString() || ''
+                                                                    })));
+                                                                } else {
+                                                                    setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
+                                                                }
+
+                                                                if (adjustmentTxn) {
+                                                                    setAdjustmentAmount(adjustmentTxn.amount?.toString() || '');
+                                                                } else {
+                                                                    setAdjustmentAmount('');
+                                                                }
+
+                                                                // Notify + scroll to the form
+                                                                toast.success(`Loaded ${productEntries.length} entries — edit below ⬇️`);
+                                                                setTimeout(() => {
+                                                                    document.getElementById('maqal-form-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                                }, 100);
+                                                            } else {
+                                                                // REVERT TO UNPROCESSED STATE
+                                                                setDateEntries(prev => {
+                                                                    const newExpandedIds = new Set<string>();
+                                                                    let newEntries;
+                                                                    const dailyData = customerDailyDates;
+                                                                    
+                                                                    if (dailyData && dailyData.length > 0) {
+                                                                        const entryId = Date.now().toString();
+                                                                        const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, dailyData[0], defaultPrice);
+                                                                        if (shouldExpandExtra) {
+                                                                            newExpandedIds.add(entryId);
+                                                                        }
+                                                                        newEntries = [entry];
+                                                                    } else {
+                                                                        newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                                                                    }
+                                                                    
+                                                                    if (newExpandedIds.size > 0) {
+                                                                        setTimeout(() => setExpandedExtraEntryIds(newExpandedIds), 0);
+                                                                    } else {
+                                                                        setTimeout(() => setExpandedExtraEntryIds(new Set()), 0);
+                                                                    }
+                                                                    
+                                                                    return newEntries;
+                                                                });
+                                                                setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
+                                                                setAdjustmentAmount('');
+                                                            }
+                                                        }}
                                                         className={cn(
                                                             "h-7 text-[9px] px-2.5 rounded font-black uppercase tracking-wider",
                                                             updateLastMaqal ? "border-primary text-primary hover:bg-primary/5" : "border-border text-muted-foreground hover:bg-muted"
@@ -771,7 +983,7 @@ export default function LedgerPage() {
                                 {selectedCustomerId && (
                                     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-                                        <div className="space-y-4">
+                                        <div id="maqal-form-section" className="space-y-4">
                                             <div className="flex items-center justify-between border-b border-border pb-2">
                                                 <Label className="text-sm font-black uppercase tracking-wider text-foreground">1. Maqalka <span className="text-muted-foreground text-xs font-normal capitalize ml-2">(Add Kilos)</span></Label>
                                                 {dateEntries.length < 2 && (
@@ -797,22 +1009,31 @@ export default function LedgerPage() {
                                                                 <div className="flex-1 space-y-1.5">
                                                                     <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Date</Label>
                                                                     <div className="relative">
-                                                                        <select
-                                                                            value={entry.date || ""}
-                                                                            disabled
-                                                                            className={cn(
-                                                                                "w-full h-11 md:h-12 pl-10 pr-8 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-muted/30 appearance-none cursor-not-allowed focus:ring-0",
-                                                                                !entry.date && "text-muted-foreground"
-                                                                            )}
-                                                                        >
-                                                                            {entry.date ? (
-                                                                                <option value={entry.date}>
-                                                                                    {format(parseISO(entry.date), "MMM dd, yyyy")} {parseFloat(entry.kg) === 0 ? "❌ Absent" : `📦 ${entry.kg} KG`}
-                                                                                </option>
-                                                                            ) : (
-                                                                                <option value="" disabled>No unprocessed dates</option>
-                                                                            )}
-                                                                        </select>
+                                                                        {updateLastMaqal ? (
+                                                                            <Input
+                                                                                type="date"
+                                                                                value={entry.date || ""}
+                                                                                onChange={e => updateDateEntry(entry.id, 'date', e.target.value)}
+                                                                                className="h-11 md:h-12 pl-10 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-background shadow-none"
+                                                                            />
+                                                                        ) : (
+                                                                            <select
+                                                                                value={entry.date || ""}
+                                                                                disabled
+                                                                                className={cn(
+                                                                                    "w-full h-11 md:h-12 pl-10 pr-8 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-muted/30 appearance-none cursor-not-allowed focus:ring-0",
+                                                                                    !entry.date && "text-muted-foreground"
+                                                                                )}
+                                                                            >
+                                                                                {entry.date ? (
+                                                                                    <option value={entry.date}>
+                                                                                        {format(parseISO(entry.date), "MMM dd, yyyy")} {parseFloat(entry.kg) === 0 ? "❌ Absent" : `📦 ${entry.kg} KG`}
+                                                                                    </option>
+                                                                                ) : (
+                                                                                    <option value="" disabled>No unprocessed dates</option>
+                                                                                )}
+                                                                            </select>
+                                                                        )}
                                                                         <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-primary pointer-events-none opacity-60" />
                                                                     </div>
                                                                 </div>
@@ -830,9 +1051,13 @@ export default function LedgerPage() {
                                                                             type="number"
                                                                             step="1"
                                                                             value={entry.kg}
-                                                                            readOnly
+                                                                            readOnly={!updateLastMaqal}
+                                                                            onChange={e => updateDateEntry(entry.id, 'kg', e.target.value)}
                                                                             inputMode="decimal"
-                                                                            className="h-12 pl-10 text-base font-black bg-muted/5 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none cursor-not-allowed opacity-90"
+                                                                            className={cn(
+                                                                                "h-12 pl-10 text-base font-black border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none",
+                                                                                updateLastMaqal ? "bg-background cursor-text" : "bg-muted/5 cursor-not-allowed opacity-90"
+                                                                            )}
                                                                             placeholder="0"
                                                                         />
                                                                     </div>

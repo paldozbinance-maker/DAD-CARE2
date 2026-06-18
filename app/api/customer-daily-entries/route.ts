@@ -21,6 +21,7 @@ export async function GET(request: Request) {
             .from('DailyBookItem')
             .select(`
                 kg,
+                note,
                 daily_book:DailyBook (date)
             `)
             .eq('customer_id', customerId)
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
             .map((item: any) => ({
                 date: item.daily_book?.date,
                 kg: item.kg,
+                note: item.note,
                 processed: processedDates.has(item.daily_book?.date)
             }))
             .filter((item: any) => item.date && !item.processed)
