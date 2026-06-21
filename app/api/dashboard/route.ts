@@ -12,6 +12,7 @@ const getCachedDashboardData = unstable_cache(
         const [
             totalCustomersResult,
             totalDebtResult,
+            totalReestoResult,
             totalPaidResult,
             totalKgResult,
             todayStatsResult,
@@ -21,15 +22,30 @@ const getCachedDashboardData = unstable_cache(
             // 1. Total customers count
             pool.query('SELECT count(*)::int as count FROM "Customer"'),
             
-            // 2. Total Current Debt (sum of positive balances of each customer)
+            // 2. Total Current Debt (Lacagta Guud)
             pool.query(`
                 SELECT COALESCE(SUM(new_debt), 0)::float as total_debt
                 FROM (
-                    SELECT DISTINCT ON (customer_id) new_debt
+                    SELECT DISTINCT ON (customer_id) 
+                        new_debt,
+                        (type = 'PAYMENT') as is_reesto
                     FROM "Ledger"
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) latest_balances
-                WHERE new_debt > 0
+                WHERE is_reesto = false AND new_debt != 0
+            `),
+
+            // 2b. Total Reesto
+            pool.query(`
+                SELECT ABS(COALESCE(SUM(new_debt), 0))::float as total_reesto
+                FROM (
+                    SELECT DISTINCT ON (customer_id) 
+                        new_debt,
+                        (type = 'PAYMENT') as is_reesto
+                    FROM "Ledger"
+                    ORDER BY customer_id, created_at DESC, id DESC
+                ) latest_balances
+                WHERE is_reesto = true AND new_debt != 0
             `),
 
             // 3. Total Payments
@@ -56,22 +72,25 @@ const getCachedDashboardData = unstable_cache(
                 WHERE db.date = $1
             `, [today]),
 
-            // 6. Top Debtors (limit 50)
+            // 6. Top Debtors and Creditors (all non-zero balances)
             pool.query(`
                 SELECT 
                     l.customer_id as id, 
                     c.name, 
                     c.customer_code as code, 
-                    l.new_debt::float as debt
+                    l.new_debt::float as debt,
+                    l.is_reesto
                 FROM (
-                    SELECT DISTINCT ON (customer_id) customer_id, new_debt
+                    SELECT DISTINCT ON (customer_id) 
+                        customer_id, 
+                        new_debt,
+                        (type = 'PAYMENT') as is_reesto
                     FROM "Ledger"
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) l
                 JOIN "Customer" c ON l.customer_id = c.id
-                WHERE l.new_debt > 0
-                ORDER BY l.new_debt DESC
-                LIMIT 50
+                WHERE l.new_debt != 0
+                ORDER BY ABS(l.new_debt) DESC
             `),
 
             // 7. Recent transactions (last 5)
@@ -88,6 +107,7 @@ const getCachedDashboardData = unstable_cache(
 
         const totalCustomers = totalCustomersResult.rows[0]?.count || 0;
         const totalDebt = totalDebtResult.rows[0]?.total_debt || 0;
+        const totalReesto = totalReestoResult.rows[0]?.total_reesto || 0;
         const totalPaid = totalPaidResult.rows[0]?.total_paid || 0;
         const totalKg = totalKgResult.rows[0]?.total_kg || 0;
         const todayKg = todayStatsResult.rows[0]?.today_kg || 0;
@@ -115,6 +135,7 @@ const getCachedDashboardData = unstable_cache(
         return {
             totalCustomers,
             totalDebt,
+            totalReesto,
             totalPaid,
             totalKg,
             todayKg,

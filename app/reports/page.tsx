@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
 
 interface CustomerStats {
     id: string;
@@ -31,6 +32,7 @@ interface CustomerStats {
     averageKg: number;
     productTxnCount: number;
     currentDebt: number;
+    is_reesto: boolean;
     performanceScore: number;
 }
 
@@ -40,6 +42,8 @@ export default function ReportsPage() {
     const [totalDebt, setTotalDebt] = useState(0);
     const [totalPaid, setTotalPaid] = useState(0);
     const [totalKg, setTotalKg] = useState(0);
+    const [debtFilter, setDebtFilter] = useState<'all' | 'debt' | 'reesto'>('all');
+    const [sortOrder, setSortOrder] = useState<'largest' | 'smallest'>('largest');
 
     useEffect(() => {
         const fetchReports = async () => {
@@ -75,9 +79,17 @@ export default function ReportsPage() {
     }, []);
 
     // Derived lists
-    const debtors = [...customers].filter(c => c.currentDebt > 0);
-    const topDebtors = [...debtors].sort((a, b) => b.currentDebt - a.currentDebt);
-    const lowestDebt = [...debtors].sort((a, b) => a.currentDebt - b.currentDebt);
+    const debtorsList = [...customers].filter(c => c.currentDebt !== 0);
+    
+    const filteredDebtors = debtorsList.filter(debtor => {
+        if (debtFilter === 'debt') return debtor.is_reesto === false;
+        if (debtFilter === 'reesto') return debtor.is_reesto === true;
+        return true;
+    });
+
+    const sortedDebtors = [...filteredDebtors].sort((a, b) => {
+        return sortOrder === 'largest' ? Math.abs(b.currentDebt) - Math.abs(a.currentDebt) : Math.abs(a.currentDebt) - Math.abs(b.currentDebt);
+    });
     
     const payers = [...customers].filter(c => c.totalPaid > 0);
     const topPayers = [...payers].sort((a, b) => b.totalPaid - a.totalPaid);
@@ -155,6 +167,16 @@ export default function ReportsPage() {
         return 'Poor';
     };
 
+    const [activeTab, setActiveTab] = useState('performance');
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+            setActiveTab(tab);
+        }
+    }, []);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-[60vh]">
@@ -223,7 +245,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Advanced Tabs */}
-            <Tabs defaultValue="performance" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 {/* Horizontal Scrollable Tabs List for Mobile */}
                 <div className="w-full overflow-x-auto pb-2 scrollbar-hide">
                     <TabsList className="bg-muted/50 border border-border p-1.5 rounded-2xl inline-flex min-w-full md:min-w-0">
@@ -408,53 +430,105 @@ export default function ReportsPage() {
                     </div>
                 </TabsContent>
 
-                {/* 4. DEBTORS (Original) */}
+                {/* 4. DEBTORS (Customers List) */}
                 <TabsContent value="debtors" className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Card className="glass-card overflow-hidden">
-                            <CardHeader className="pb-3 border-b border-border bg-gradient-to-r from-red-500/10 to-transparent">
-                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                                    <TrendingUp className="h-4 w-4 text-red-500" />
-                                    Highest Debt (Reesto)
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
-                                <div className="divide-y divide-border">
-                                    {topDebtors.map((c, i) => (
-                                        <Link key={c.id} href={`/customers/${c.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 group">
+                    <Card className="glass-card overflow-hidden">
+                        <CardHeader className="pb-3 border-b border-border/50 bg-gradient-to-r from-red-500/[0.03] to-transparent">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                                        <div className="p-1.5 rounded-lg bg-red-500/10">
+                                            <TrendingUp className="h-3.5 w-3.5 text-red-500" />
+                                        </div>
+                                        Customers List
+                                    </CardTitle>
+                                </div>
+                            </div>
+                            {/* Filters and Sorters */}
+                            <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                                <div className="flex items-center gap-1.5 bg-muted/50 p-1 rounded-lg">
+                                    <button
+                                        onClick={() => setDebtFilter('all')}
+                                        className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-md transition-all ${debtFilter === 'all' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >
+                                        All
+                                    </button>
+                                    <button
+                                        onClick={() => setDebtFilter('debt')}
+                                        className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-md transition-all ${debtFilter === 'debt' ? 'bg-red-500/10 text-red-600 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >
+                                        Lacagta Guud
+                                    </button>
+                                    <button
+                                        onClick={() => setDebtFilter('reesto')}
+                                        className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-md transition-all ${debtFilter === 'reesto' ? 'bg-emerald-500/10 text-emerald-600 shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >
+                                        Reesto
+                                    </button>
+                                </div>
+                                {/* Sort Toggle */}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSortOrder(sortOrder === 'largest' ? 'smallest' : 'largest')}
+                                    className="h-7 px-2.5 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 rounded-lg border-border/50 hover:border-primary/30 transition-all"
+                                >
+                                    {sortOrder === 'largest' ? (
+                                        <>
+                                            <ArrowDownWideNarrow className="h-3 w-3 text-primary" />
+                                            <span className="hidden sm:inline">Largest</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ArrowUpNarrowWide className="h-3 w-3 text-primary" />
+                                            <span className="hidden sm:inline">Smallest</span>
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {sortedDebtors.length > 0 ? (
+                                <div className="divide-y divide-border/50">
+                                    {sortedDebtors.map((debtor, i) => (
+                                        <Link
+                                            href={`/customers/${debtor.id}`}
+                                            key={debtor.id}
+                                            className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-all group active:scale-[0.99]"
+                                        >
                                             <div className="flex items-center gap-3">
-                                                <span className="text-xs font-black text-red-500/50 w-4">{i + 1}.</span>
-                                                <span className="text-sm font-semibold group-hover:text-red-500 transition-colors">{c.name}</span>
+                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center text-[11px] font-black text-primary border border-primary/10 group-hover:scale-105 transition-transform">
+                                                    {sortOrder === 'largest' ? i + 1 : sortedDebtors.length - i}
+                                                </div>
+                                                <div>
+                                                    <p className="text-[13px] font-bold text-foreground">{debtor.name}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-[10px] text-muted-foreground font-medium">#{debtor.code}</p>
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${debtor.is_reesto ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                                                            {debtor.is_reesto ? 'Reesto' : 'Lacagta Guud'}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <span className="text-sm font-bold text-red-500">${c.currentDebt.toLocaleString()}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-[13px] font-black tabular-nums ${debtor.is_reesto ? 'text-emerald-500' : (Math.abs(debtor.currentDebt) > 1000 ? 'text-red-500' : 'text-foreground')}`}>
+                                                    ${Math.abs(Math.round(debtor.currentDebt)).toLocaleString()}
+                                                </span>
+                                                <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                                            </div>
                                         </Link>
                                     ))}
                                 </div>
-                            </CardContent>
-                        </Card>
-                        
-                        <Card className="glass-card overflow-hidden">
-                            <CardHeader className="pb-3 border-b border-border">
-                                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                                    <TrendingDown className="h-4 w-4 text-emerald-500" />
-                                    Lowest Debt (Reesto)
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-0 max-h-[500px] overflow-y-auto">
-                                <div className="divide-y divide-border">
-                                    {lowestDebt.map((c, i) => (
-                                        <Link key={c.id} href={`/customers/${c.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 group">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xs font-black text-emerald-500/50 w-4">{i + 1}.</span>
-                                                <span className="text-sm font-semibold group-hover:text-emerald-500 transition-colors">{c.name}</span>
-                                            </div>
-                                            <span className="text-sm font-bold text-foreground">${c.currentDebt.toLocaleString()}</span>
-                                        </Link>
-                                    ))}
+                            ) : (
+                                <div className="p-8 text-center">
+                                    <div className="p-3 rounded-full bg-emerald-500/10 w-fit mx-auto mb-3">
+                                        <DollarSign className="h-6 w-6 text-emerald-500" />
+                                    </div>
+                                    <p className="text-sm font-medium text-muted-foreground">No matches found</p>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             </Tabs>
         </div>

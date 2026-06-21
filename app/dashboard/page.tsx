@@ -24,11 +24,12 @@ import { GlobalSearch } from '@/components/global-search';
 interface DashboardData {
     totalCustomers: number;
     totalDebt: number;
+    totalReesto: number;
     totalPaid: number;
     totalKg: number;
     todayKg: number;
     todayCustomerCount: number;
-    topDebtors: { id: string; name: string; code: string; debt: number }[];
+    topDebtors: { id: string; name: string; code: string; debt: number; is_reesto: boolean }[];
     recentTransactions: any[];
 }
 
@@ -36,7 +37,6 @@ export default function DashboardPage() {
     const { theme, setTheme } = useTheme();
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [sortOrder, setSortOrder] = useState<'largest' | 'smallest'>('largest');
     const [isExpanded, setIsExpanded] = useState(false);
     const [dates, setDates] = useState({ standard: '', hijri: '' });
 
@@ -80,12 +80,8 @@ export default function DashboardPage() {
         );
     }
 
-    // Sorting logic
-    const sortedDebtors = [...(data?.topDebtors || [])].sort((a, b) => {
-        return sortOrder === 'largest' ? b.debt - a.debt : a.debt - b.debt;
-    });
-
-    const displayedDebtors = isExpanded ? sortedDebtors : sortedDebtors.slice(0, 5);
+    // Derived lists (kept minimal since Customers List moved to reports)
+    const totalCombinedDebt = (data?.totalDebt || 0) + (data?.totalReesto || 0);
 
     return (
         <div className="space-y-5 md:space-y-6 max-w-3xl mx-auto w-full px-1 md:px-0">
@@ -111,17 +107,15 @@ export default function DashboardPage() {
             </div>
 
             {/* Stats Grid - Premium Cards */}
-            <div className="grid grid-cols-2 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
                 {/* Total Customers */}
-                <Card className="glass-card overflow-hidden group">
-                    <CardContent className="p-4 md:p-5">
-                        <div className="flex items-center gap-2.5 mb-3">
-                            <div className="p-2 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/15 transition-colors">
-                                <Users className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
-                            </div>
+                <Card className="glass-card overflow-hidden group flex flex-col justify-center">
+                    <CardContent className="p-3 md:p-4 flex flex-col items-center text-center justify-center h-full">
+                        <div className="p-1.5 md:p-2 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/15 transition-colors mb-3">
+                            <Users className="h-5 w-5 md:h-6 md:w-6 text-blue-500" />
                         </div>
                         <p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">
-                            Customers
+                            Total Customers
                         </p>
                         <p className="text-2xl md:text-3xl font-black text-foreground tabular-nums">
                             {data?.totalCustomers || 0}
@@ -129,20 +123,65 @@ export default function DashboardPage() {
                     </CardContent>
                 </Card>
 
-                {/* Total Debt */}
-                <Card className="glass-card overflow-hidden group">
-                    <CardContent className="p-4 md:p-5">
-                        <div className="flex items-center gap-2.5 mb-3">
-                            <div className="p-2 rounded-xl bg-red-500/10 group-hover:bg-red-500/15 transition-colors">
-                                <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-red-500" />
+                {/* Deynta Guud Toggle Card */}
+                <Card 
+                    className="glass-card overflow-hidden cursor-pointer group hover:border-primary/50 transition-all shadow-sm group-hover:shadow-md group-hover:shadow-primary/10"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                >
+                    <CardContent className="p-3 md:p-4 flex flex-col h-full">
+                        <div className="flex justify-between items-center mb-3">
+                            <p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                                Deynta Guud
+                            </p>
+                            <Link 
+                                href="/reports?tab=debtors" 
+                                onClick={(e) => e.stopPropagation()} 
+                                className="p-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-1 group/link"
+                            >
+                                <span className="text-[9px] font-bold uppercase tracking-widest hidden sm:inline opacity-80 group-hover/link:opacity-100">Reports</span>
+                                <ChevronRight className="h-3 w-3" />
+                            </Link>
+                        </div>
+                        
+                        <div className="flex-1 flex flex-col justify-center text-center">
+                            <p className="text-2xl md:text-3xl font-black text-foreground tabular-nums flex items-baseline justify-center gap-1">
+                                <span className="text-lg md:text-xl text-muted-foreground font-bold">$</span>
+                                {totalCombinedDebt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </p>
+                        </div>
+
+                        {/* Expandable Split Details */}
+                        <div className={`grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-border/50 transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0 border-transparent m-0 p-0'}`}>
+                            <div className="flex flex-col items-center border-r border-border/50">
+                                <div className="flex items-center gap-1 mb-1 text-red-500">
+                                    <TrendingUp className="h-3 w-3" />
+                                    <p className="text-[9px] font-bold uppercase tracking-widest">Lacagta Guud</p>
+                                </div>
+                                <p className="text-base font-black text-red-500 tabular-nums">
+                                    ${(data?.totalDebt || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </p>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <div className="flex items-center gap-1 mb-1 text-emerald-500">
+                                    <DollarSign className="h-3 w-3" />
+                                    <p className="text-[9px] font-bold uppercase tracking-widest">Reesto</p>
+                                </div>
+                                <p className="text-base font-black text-emerald-500 tabular-nums">
+                                    ${(data?.totalReesto || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </p>
                             </div>
                         </div>
-                        <p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">
-                            Total Debt
-                        </p>
-                        <p className="text-lg md:text-2xl font-black text-red-500 tabular-nums">
-                            ${(data?.totalDebt || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                        </p>
+
+                        {!isExpanded && (
+                            <div className="text-center mt-1 text-muted-foreground/30 group-hover:text-primary transition-colors">
+                                <ChevronDown className="h-4 w-4 mx-auto" />
+                            </div>
+                        )}
+                        {isExpanded && (
+                            <div className="text-center mt-2 text-muted-foreground/30 group-hover:text-primary transition-colors">
+                                <ChevronUp className="h-4 w-4 mx-auto" />
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -175,99 +214,6 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
 
-            {/* Top Debtors */}
-            <Card className="glass-card overflow-hidden">
-                <CardHeader className="pb-3 border-b border-border/50 bg-gradient-to-r from-red-500/[0.03] to-transparent">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-red-500/10">
-                                    <TrendingUp className="h-3.5 w-3.5 text-red-500" />
-                                </div>
-                                Top Debtors
-                            </CardTitle>
-                            {/* Sort Toggle */}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setSortOrder(sortOrder === 'largest' ? 'smallest' : 'largest')}
-                                className="h-7 px-2.5 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 rounded-lg border-border/50 hover:border-primary/30 transition-all"
-                            >
-                                {sortOrder === 'largest' ? (
-                                    <>
-                                        <ArrowDownWideNarrow className="h-3 w-3 text-red-500" />
-                                        <span className="hidden sm:inline">Largest</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <ArrowUpNarrowWide className="h-3 w-3 text-emerald-500" />
-                                        <span className="hidden sm:inline">Smallest</span>
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-                        <Link href="/reports" className="text-[11px] text-primary font-bold hover:underline flex items-center gap-1">
-                            View All <ChevronRight className="h-3 w-3" />
-                        </Link>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {displayedDebtors.length > 0 ? (
-                        <div className="divide-y divide-border/50">
-                            {displayedDebtors.map((debtor, i) => (
-                                <Link
-                                    href={`/customers/${debtor.id}`}
-                                    key={debtor.id}
-                                    className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-all group active:scale-[0.99]"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center text-[11px] font-black text-primary border border-primary/10 group-hover:scale-105 transition-transform">
-                                            {sortOrder === 'largest' ? i + 1 : sortedDebtors.length - i}
-                                        </div>
-                                        <div>
-                                            <p className="text-[13px] font-bold text-foreground">{debtor.name}</p>
-                                            <p className="text-[10px] text-muted-foreground font-medium">#{debtor.code}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-[13px] font-black tabular-nums ${debtor.debt > 1000 ? 'text-red-500' : 'text-foreground'}`}>
-                                            ${Math.round(debtor.debt).toLocaleString()}
-                                        </span>
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-                                    </div>
-                                </Link>
-                            ))}
-                            {/* Expand/Collapse */}
-                            {sortedDebtors.length > 5 && (
-                                <Button
-                                    variant="ghost"
-                                    className="w-full h-10 text-xs font-bold text-primary hover:bg-primary/5 flex items-center justify-center gap-2 rounded-none"
-                                    onClick={() => setIsExpanded(!isExpanded)}
-                                >
-                                    {isExpanded ? (
-                                        <>
-                                            <ChevronUp className="h-4 w-4" />
-                                            Collapse
-                                        </>
-                                    ) : (
-                                        <>
-                                            <ChevronDown className="h-4 w-4" />
-                                            Show {sortedDebtors.length - 5} more
-                                        </>
-                                    )}
-                                </Button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="p-8 text-center">
-                            <div className="p-3 rounded-full bg-emerald-500/10 w-fit mx-auto mb-3">
-                                <DollarSign className="h-6 w-6 text-emerald-500" />
-                            </div>
-                            <p className="text-sm font-medium text-muted-foreground">No outstanding debts</p>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
         </div>
     );
 }

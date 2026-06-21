@@ -51,6 +51,7 @@ export async function GET(request: Request) {
             // Capture the latest new_debt as the current debt
             if (!stats.hasDebtRecord) {
                 stats.currentDebt = entry.new_debt || 0;
+                stats.is_reesto = entry.type === 'PAYMENT';
                 stats.hasDebtRecord = true;
             }
 
@@ -99,6 +100,7 @@ export async function GET(request: Request) {
                 averageKg: averageKg,
                 productTxnCount: stats.productTxnCount,
                 currentDebt: stats.currentDebt,
+                is_reesto: stats.is_reesto,
                 performanceScore: performanceScore
             };
         });
