@@ -177,6 +177,13 @@ export default function ReportsPage() {
         }
     }, []);
 
+    const handleTabChange = (val: string) => {
+        setActiveTab(val);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', val);
+        window.history.replaceState({}, '', url.toString());
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-[60vh]">
@@ -245,7 +252,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Advanced Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                 {/* Horizontal Scrollable Tabs List for Mobile */}
                 <div className="w-full overflow-x-auto pb-2 scrollbar-hide">
                     <TabsList className="bg-muted/50 border border-border p-1.5 rounded-2xl inline-flex min-w-full md:min-w-0">

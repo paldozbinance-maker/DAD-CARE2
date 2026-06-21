@@ -105,6 +105,28 @@ export default function SettingsPage() {
         auditFiltersRef.current = { user: auditFilterUser, action: auditFilterAction };
     }, [auditFilterUser, auditFilterAction]);
 
+    // Active tab state to keep across reloads
+    const [activeTab, setActiveTab] = useState<string>('');
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (currentUser) {
+            if (tab && (tab !== 'users' || currentUser.role === 'SUPER_ADMIN')) {
+                setActiveTab(tab);
+            } else {
+                setActiveTab(currentUser.role === 'SUPER_ADMIN' ? 'business' : 'appearance');
+            }
+        }
+    }, [currentUser]);
+
+    const handleTabChange = (val: string) => {
+        setActiveTab(val);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', val);
+        window.history.replaceState({}, '', url.toString());
+    };
+
     // Admin Detail Dialog state
     const [adminDetailOpen, setAdminDetailOpen] = useState(false);
     const [adminDetailUser, setAdminDetailUser] = useState<any>(null);
@@ -522,8 +544,19 @@ export default function SettingsPage() {
     };
 
     const handleDeleteUser = async (userId: string, username: string) => {
-        if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
-            return;
+        const userToDelete = users.find(u => u.id === userId);
+        const isAdmin = userToDelete?.role === 'ADMIN' || userToDelete?.role === 'SUPER_ADMIN';
+
+        if (isAdmin) {
+            const confirmation = prompt(`To delete admin user "${username}", please type PALDOZ in capital letters to confirm:`);
+            if (confirmation !== 'PALDOZ') {
+                toast.error('Incorrect confirmation code. Deletion cancelled.');
+                return;
+            }
+        } else {
+            if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+                return;
+            }
         }
 
         try {
@@ -640,7 +673,7 @@ export default function SettingsPage() {
 
             {/* Tabs - Compact pill style */}
             <div className="px-1">
-                <Tabs defaultValue={isSuperAdmin ? "business" : "users"} className="w-full">
+                <Tabs value={activeTab || (isSuperAdmin ? "business" : "appearance")} onValueChange={handleTabChange} className="w-full">
                     <TabsList className="bg-muted/60 backdrop-blur-sm border border-border/40 p-1 rounded-2xl w-full flex gap-0.5 h-auto">
                         {isSuperAdmin && (
                             <TabsTrigger
@@ -652,13 +685,15 @@ export default function SettingsPage() {
                                 <span className="xs:hidden">💲</span>
                             </TabsTrigger>
                         )}
-                        <TabsTrigger
-                            value="users"
-                            className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
-                        >
-                            <Users className="w-3.5 h-3.5 text-blue-500" />
-                            Users
-                        </TabsTrigger>
+                        {isSuperAdmin && (
+                            <TabsTrigger
+                                value="users"
+                                className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
+                            >
+                                <Users className="w-3.5 h-3.5 text-blue-500" />
+                                Users
+                            </TabsTrigger>
+                        )}
                         <TabsTrigger
                             value="appearance"
                             className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
@@ -727,132 +762,134 @@ export default function SettingsPage() {
                     )}
 
                     {/* ── Users Management ── */}
-                    <TabsContent value="users" className="mt-3">
-                        <div className="space-y-3">
-                            {/* Search + Add */}
-                            <div className="flex gap-2 px-0.5">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
-                                    <Input
-                                        placeholder="Search users..."
-                                        value={searchUser}
-                                        onChange={e => setSearchUser(e.target.value)}
-                                        className="pl-9 bg-background/50 border-border/50 rounded-xl h-11 text-sm"
-                                    />
-                                </div>
-                                {isSuperAdmin && (
-                                    <Button
-                                        onClick={handleOpenCreateDialog}
-                                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 shrink-0 h-11 rounded-xl px-3 active:scale-95 transition-all"
-                                    >
-                                        <UserPlus className="w-4 h-4 mr-1.5" />
-                                        <span className="hidden sm:inline">Add User</span>
-                                        <span className="sm:hidden">Add</span>
-                                    </Button>
-                                )}
-                            </div>
-
-                            {/* User Cards */}
-                            <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
-                                <div className="px-4 py-2.5 border-b border-border/40 bg-gradient-to-r from-blue-500/5 to-transparent flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Users className="w-4 h-4 text-blue-500" />
-                                        <span className="text-xs font-bold text-foreground">Team Members</span>
+                    {isSuperAdmin && (
+                        <TabsContent value="users" className="mt-3">
+                            <div className="space-y-3">
+                                {/* Search + Add */}
+                                <div className="flex gap-2 px-0.5">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                                        <Input
+                                            placeholder="Search users..."
+                                            value={searchUser}
+                                            onChange={e => setSearchUser(e.target.value)}
+                                            className="pl-9 bg-background/50 border-border/50 rounded-xl h-11 text-sm"
+                                        />
                                     </div>
-                                    <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                                        {filteredUsers.length}
-                                    </span>
+                                    {isSuperAdmin && (
+                                        <Button
+                                            onClick={handleOpenCreateDialog}
+                                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 shrink-0 h-11 rounded-xl px-3 active:scale-95 transition-all"
+                                        >
+                                            <UserPlus className="w-4 h-4 mr-1.5" />
+                                            <span className="hidden sm:inline">Add User</span>
+                                            <span className="sm:hidden">Add</span>
+                                        </Button>
+                                    )}
                                 </div>
 
-                                {usersLoading ? (
-                                    <div className="flex flex-col items-center justify-center py-14 gap-3">
-                                        <Loader2 className="w-7 h-7 animate-spin text-primary" />
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading...</p>
-                                    </div>
-                                ) : filteredUsers.length === 0 ? (
-                                    <div className="text-center py-14 px-6">
-                                        <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                                            <User className="w-7 h-7 text-muted-foreground/40" />
+                                {/* User Cards */}
+                                <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                    <div className="px-4 py-2.5 border-b border-border/40 bg-gradient-to-r from-blue-500/5 to-transparent flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Users className="w-4 h-4 text-blue-500" />
+                                            <span className="text-xs font-bold text-foreground">Team Members</span>
                                         </div>
-                                        <p className="text-foreground font-bold text-sm">No Users Yet</p>
-                                        <p className="text-muted-foreground text-xs mt-1 mb-4">Create user accounts for your team</p>
-                                        {isSuperAdmin && (
-                                            <Button onClick={handleOpenCreateDialog} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 active:scale-95">
-                                                <Plus className="w-3.5 h-3.5 mr-1.5" /> Create User
-                                            </Button>
-                                        )}
+                                        <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                                            {filteredUsers.length}
+                                        </span>
                                     </div>
-                                ) : (
-                                    <div className="divide-y divide-border/30">
-                                        {filteredUsers.map((user) => {
-                                            const hasAvatar = !!user.avatar_url;
-                                            const assignedCount = user.assigned_customer_ids?.length || 0;
-                                            const isUserAdmin = user.role === 'ADMIN';
 
-                                            return (
-                                                <div key={user.id} className="flex items-center gap-3 px-3 py-3 active:bg-muted/20 transition-colors">
-                                                    {/* Avatar */}
-                                                    <Avatar className="h-11 w-11 border border-border/60 bg-muted shrink-0 shadow-sm">
-                                                        {hasAvatar ? (
-                                                            <AvatarImage src={user.avatar_url} className="object-cover" />
-                                                        ) : null}
-                                                        <AvatarFallback className="text-sm font-black bg-primary/10 text-primary uppercase">
-                                                            {user.gender === 'Female' ? '👩' : user.gender === 'Male' ? '👨' : user.name?.charAt(0) || '👤'}
-                                                        </AvatarFallback>
-                                                    </Avatar>
+                                    {usersLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-14 gap-3">
+                                            <Loader2 className="w-7 h-7 animate-spin text-primary" />
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading...</p>
+                                        </div>
+                                    ) : filteredUsers.length === 0 ? (
+                                        <div className="text-center py-14 px-6">
+                                            <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                                                <User className="w-7 h-7 text-muted-foreground/40" />
+                                            </div>
+                                            <p className="text-foreground font-bold text-sm">No Users Yet</p>
+                                            <p className="text-muted-foreground text-xs mt-1 mb-4">Create user accounts for your team</p>
+                                            {isSuperAdmin && (
+                                                <Button onClick={handleOpenCreateDialog} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 active:scale-95">
+                                                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Create User
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y divide-border/30">
+                                            {filteredUsers.map((user) => {
+                                                const hasAvatar = !!user.avatar_url;
+                                                const assignedCount = user.assigned_customer_ids?.length || 0;
+                                                const isUserAdmin = user.role === 'ADMIN';
 
-                                                    {/* Info */}
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="font-black text-foreground text-xs uppercase truncate">{user.name}</span>
-                                                            <span className={`shrink-0 px-1.5 py-0.5 rounded-md text-[8px] font-black tracking-wider uppercase ${isUserAdmin ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30' : 'bg-blue-500/15 text-blue-500 border border-blue-500/30'}`}>
-                                                                {user.role}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                            <span className="text-[10px] font-bold text-muted-foreground">@{user.username}</span>
-                                                            {user.phone && (
-                                                                <span className="hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                                                    <Phone className="w-2.5 h-2.5" /> {user.phone}
+                                                return (
+                                                    <div key={user.id} className="flex items-center gap-3 px-3 py-3 active:bg-muted/20 transition-colors">
+                                                        {/* Avatar */}
+                                                        <Avatar className="h-11 w-11 border border-border/60 bg-muted shrink-0 shadow-sm">
+                                                            {hasAvatar ? (
+                                                                <AvatarImage src={user.avatar_url} className="object-cover" />
+                                                            ) : null}
+                                                            <AvatarFallback className="text-sm font-black bg-primary/10 text-primary uppercase">
+                                                                {user.gender === 'Female' ? '👩' : user.gender === 'Male' ? '👨' : user.name?.charAt(0) || '👤'}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+
+                                                        {/* Info */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-black text-foreground text-xs uppercase truncate">{user.name}</span>
+                                                                <span className={`shrink-0 px-1.5 py-0.5 rounded-md text-[8px] font-black tracking-wider uppercase ${isUserAdmin ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30' : 'bg-blue-500/15 text-blue-500 border border-blue-500/30'}`}>
+                                                                    {user.role}
                                                                 </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <span className="text-[10px] font-bold text-muted-foreground">@{user.username}</span>
+                                                                {user.phone && (
+                                                                    <span className="hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                                                        <Phone className="w-2.5 h-2.5" /> {user.phone}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {/* Priority stars */}
+                                                            {assignedCount > 0 && (
+                                                                <div className="flex items-center gap-1 mt-1">
+                                                                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                                                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">{assignedCount} Priority</span>
+                                                                </div>
                                                             )}
                                                         </div>
-                                                        {/* Priority stars */}
-                                                        {assignedCount > 0 && (
-                                                            <div className="flex items-center gap-1 mt-1">
-                                                                <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                                                                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">{assignedCount} Priority</span>
+
+                                                        {/* Actions */}
+                                                        {isSuperAdmin && (
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                <button
+                                                                    onClick={() => handleOpenEditDialog(user)}
+                                                                    className="p-2 rounded-xl border border-border/50 hover:bg-muted/50 active:scale-90 transition-all"
+                                                                >
+                                                                    <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                                                </button>
+                                                                {user.username !== 'admin' && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteUser(user.id, user.username)}
+                                                                        className="p-2 rounded-xl border border-destructive/20 hover:bg-destructive/10 active:scale-90 transition-all"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
-
-                                                    {/* Actions */}
-                                                    {isSuperAdmin && (
-                                                        <div className="flex items-center gap-1.5 shrink-0">
-                                                            <button
-                                                                onClick={() => handleOpenEditDialog(user)}
-                                                                className="p-2 rounded-xl border border-border/50 hover:bg-muted/50 active:scale-90 transition-all"
-                                                            >
-                                                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                                                            </button>
-                                                            {user.username !== 'admin' && (
-                                                                <button
-                                                                    onClick={() => handleDeleteUser(user.id, user.username)}
-                                                                    className="p-2 rounded-xl border border-destructive/20 hover:bg-destructive/10 active:scale-90 transition-all"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    </TabsContent>
+                        </TabsContent>
+                    )}
 
                     {/* ── Appearance ── */}
                     <TabsContent value="appearance" className="mt-3">

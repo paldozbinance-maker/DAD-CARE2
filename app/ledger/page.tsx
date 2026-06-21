@@ -119,10 +119,15 @@ const buildEntryFromDailyRecord = (
             const mainKgNum = Math.max(0, (record.kg || 0) - vipData.kg);
             kg = mainKgNum.toString();
         } else if (heshiishData) {
-            kg = heshiishData.kg.toString();
+            extraKg = heshiishData.kg.toString();
             if (heshiishData.price !== null) {
-                pricePerKg = heshiishData.price.toString();
+                extraPricePerKg = heshiishData.price.toString();
             }
+            extraNote = 'Heshiish';
+            shouldExpandExtra = true;
+            // Subtract Heshiish KG from main KG and cap at 0
+            const mainKgNum = Math.max(0, (record.kg || 0) - heshiishData.kg);
+            kg = mainKgNum.toString();
         }
     }
 

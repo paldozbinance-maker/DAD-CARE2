@@ -34,6 +34,7 @@ interface UserData {
 }
 
 export default function UsersPage() {
+    const [currentUser, setCurrentUser] = useState<any>(null);
     const [users, setUsers] = useState<UserData[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -60,6 +61,12 @@ export default function UsersPage() {
     };
 
     useEffect(() => {
+        const storedUser = localStorage.getItem('currentUser');
+        if (storedUser) {
+            try {
+                setCurrentUser(JSON.parse(storedUser));
+            } catch (e) {}
+        }
         loadUsers();
     }, []);
 
@@ -111,8 +118,19 @@ export default function UsersPage() {
     };
 
     const handleDeleteUser = async (userId: string, username: string) => {
-        if (!confirm(`Are you sure you want to delete user "${username}"? This cannot be undone.`)) {
-            return;
+        const userToDelete = users.find(u => u.id === userId);
+        const isAdmin = userToDelete?.role === 'ADMIN';
+
+        if (isAdmin) {
+            const confirmation = prompt(`To delete admin user "${username}", please type PALDOZ in capital letters to confirm:`);
+            if (confirmation !== 'PALDOZ') {
+                toast.error('Incorrect confirmation code. Deletion cancelled.');
+                return;
+            }
+        } else {
+            if (!confirm(`Are you sure you want to delete user "${username}"? This cannot be undone.`)) {
+                return;
+            }
         }
 
         try {
@@ -135,6 +153,18 @@ export default function UsersPage() {
         user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.username?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    if (currentUser && currentUser.role !== 'SUPER_ADMIN') {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-6">
+                <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mb-4">
+                    <Shield className="w-8 h-8 text-destructive" />
+                </div>
+                <h2 className="text-xl font-black text-foreground">Access Denied</h2>
+                <p className="text-muted-foreground mt-2 text-sm">You do not have permission to view this page.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto w-full px-1 md:px-0">
