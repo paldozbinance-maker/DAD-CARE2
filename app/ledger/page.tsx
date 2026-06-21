@@ -1032,7 +1032,18 @@ export default function LedgerPage() {
                                                                             >
                                                                                 {entry.date ? (
                                                                                     <option value={entry.date}>
-                                                                                        {format(parseISO(entry.date), "MMM dd, yyyy")} {parseFloat(entry.kg) === 0 ? "❌ Absent" : `📦 ${entry.kg} KG`}
+                                                                                        {(() => {
+                                                                                            const mainKg = parseFloat(entry.kg) || 0;
+                                                                                            const extraKg = parseFloat(entry.extraKg || '0') || 0;
+                                                                                            const dateStr = format(parseISO(entry.date), "MMM dd, yyyy");
+                                                                                            if (mainKg === 0 && extraKg === 0) {
+                                                                                                return `${dateStr} ❌ Absent`;
+                                                                                            }
+                                                                                            const parts = [];
+                                                                                            if (mainKg > 0) parts.push(`📦 ${mainKg} KG`);
+                                                                                            if (extraKg > 0) parts.push(`📔 ${extraKg} KG (${entry.extraNote || 'Notebook'})`);
+                                                                                            return `${dateStr} - ${parts.join(' + ')}`;
+                                                                                        })()}
                                                                                     </option>
                                                                                 ) : (
                                                                                     <option value="" disabled>No unprocessed dates</option>
@@ -1259,20 +1270,29 @@ export default function LedgerPage() {
                                                 )}
 
                                                 {/* Maqalka breakdown lines */}
-                                                {dateEntries.filter(e => e.date && parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0).map((entry, idx) => (
-                                                    <div key={`rec-${idx}`} className="space-y-1 py-1 border-b border-border/30 text-muted-foreground">
-                                                        <div className="flex justify-between">
-                                                            <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
-                                                            <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
+                                                {dateEntries.filter(e => e.date && (
+                                                    (parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0) ||
+                                                    (e.extraKg && parseFloat(e.extraKg) > 0 && e.extraPricePerKg && parseFloat(e.extraPricePerKg) > 0)
+                                                )).map((entry, idx) => {
+                                                    const showMain = parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0;
+                                                    const showExtra = entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0;
+                                                    return (
+                                                        <div key={`rec-${idx}`} className="space-y-1 py-1 border-b border-border/30 text-muted-foreground">
+                                                            {showMain && (
+                                                                <div className="flex justify-between">
+                                                                    <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
+                                                                    <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
+                                                                </div>
+                                                            )}
+                                                            {showExtra && (
+                                                                <div className={cn("flex justify-between text-[10px] text-muted-foreground/80", showMain ? "pl-3" : "")}>
+                                                                    <span>{showMain ? '↳ ' : ''}{format(new Date(entry.date), 'MMM dd')} · {entry.extraKg}KG × ${entry.extraPricePerKg} ({entry.extraNote || 'Notebook'})</span>
+                                                                    <span className="font-bold text-foreground">${Math.round(parseFloat(entry.extraKg || '0') * parseFloat(entry.extraPricePerKg || '0')).toLocaleString()}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        {entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0 && (
-                                                            <div className="flex justify-between pl-3 text-[10px] text-muted-foreground/80">
-                                                                <span>↳ {entry.extraKg}KG × ${entry.extraPricePerKg} ({entry.extraNote || 'Notebook'})</span>
-                                                                <span className="font-bold text-foreground">${Math.round(parseFloat(entry.extraKg) * parseFloat(entry.extraPricePerKg)).toLocaleString()}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
 
                                                 {/* Maqalka Total */}
                                                 <div className="flex justify-between py-1.5 border-b border-border/40 font-bold text-foreground">

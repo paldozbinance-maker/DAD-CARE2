@@ -127,7 +127,9 @@ export default function DailyBookPage() {
     }, []);
 
     useEffect(() => {
-        loadDailyBook(date);
+        if (!editingDate) {
+            loadDailyBook(date);
+        }
         fetchLedgerStatusForDate(date);
     }, [date]);
 
@@ -175,6 +177,19 @@ export default function DailyBookPage() {
             }));
 
         try {
+            if (editingDate && editingDate !== dateStr) {
+                // Delete the old daily book entry to prevent duplicate keys or outdated records
+                try {
+                    const delRes = await fetch(`/api/daily-book?date=${editingDate}`, { method: 'DELETE' });
+                    if (!delRes.ok && delRes.status !== 404) {
+                        const errText = await delRes.text();
+                        console.error('Failed to delete old entry:', errText);
+                    }
+                } catch (delErr) {
+                    console.error('Error deleting old entry:', delErr);
+                }
+            }
+
             const res = await fetch('/api/daily-book', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -188,7 +203,7 @@ export default function DailyBookPage() {
                     items: items
                 };
 
-                const updated = [...savedEntries.filter(e => e.date !== dateStr), newEntry];
+                const updated = [...savedEntries.filter(e => e.date !== dateStr && e.date !== editingDate), newEntry];
                 setSavedEntries(updated);
 
                 toast.success(`Entry saved for ${format(date, 'MMMM dd, yyyy')}`);
@@ -196,10 +211,12 @@ export default function DailyBookPage() {
                 setEditingDate(null);
                 setViewMode('details');
             } else {
-                toast.error('Failed to save entry');
+                const errData = await res.json().catch(() => ({}));
+                toast.error(errData.error || 'Failed to save entry');
             }
-        } catch (e) {
-            toast.error('Network error');
+        } catch (e: any) {
+            console.error('Save error:', e);
+            toast.error(e.message || 'Network error');
         } finally {
             setSaving(false);
             fetchLatestDate(); // Refresh sequence after save
@@ -346,6 +363,19 @@ export default function DailyBookPage() {
                                 <BookOpen className="w-4 h-4 text-primary shrink-0" />
                                 <span className="font-black text-sm uppercase tracking-tight truncate text-foreground">{format(date, 'MMM dd, yyyy')}</span>
                                 {totalKg > 0 && <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">{Math.round(totalKg)} KG</span>}
+                                {editingDate && (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] font-bold border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 shrink-0">
+                                                <CalendarIcon className="w-3 h-3 mr-1" />
+                                                Change Date
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0 bg-popover border-border shadow-xl z-[10000]">
+                                            <Calendar mode="single" selected={date} onSelect={(newDate) => newDate && handleDateChange(newDate)} className="rounded-md border-0" />
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 {editingDate && (
