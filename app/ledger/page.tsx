@@ -167,7 +167,7 @@ export default function LedgerPage() {
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     const [customerDailyDates, setCustomerDailyDates] = useState<DailyBookRecord[]>([]);
     const [dateEntries, setDateEntries] = useState<DateEntry[]>([]);
-    const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
+    const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([{ id: Date.now().toString(), date: '', amount: '' }]);
     const [adjustmentAmount, setAdjustmentAmount] = useState('');
     const [adjustmentNote, setAdjustmentNote] = useState('');
     const [expandedExtraEntryIds, setExpandedExtraEntryIds] = useState<Set<string>>(new Set());
@@ -340,7 +340,7 @@ export default function LedgerPage() {
     const handleCustomerChange = (customerId: string) => {
         setSelectedCustomerId(customerId);
         setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
-        setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
+        setPaymentEntries([{ id: Date.now().toString(), date: '', amount: '' }]);
         setHistory([]);
         setCustomerDailyDates([]);
         setShowLastMaqal(false);
@@ -457,6 +457,11 @@ export default function LedgerPage() {
 
     const addDateEntry = () => {
         const nextIndex = dateEntries.length;
+        // Maximum 6 date rows at a time
+        if (nextIndex >= 6) {
+            toast.error("Maximum 6 date rows allowed at once!");
+            return;
+        }
         if (nextIndex >= customerDailyDates.length) {
             toast.error("No more unprocessed dates available!");
             return;
@@ -625,8 +630,8 @@ export default function LedgerPage() {
             toast.success('Receipt saved successfully!');
 
             // 3. Reset form
-            setDateEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
-            setPaymentEntries([{ id: (Date.now() + 1).toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
+            setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
+            setPaymentEntries([{ id: (Date.now() + 1).toString(), date: '', amount: '' }]);
             setAdjustmentAmount('');
 
             // 4. Refresh data (full sync)
@@ -1202,7 +1207,7 @@ export default function LedgerPage() {
                                                 <Label className="text-sm font-black uppercase tracking-wider text-foreground">2. Lacagaha <span className="text-muted-foreground text-xs font-normal capitalize ml-2">(Payments Received)</span></Label>
                                                 <Button
                                                     type="button"
-                                                    onClick={() => setPaymentEntries([...paymentEntries, { id: Date.now().toString() + Math.random(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }])}
+                                                    onClick={() => setPaymentEntries([...paymentEntries, { id: Date.now().toString() + Math.random(), date: '', amount: '' }])}
                                                     variant="secondary"
                                                     size="sm"
                                                     className="rounded-lg font-bold text-xs"

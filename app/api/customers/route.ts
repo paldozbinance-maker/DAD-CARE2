@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
+import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,6 +92,10 @@ export async function POST(request: Request) {
     const supabase = await createClient();
 
     try {
+        // Hash default password '123' securely
+        const salt = await bcrypt.genSalt(10);
+        const hashedDefaultPassword = await bcrypt.hash('123', salt);
+
         // 1. Create the User account first
         const { data: userData, error: userError } = await supabase
             .from('User')
@@ -98,7 +103,7 @@ export async function POST(request: Request) {
                 username: customer_code.toLowerCase().replace(/\s+/g, ''),
                 email: `${customer_code.toLowerCase().replace(/\s+/g, '')}@dadwork.com`,
                 name: name,
-                password: '123', // Default password as requested
+                password: hashedDefaultPassword,
                 role: 'CUSTOMER',
                 is_active: true
             })

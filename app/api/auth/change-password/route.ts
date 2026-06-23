@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
+import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
     const { errorResponse } = await requireSession(request);
@@ -11,8 +12,6 @@ export async function POST(request: Request) {
 
     try {
         // 1. Verify current password
-        // In a real app we'd verify hash. Here we check plain text as per "default 123" simplicity requested
-        // but ready for upgrade.
         const { data: user, error: fetchError } = await supabase
             .from('User')
             .select('password, id')
@@ -23,14 +22,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        if (user.password !== currentPassword) {
+        // Support both plaintext (legacy accounts) and bcrypt validation
+        const isPasswordValid = user.password === currentPassword || await bcrypt.compare(currentPassword, user.password);
+
+        if (!isPasswordValid) {
             return NextResponse.json({ error: 'Incorrect current password' }, { status: 400 });
         }
 
-        // 2. Update to new password
+        // 2. Hash and update to new password
+        const salt = await bcrypt.genSalt(10);
+        const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
         const { error: updateError } = await supabase
             .from('User')
-            .update({ password: newPassword })
+            .update({ password: hashedNewPassword })
             .eq('id', user.id);
 
         if (updateError) {

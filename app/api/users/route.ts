@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSuperAdmin } from '@/lib/require-session';
+import bcrypt from 'bcryptjs';
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSuperAdmin(request);
@@ -44,13 +45,17 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
         }
 
+        // Hash the password securely
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
         const { data, error } = await supabase
             .from('User')
             .insert({
                 username,
                 email: `${username}@example.com`, // Placeholder email generator
                 name,
-                password: password,
+                password: hashedPassword,
                 role: role || 'CUSTOMER',
                 is_active: true,
                 gender: gender || null,

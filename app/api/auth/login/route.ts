@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createSession } from '@/lib/sessions-store';
 import { logAuditDirect } from '@/lib/audit';
 import { randomBytes } from 'crypto';
+import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
     try {
@@ -30,17 +31,17 @@ export async function POST(request: Request) {
 
         let resolvedUser: any = null;
 
-        // Fallback for hardcoded admin login
-        if (username === 'admin' && password === '123' && !user) {
-            resolvedUser = {
-                id: 'admin-hardcoded',
-                username: 'admin',
-                name: 'Administrator',
-                role: 'SUPER_ADMIN',
-                is_active: true,
-                assigned_customer_ids: []
-            };
-        } else {
+        if (!user) {
+            await logAuditDirect({
+                username,
+                role: 'UNKNOWN',
+                action: 'LOGIN_FAILED',
+                details: `Failed login attempt for username: ${username}`,
+                ipAddress: ip,
+                userAgent,
+            });
+            return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
+        }
             if (!user) {
                 await logAuditDirect({
                     username,
@@ -52,25 +53,28 @@ export async function POST(request: Request) {
                 });
                 return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
             }
-            if (user.username === 'admin') user.role = 'SUPER_ADMIN';
-            if (user.password !== password) {
-                await logAuditDirect({
-                    userId: user.id,
-                    username: user.username,
-                    name: user.name,
-                    role: user.role,
-                    action: 'LOGIN_FAILED',
-                    details: `Wrong password for user: ${user.username}`,
-                    ipAddress: ip,
-                    userAgent,
-                });
-                return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
-            }
-            if (!user.is_active) {
-                return NextResponse.json({ error: 'This user account is inactive' }, { status: 403 });
-            }
-            resolvedUser = user;
+        if (user.username === 'admin') user.role = 'SUPER_ADMIN';
+        
+        // Support both plaintext (for existing accounts) and bcrypt (for new/updated accounts)
+        const isPasswordValid = user.password === password || await bcrypt.compare(password, user.password);
+        
+        if (!isPasswordValid) {
+            await logAuditDirect({
+                userId: user.id,
+                username: user.username,
+                name: user.name,
+                role: user.role,
+                action: 'LOGIN_FAILED',
+                details: `Wrong password for user: ${user.username}`,
+                ipAddress: ip,
+                userAgent,
+            });
+            return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
         }
+        if (!user.is_active) {
+            return NextResponse.json({ error: 'This user account is inactive' }, { status: 403 });
+        }
+        resolvedUser = user;
 
         // 🔒 Generate secure session token and persist to DB
         const token = randomBytes(32).toString('hex');
