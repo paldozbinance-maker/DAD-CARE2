@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { createSession } from '@/lib/sessions-store';
 import { logAuditDirect } from '@/lib/audit';
@@ -9,7 +9,6 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { username, password } = body;
-        const supabase = await createClient();
 
         if (!username || !password) {
             return NextResponse.json({ error: 'Username and password are required' }, { status: 400 });
@@ -20,14 +19,9 @@ export async function POST(request: Request) {
             || 'localhost';
         const userAgent = request.headers.get('user-agent') || 'unknown';
 
-        // Check user credentials against database
-        const { data: user, error } = await supabase
-            .from('User')
-            .select('*')
-            .eq('username', username)
-            .maybeSingle();
-
-        if (error) throw error;
+        // Check user credentials against database directly via pg pool
+        const { rows } = await pool.query('SELECT * FROM "User" WHERE username = $1 LIMIT 1', [username]);
+        const user = rows[0] || null;
 
         let resolvedUser: any = null;
 
@@ -42,17 +36,6 @@ export async function POST(request: Request) {
             });
             return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
         }
-            if (!user) {
-                await logAuditDirect({
-                    username,
-                    role: 'UNKNOWN',
-                    action: 'LOGIN_FAILED',
-                    details: `Failed login attempt for username: ${username}`,
-                    ipAddress: ip,
-                    userAgent,
-                });
-                return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
-            }
         if (user.username === 'admin') user.role = 'SUPER_ADMIN';
         
         // Support both plaintext (for existing accounts) and bcrypt (for new/updated accounts)

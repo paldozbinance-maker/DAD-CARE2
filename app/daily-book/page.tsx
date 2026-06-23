@@ -57,6 +57,7 @@ export default function DailyBookPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [latestSavedDateStr, setLatestSavedDateStr] = useState<string | null>(null);
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [visibleEntriesCount, setVisibleEntriesCount] = useState(10);
     const [processedCustomerIds, setProcessedCustomerIds] = useState<Set<string>>(new Set());
     const [loadingLedgerStatus, setLoadingLedgerStatus] = useState(false);
     const [historyLedgerStatus, setHistoryLedgerStatus] = useState<Record<string, Set<string>>>({});
@@ -284,7 +285,7 @@ export default function DailyBookPage() {
     const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
 
     const filteredEntries = searchDate
-        ? savedEntries.filter(e => e.date === format(searchDate, 'yyyy-MM-dd'))
+        ? savedEntries.filter(e => e.date && e.date.substring(0, 10) === format(searchDate, 'yyyy-MM-dd'))
         : savedEntries;
 
     const sortedEntries = [...filteredEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -440,7 +441,7 @@ export default function DailyBookPage() {
                                                             <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl">
+                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl z-[10000]">
                                                         <div className="space-y-2">
                                                             <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
                                                             <Input placeholder="Add a remark..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
@@ -549,7 +550,7 @@ export default function DailyBookPage() {
                                                             <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl">
+                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl z-[10000]">
                                                         <div className="space-y-2">
                                                             <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
                                                             <Input placeholder="Add a remark..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
@@ -824,17 +825,17 @@ export default function DailyBookPage() {
                                             {searchDate ? format(searchDate, 'MMM dd') : 'Filter Date'}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0 bg-popover border-border shadow-lg">
+                                    <PopoverContent className="w-auto p-0 z-[100] bg-popover border-border shadow-lg">
                                         <Calendar
                                             mode="single"
                                             selected={searchDate}
-                                            onSelect={setSearchDate}
+                                            onSelect={(newDate) => { setSearchDate(newDate); setVisibleEntriesCount(10); }}
                                         />
                                         <div className="p-2 border-t border-border">
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                onClick={() => setSearchDate(undefined)}
+                                                onClick={() => { setSearchDate(undefined); setVisibleEntriesCount(10); }}
                                                 className="w-full text-muted-foreground hover:text-primary"
                                             >
                                                 Clear Filter
@@ -850,13 +851,14 @@ export default function DailyBookPage() {
                             <div className="text-center py-16 bg-muted/20">
                                 <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
                                 <h3 className="text-lg font-medium text-foreground">No entries found</h3>
-                                <p className="text-muted-foreground text-sm mt-1">
+                                        <p className="text-muted-foreground text-sm mt-1">
                                     {searchDate ? 'Try selecting a different date' : 'Your saved entries will appear here'}
                                 </p>
                             </div>
                         ) : (
-                            <div className="divide-y divide-border">
-                                {sortedEntries.map((entry) => (
+                            <>
+                                <div className="divide-y divide-border">
+                                {sortedEntries.slice(0, visibleEntriesCount).map((entry) => (
                                     <div
                                         key={entry.date}
                                         className="group transition-all hover:bg-muted/30"
@@ -1008,6 +1010,18 @@ export default function DailyBookPage() {
                                     </div>
                                 ))}
                             </div>
+                            {sortedEntries.length > visibleEntriesCount && (
+                                <div className="p-4 border-t border-border flex justify-center bg-muted/5">
+                                    <Button
+                                        onClick={() => setVisibleEntriesCount(prev => prev + 10)}
+                                        variant="outline"
+                                        className="w-full max-w-xs h-10 font-black text-xs uppercase tracking-wider border-primary/20 text-primary hover:bg-primary/5 hover:border-primary/30"
+                                    >
+                                        View More (10x)
+                                    </Button>
+                                </div>
+                            )}
+                            </>
                         )}
                     </CardContent>
                 </Card>

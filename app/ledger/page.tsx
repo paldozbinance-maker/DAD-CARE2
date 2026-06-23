@@ -156,7 +156,7 @@ export default function LedgerPage() {
     const SESSION_KEY = 'dadwork_ledger_session_active';
 
     // Data state
-    const [allCustomers, setAllCustomers] = useState<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number }[]>([]);
+    const [allCustomers, setAllCustomers] = useState<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>([]);
     const [history, setHistory] = useState<Transaction[]>([]);
     const [summary, setSummary] = useState<CustomerSummary>({ totalKg: 0, totalPaid: 0, currentBalance: 0 });
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -288,15 +288,17 @@ export default function LedgerPage() {
                         const newExpandedIds = new Set<string>();
                         let newEntries;
 
-                        // If no dates, or just 1 empty row, initialize sequentially
+                        // If no dates, or just 1 empty row, initialize sequentially with all unprocessed records
                         if (prev.length === 0 || (prev.length === 1 && !prev[0].date)) {
                             if (dailyData && dailyData.length > 0) {
-                                const entryId = Date.now().toString();
-                                const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, dailyData[0], defaultPrice);
-                                if (shouldExpandExtra) {
-                                    newExpandedIds.add(entryId);
-                                }
-                                newEntries = [entry];
+                                newEntries = dailyData.map((d: any, idx: number) => {
+                                    const entryId = (Date.now() + idx).toString();
+                                    const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
+                                    if (shouldExpandExtra) {
+                                        newExpandedIds.add(entryId);
+                                    }
+                                    return entry;
+                                });
                             } else {
                                 newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
                             }
@@ -733,14 +735,14 @@ export default function LedgerPage() {
                                                 <optgroup label="⭐ PRIORITY CUSTOMERS">
                                                     {sortedCustomers.filter(c => currentUser.assigned_customer_ids.includes(c.id)).map(c => (
                                                         <option key={c.id} value={c.id}>
-                                                            ⭐ {c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')}{c.name.toUpperCase()} (ID: {c.customer_code})
+                                                            ⭐ {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}{c.name.toUpperCase()} (ID: {c.customer_code})
                                                         </option>
                                                     ))}
                                                 </optgroup>
                                                 <optgroup label="OTHER CUSTOMERS">
                                                     {sortedCustomers.filter(c => !currentUser.assigned_customer_ids.includes(c.id)).map(c => (
                                                         <option key={c.id} value={c.id}>
-                                                            {c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')}{c.name.toUpperCase()} (ID: {c.customer_code})
+                                                            {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}{c.name.toUpperCase()} (ID: {c.customer_code})
                                                         </option>
                                                     ))}
                                                 </optgroup>
@@ -748,7 +750,7 @@ export default function LedgerPage() {
                                         ) : (
                                             sortedCustomers.map(c => (
                                                 <option key={c.id} value={c.id}>
-                                                    {c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')}{c.name.toUpperCase()} (ID: {c.customer_code})
+                                                    {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}{c.name.toUpperCase()} (ID: {c.customer_code})
                                                 </option>
                                             ))
                                         )}
@@ -850,12 +852,14 @@ export default function LedgerPage() {
                                                                     const dailyData = customerDailyDates;
                                                                     
                                                                     if (dailyData && dailyData.length > 0) {
-                                                                        const entryId = Date.now().toString();
-                                                                        const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, dailyData[0], defaultPrice);
-                                                                        if (shouldExpandExtra) {
-                                                                            newExpandedIds.add(entryId);
-                                                                        }
-                                                                        newEntries = [entry];
+                                                                        newEntries = dailyData.map((d: any, idx: number) => {
+                                                                            const entryId = (Date.now() + idx).toString();
+                                                                            const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
+                                                                            if (shouldExpandExtra) {
+                                                                                newExpandedIds.add(entryId);
+                                                                            }
+                                                                            return entry;
+                                                                        });
                                                                     } else {
                                                                         newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
                                                                     }

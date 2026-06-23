@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
+import { revalidateTag } from 'next/cache';
 
 export async function POST(request: Request) {
     const { errorResponse } = await requireSession(request);
@@ -116,6 +117,12 @@ export async function POST(request: Request) {
 
         await logAudit(request, 'ADD_LEDGER_ENTRIES', `Added ${entriesToInsert.length} ledger entries for customer ${customer.name}`);
 
+        try {
+            revalidateTag('customers');
+        } catch (cacheErr) {
+            console.error('Failed to revalidate customers tag:', cacheErr);
+        }
+
         return NextResponse.json({ success: true, finalDebt: runningDebt, count: entriesToInsert.length });
     } catch (error: any) {
         console.error('Ledger Error:', error);
@@ -223,6 +230,12 @@ export async function DELETE(request: Request) {
         if (error) throw error;
 
         await logAudit(request, 'DELETE_LEDGER_ENTRIES', `Deleted ledger entry (ID: ${id || 'ALL'}, Customer: ${customerId || 'UNKNOWN'})`);
+
+        try {
+            revalidateTag('customers');
+        } catch (cacheErr) {
+            console.error('Failed to revalidate customers tag:', cacheErr);
+        }
 
         return NextResponse.json({ success: true });
     } catch (error: any) {

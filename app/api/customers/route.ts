@@ -12,6 +12,25 @@ import { unstable_cache } from 'next/cache';
 const getCachedCustomers = unstable_cache(
     async () => {
         const query = `
+            WITH past_dates AS (
+                SELECT date::date as db_date
+                FROM "DailyBook"
+                WHERE date::date < CURRENT_DATE
+                ORDER BY date::date ASC
+            ),
+            numbered_dates AS (
+                SELECT db_date,
+                       ROW_NUMBER() OVER (ORDER BY db_date ASC) as rn
+                FROM past_dates
+            ),
+            target_pair AS (
+                SELECT n1.db_date as date1, n2.db_date as date2
+                FROM numbered_dates n1
+                JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
+                WHERE n1.rn % 2 = 1
+                ORDER BY n1.db_date DESC
+                LIMIT 1
+            )
             SELECT 
                 c.*,
                 COALESCE(l.new_debt, 0)::float as current_balance,
@@ -19,7 +38,8 @@ const getCachedCustomers = unstable_cache(
                 COALESCE(p.total_paid, 0)::float as total_paid,
                 COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
                 COALESCE(dbk.total_books_count, 0) as total_books_count,
-                CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count
+                CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
+                CASE WHEN COALESCE(td.target_days_count, 0) >= 2 THEN true ELSE false END as is_target_days_done
             FROM "Customer" c
             LEFT JOIN (
                 SELECT DISTINCT ON (customer_id) 
@@ -62,6 +82,15 @@ const getCachedCustomers = unstable_cache(
                 WHERE type = 'PRODUCT'
                 GROUP BY customer_id
             ) lk ON c.id = lk.customer_id
+            LEFT JOIN (
+                SELECT 
+                    customer_id,
+                    COUNT(DISTINCT reference_date::date) as target_days_count
+                FROM "Ledger"
+                WHERE type = 'PRODUCT' 
+                AND reference_date::date IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
+                GROUP BY customer_id
+            ) td ON c.id = td.customer_id
             ORDER BY c.name ASC;
         `;
 
