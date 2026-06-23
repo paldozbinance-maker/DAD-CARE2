@@ -118,7 +118,7 @@ export async function POST(request: Request) {
         await logAudit(request, 'ADD_LEDGER_ENTRIES', `Added ${entriesToInsert.length} ledger entries for customer ${customer.name}`);
 
         try {
-            revalidateTag('customers');
+            revalidateTag('customers', 'max');
         } catch (cacheErr) {
             console.error('Failed to revalidate customers tag:', cacheErr);
         }
@@ -232,7 +232,7 @@ export async function DELETE(request: Request) {
         await logAudit(request, 'DELETE_LEDGER_ENTRIES', `Deleted ledger entry (ID: ${id || 'ALL'}, Customer: ${customerId || 'UNKNOWN'})`);
 
         try {
-            revalidateTag('customers');
+            revalidateTag('customers', 'max');
         } catch (cacheErr) {
             console.error('Failed to revalidate customers tag:', cacheErr);
         }
