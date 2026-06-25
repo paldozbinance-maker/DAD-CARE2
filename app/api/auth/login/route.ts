@@ -87,7 +87,7 @@ export async function POST(request: Request) {
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
-            maxAge: 12 * 60 * 60, // 12 hours – matches SESSION_TTL_HOURS
+            maxAge: 30 * 24 * 60 * 60, // 30 days – matches SESSION_TTL_HOURS
         });
         return response;
     } catch (error: any) {

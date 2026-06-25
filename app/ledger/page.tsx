@@ -26,6 +26,7 @@ interface PaymentEntry {
     id: string;
     date: string;
     amount: string;
+    note?: string;
 }
 
 interface Transaction {
@@ -171,6 +172,7 @@ export default function LedgerPage() {
     const [adjustmentAmount, setAdjustmentAmount] = useState('');
     const [adjustmentNote, setAdjustmentNote] = useState('');
     const [expandedExtraEntryIds, setExpandedExtraEntryIds] = useState<Set<string>>(new Set());
+    const [expandedPaymentIds, setExpandedPaymentIds] = useState<Set<string>>(new Set());
     const [startDate, setStartDate] = useState<string>('');
     const [allUnprocessedDates, setAllUnprocessedDates] = useState<string[]>([]);
 
@@ -619,7 +621,8 @@ export default function LedgerPage() {
             items.push({
                 type: 'PAYMENT',
                 date: pay.date,
-                amount: pay.amount
+                amount: pay.amount,
+                note: pay.note || "Lacagta"
             });
         }
 
@@ -844,10 +847,11 @@ export default function LedgerPage() {
                                                                     setPaymentEntries(paymentTxns.map(t => ({
                                                                         id: Date.now().toString() + Math.random(),
                                                                         date: t.reference_date || format(new Date(), 'yyyy-MM-dd'),
-                                                                        amount: t.amount?.toString() || ''
+                                                                        amount: t.amount?.toString() || '',
+                                                                        note: t.note || ''
                                                                     })));
                                                                 } else {
-                                                                    setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
+                                                                    setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '', note: '' }]);
                                                                 }
 
                                                                 if (adjustmentTxn) {
@@ -988,7 +992,7 @@ export default function LedgerPage() {
                                                         <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
                                                         {lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').map(e => (
                                                             <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
-                                                                <span>{format(new Date(e.reference_date), 'MMM dd')} Payment</span>
+                                                                <span>{format(new Date(e.reference_date), 'MMM dd')} {e.note && e.note !== 'Lacagta' ? e.note : 'Payment'}</span>
                                                                 <span>-${Math.round(e.amount).toLocaleString()}</span>
                                                             </div>
                                                         ))}
@@ -1033,23 +1037,7 @@ export default function LedgerPage() {
                                                         </Button>
                                                     )}
                                                 </div>
-                                                {allUnprocessedDates.length > 0 && !updateLastMaqal && (
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Start Date Pair:</Label>
-                                                        <select
-                                                            value={startDate}
-                                                            onChange={(e) => setStartDate(e.target.value)}
-                                                            className="h-7 text-xs font-bold rounded-md border border-border/60 bg-muted/20 px-2 cursor-pointer focus:ring-1 focus:ring-primary"
-                                                        >
-                                                            <option value="">Auto (Oldest First)</option>
-                                                            {allUnprocessedDates.map(dateStr => (
-                                                                <option key={dateStr} value={dateStr}>
-                                                                    {format(parseISO(dateStr), "MMM dd, yyyy")}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                )}
+
                                             </div>
 
                                             <div className="space-y-4">
@@ -1249,7 +1237,7 @@ export default function LedgerPage() {
                                                 <Label className="text-sm font-black uppercase tracking-wider text-foreground">2. Lacagaha <span className="text-muted-foreground text-xs font-normal capitalize ml-2">(Payments Received)</span></Label>
                                                 <Button
                                                     type="button"
-                                                    onClick={() => setPaymentEntries([...paymentEntries, { id: Date.now().toString() + Math.random(), date: '', amount: '' }])}
+                                                    onClick={() => setPaymentEntries([...paymentEntries, { id: Date.now().toString() + Math.random(), date: '', amount: '', note: '' }])}
                                                     variant="secondary"
                                                     size="sm"
                                                     className="rounded-lg font-bold text-xs"
@@ -1287,6 +1275,60 @@ export default function LedgerPage() {
                                                                 </div>
                                                             </div>
                                                         </div>
+
+                                                        {/* Expandable Note / Name Input */}
+                                                        <div className="mt-3 flex items-center gap-2">
+                                                            <Button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setExpandedPaymentIds(prev => {
+                                                                        const next = new Set(prev);
+                                                                        if (next.has(pay.id)) next.delete(pay.id);
+                                                                        else next.add(pay.id);
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className={cn(
+                                                                    "h-8 text-[10px] font-bold rounded-lg border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/15 flex items-center gap-1 text-emerald-700 dark:text-emerald-500",
+                                                                    expandedPaymentIds.has(pay.id) && "border-emerald-500/40 bg-emerald-500/10"
+                                                                )}
+                                                            >
+                                                                {expandedPaymentIds.has(pay.id) ? (
+                                                                    <>
+                                                                        <ChevronUp className="w-3.5 h-3.5" />
+                                                                        Hide Name
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <ChevronDown className="w-3.5 h-3.5" />
+                                                                        Add Name (Cafis, Heyn)
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                            {pay.note && !expandedPaymentIds.has(pay.id) && (
+                                                                <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
+                                                                    {pay.note}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {expandedPaymentIds.has(pay.id) && (
+                                                            <div className="mt-2 bg-muted/30 p-3 rounded-xl border border-emerald-500/20 animate-in slide-in-from-top-1 duration-150">
+                                                                <Label className="text-[10px] uppercase font-black text-emerald-700/70 tracking-wider ml-1">Name / Note</Label>
+                                                                <div className="relative group/input">
+                                                                    <Info className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500/70 group-focus-within/input:text-emerald-500 transition-colors" />
+                                                                    <Input
+                                                                        type="text"
+                                                                        value={pay.note || ''}
+                                                                        onChange={e => setPaymentEntries(entries => entries.map(entry => entry.id === pay.id ? { ...entry, note: e.target.value } : entry))}
+                                                                        className="h-11 mt-1 pl-10 text-sm font-bold bg-background border-emerald-500/30 rounded-xl focus:border-emerald-500 shadow-none text-foreground"
+                                                                        placeholder="e.g. Cafis, Heyn, or Notebook..."
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         {paymentEntries.length > 1 && (
                                                             <button
                                                                 type="button"
@@ -1382,7 +1424,7 @@ export default function LedgerPage() {
                                                         <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-600/60 pt-1.5">Lacagaha</p>
                                                         {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
                                                             <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
-                                                                <span>{format(new Date(pay.date), 'MMM dd yyyy')} Lacagta</span>
+                                                                <span>{format(new Date(pay.date), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
                                                                 <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
                                                             </div>
                                                         ))}

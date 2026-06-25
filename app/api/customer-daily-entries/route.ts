@@ -73,11 +73,11 @@ export async function GET(request: Request) {
         }
 
         // 6. Apply the PAIR RULE: only release complete pairs.
-        //    Iterate in steps of 2; a lone final date is withheld.
+        //    We strictly return a maximum of 2 dates (1 pair) to force sequential processing.
         const result: typeof pastUnprocessed = [];
-        for (let i = 0; i + 1 < pastUnprocessed.length; i += 2) {
-            result.push(pastUnprocessed[i]);
-            result.push(pastUnprocessed[i + 1]);
+        if (pastUnprocessed.length >= 2) {
+            result.push(pastUnprocessed[0]);
+            result.push(pastUnprocessed[1]);
         }
 
         // 7. Also return allUnprocessedDates so the frontend can build a date picker

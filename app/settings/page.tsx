@@ -299,11 +299,11 @@ export default function SettingsPage() {
                     }
                 }, 30_000);
 
-                // ── Auto-refresh "Who's Online" and "Audit Logs" every 2.5s (fallback) ──
+                // ── Auto-refresh "Who's Online" and "Audit Logs" every 30s (fallback) ──
                 const refresh = setInterval(() => {
                     loadOnlineSessions();
                     loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true);
-                }, 2500);
+                }, 30000);
 
                 // ── Supabase Realtime for INSTANT updates ──
                 const supabase = createClient();
@@ -592,8 +592,8 @@ export default function SettingsPage() {
             toast.error("Incorrect phone number.");
             return;
         }
-        if (birthYearVal.trim() !== '2004') {
-            toast.error("Incorrect birth year.");
+        if (birthYearVal.trim() !== '2919') {
+            toast.error("Incorrect PIN.");
             return;
         }
         setClearHistoryStep(2);
@@ -934,6 +934,20 @@ export default function SettingsPage() {
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                            <div className="flex justify-center mt-6">
+                                <button
+                                    onClick={() => {
+                                        setMotherNameVal('');
+                                        setPhoneVal('');
+                                        setBirthYearVal('');
+                                        setClearHistoryStep(1);
+                                        setIsClearHistoryOpen(true);
+                                    }}
+                                    className="text-[9px] tracking-wide uppercase text-muted-foreground/35 hover:text-red-500 hover:bg-red-500/5 px-2.5 py-1 rounded-md transition-all font-bold border border-transparent hover:border-red-500/10 active:scale-95 duration-200 cursor-pointer animate-fade-in"
+                                >
+                                    Clear All History Customer
+                                </button>
                             </div>
                         </TabsContent>
                     )}
@@ -1495,23 +1509,6 @@ export default function SettingsPage() {
                 </Tabs>
             </div>
 
-            {isSuperAdmin && (
-                <div className="flex justify-center mt-6">
-                    <button
-                        onClick={() => {
-                            setMotherNameVal('');
-                            setPhoneVal('');
-                            setBirthYearVal('');
-                            setClearHistoryStep(1);
-                            setIsClearHistoryOpen(true);
-                        }}
-                        className="text-[9px] tracking-wide uppercase text-muted-foreground/35 hover:text-red-500 hover:bg-red-500/5 px-2.5 py-1 rounded-md transition-all font-bold border border-transparent hover:border-red-500/10 active:scale-95 duration-200 cursor-pointer animate-fade-in"
-                    >
-                        Clear All History Customer
-                    </button>
-                </div>
-            )}
-
             {/* ── Clear Ledger History Dialog ── */}
             <Dialog open={isClearHistoryOpen} onOpenChange={setIsClearHistoryOpen}>
                 <DialogContent className="bg-card border-border/50 max-w-[95vw] sm:max-w-md rounded-2xl p-0 overflow-hidden shadow-2xl">
@@ -1558,11 +1555,11 @@ export default function SettingsPage() {
 
                                 <div className="space-y-1">
                                     <Label className="text-[11px] font-bold text-foreground">
-                                        3. Which year were you born?
+                                        3. Enter 4-digit PIN
                                     </Label>
                                     <Input
-                                        type="text"
-                                        placeholder="YYYY"
+                                        type="password"
+                                        placeholder="****"
                                         value={birthYearVal}
                                         onChange={(e) => setBirthYearVal(e.target.value)}
                                         className="bg-background/50 border-border/50 rounded-xl h-10 text-xs animate-none"

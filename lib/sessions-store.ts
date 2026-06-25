@@ -24,7 +24,7 @@ export interface SessionData {
     userAgent?: string;
 }
 
-const SESSION_TTL_HOURS = 12;
+const SESSION_TTL_HOURS = 30 * 24; // 30 days
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
 // ─── Table bootstrap ────────────────────────────────────────────────────────

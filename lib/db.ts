@@ -18,9 +18,9 @@ if (!globalThis.pool) {
     globalThis.pool = new Pool({
         connectionString,
         ssl: { rejectUnauthorized: false }, // Required for Supabase in some envs
-        max: 2, // Limit max connections per serverless instance to prevent exhaustion
+        max: 20, // Limit max connections per serverless instance to prevent exhaustion
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 10000,
     });
 }
 pool = globalThis.pool;
