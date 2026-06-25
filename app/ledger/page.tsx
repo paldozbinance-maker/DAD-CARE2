@@ -171,6 +171,8 @@ export default function LedgerPage() {
     const [adjustmentAmount, setAdjustmentAmount] = useState('');
     const [adjustmentNote, setAdjustmentNote] = useState('');
     const [expandedExtraEntryIds, setExpandedExtraEntryIds] = useState<Set<string>>(new Set());
+    const [startDate, setStartDate] = useState<string>('');
+    const [allUnprocessedDates, setAllUnprocessedDates] = useState<string[]>([]);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -280,8 +282,21 @@ export default function LedgerPage() {
                 setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
 
                 // Fetch daily book records for this customer
-                const dailyRes = await fetch(`/api/customer-daily-entries?customerId=${selectedCustomerId}`);
+                const url = new URL(`/api/customer-daily-entries`, window.location.origin);
+                url.searchParams.set('customerId', selectedCustomerId);
+                if (startDate) {
+                    url.searchParams.set('startDate', startDate);
+                }
+                const dailyRes = await fetch(url.toString());
                 if (dailyRes.ok) {
+                    const allDatesHeader = dailyRes.headers.get('x-all-unprocessed-dates');
+                    if (allDatesHeader) {
+                        try {
+                            setAllUnprocessedDates(JSON.parse(allDatesHeader));
+                        } catch (e) {
+                            console.error('Failed to parse all unprocessed dates header', e);
+                        }
+                    }
                     const dailyData = await dailyRes.json();
                     setCustomerDailyDates(dailyData || []);
                     setDateEntries(prev => {
@@ -337,7 +352,7 @@ export default function LedgerPage() {
         };
 
         fetchCustomerDetails();
-    }, [selectedCustomerId, defaultPrice]);
+    }, [selectedCustomerId, defaultPrice, startDate]);
 
     const handleCustomerChange = (customerId: string) => {
         setSelectedCustomerId(customerId);
@@ -348,6 +363,8 @@ export default function LedgerPage() {
         setShowLastMaqal(false);
         setUpdateLastMaqal(false);
         setExpandedExtraEntryIds(new Set());
+        setStartDate('');
+        setAllUnprocessedDates([]);
     };
 
     const sortedCustomers = useMemo(() => {
@@ -998,19 +1015,40 @@ export default function LedgerPage() {
                                     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                                         <div id="maqal-form-section" className="space-y-4">
-                                            <div className="flex items-center justify-between border-b border-border pb-2">
-                                                <Label className="text-sm font-black uppercase tracking-wider text-foreground">1. Maqalka <span className="text-muted-foreground text-xs font-normal capitalize ml-2">(Add Kilos)</span></Label>
-                                                {dateEntries.length < 2 && (
-                                                    <Button
-                                                        type="button"
-                                                        onClick={addDateEntry}
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        className="rounded-lg font-bold text-xs"
-                                                        disabled={fetchingDetails}
-                                                    >
-                                                        <Plus className="w-4 h-4 mr-1" /> Add Row
-                                                    </Button>
+                                            <div className="flex flex-col gap-2 border-b border-border pb-2">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-sm font-black uppercase tracking-wider text-foreground">
+                                                        1. Maqalka <span className="text-muted-foreground text-xs font-normal capitalize ml-2">(Add Kilos)</span>
+                                                    </Label>
+                                                    {dateEntries.length < 2 && (
+                                                        <Button
+                                                            type="button"
+                                                            onClick={addDateEntry}
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            className="rounded-lg font-bold text-xs"
+                                                            disabled={fetchingDetails}
+                                                        >
+                                                            <Plus className="w-4 h-4 mr-1" /> Add Row
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                {allUnprocessedDates.length > 0 && !updateLastMaqal && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Start Date Pair:</Label>
+                                                        <select
+                                                            value={startDate}
+                                                            onChange={(e) => setStartDate(e.target.value)}
+                                                            className="h-7 text-xs font-bold rounded-md border border-border/60 bg-muted/20 px-2 cursor-pointer focus:ring-1 focus:ring-primary"
+                                                        >
+                                                            <option value="">Auto (Oldest First)</option>
+                                                            {allUnprocessedDates.map(dateStr => (
+                                                                <option key={dateStr} value={dateStr}>
+                                                                    {format(parseISO(dateStr), "MMM dd, yyyy")}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
                                                 )}
                                             </div>
 

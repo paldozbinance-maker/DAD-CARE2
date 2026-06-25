@@ -127,6 +127,14 @@ export default function SettingsPage() {
         window.history.replaceState({}, '', url.toString());
     };
 
+    // Clear Ledger History Dialog and state
+    const [isClearHistoryOpen, setIsClearHistoryOpen] = useState(false);
+    const [clearHistoryStep, setClearHistoryStep] = useState(1); // 1 = questions, 2 = warning/confirm
+    const [motherNameVal, setMotherNameVal] = useState('');
+    const [phoneVal, setPhoneVal] = useState('');
+    const [birthYearVal, setBirthYearVal] = useState('');
+    const [isClearingHistory, setIsClearingHistory] = useState(false);
+
     // Admin Detail Dialog state
     const [adminDetailOpen, setAdminDetailOpen] = useState(false);
     const [adminDetailUser, setAdminDetailUser] = useState<any>(null);
@@ -572,6 +580,45 @@ export default function SettingsPage() {
             }
         } catch (e) {
             toast.error('Connection error occurred');
+        }
+    };
+
+    const handleVerifyConditions = () => {
+        if (motherNameVal.trim().toLowerCase() !== 'nasteexo') {
+            toast.error("Incorrect answer for Mother's Name.");
+            return;
+        }
+        if (phoneVal.trim() !== '0618372575') {
+            toast.error("Incorrect phone number.");
+            return;
+        }
+        if (birthYearVal.trim() !== '2004') {
+            toast.error("Incorrect birth year.");
+            return;
+        }
+        setClearHistoryStep(2);
+    };
+
+    const handleClearLedgerHistory = async () => {
+        setIsClearingHistory(true);
+        try {
+            const token = localStorage.getItem('dadwork_session_token') || '';
+            const res = await fetch('/api/ledger/clear-all', {
+                method: 'DELETE',
+                headers: { 'x-session-token': token }
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                toast.success(`Successfully cleared all customer ledger history (${data.deletedCount} entries deleted)`);
+                setIsClearHistoryOpen(false);
+                loadCustomers();
+            } else {
+                toast.error(data.error || 'Failed to clear history');
+            }
+        } catch (e) {
+            toast.error('Network error occurred while clearing history');
+        } finally {
+            setIsClearingHistory(false);
         }
     };
 
@@ -1447,6 +1494,145 @@ export default function SettingsPage() {
                     )}
                 </Tabs>
             </div>
+
+            {isSuperAdmin && (
+                <div className="flex justify-center mt-6">
+                    <button
+                        onClick={() => {
+                            setMotherNameVal('');
+                            setPhoneVal('');
+                            setBirthYearVal('');
+                            setClearHistoryStep(1);
+                            setIsClearHistoryOpen(true);
+                        }}
+                        className="text-[9px] tracking-wide uppercase text-muted-foreground/35 hover:text-red-500 hover:bg-red-500/5 px-2.5 py-1 rounded-md transition-all font-bold border border-transparent hover:border-red-500/10 active:scale-95 duration-200 cursor-pointer animate-fade-in"
+                    >
+                        Clear All History Customer
+                    </button>
+                </div>
+            )}
+
+            {/* ── Clear Ledger History Dialog ── */}
+            <Dialog open={isClearHistoryOpen} onOpenChange={setIsClearHistoryOpen}>
+                <DialogContent className="bg-card border-border/50 max-w-[95vw] sm:max-w-md rounded-2xl p-0 overflow-hidden shadow-2xl">
+                    <div className="bg-card/95 backdrop-blur-xl border-b border-border/40 px-4 py-3">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2 text-foreground text-sm font-black">
+                                <Shield className="w-4 h-4 text-destructive animate-pulse" />
+                                Clear Customer Ledger History
+                            </DialogTitle>
+                            <DialogDescription className="text-muted-foreground text-[10px]">
+                                Security verification is required to clear all customer ledger history.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+
+                    <div className="p-4 space-y-4">
+                        {clearHistoryStep === 1 ? (
+                            <div className="space-y-3.5">
+                                <div className="space-y-1">
+                                    <Label className="text-[11px] font-bold text-foreground">
+                                        1. What is your mother's name?
+                                    </Label>
+                                    <Input
+                                        type="text"
+                                        placeholder="Enter mother's name"
+                                        value={motherNameVal}
+                                        onChange={(e) => setMotherNameVal(e.target.value)}
+                                        className="bg-background/50 border-border/50 rounded-xl h-10 text-xs animate-none"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[11px] font-bold text-foreground">
+                                        2. Fill in the blank: what is the full phone number matching 06******75?
+                                    </Label>
+                                    <Input
+                                        type="text"
+                                        placeholder="06xxxxxxxx"
+                                        value={phoneVal}
+                                        onChange={(e) => setPhoneVal(e.target.value)}
+                                        className="bg-background/50 border-border/50 rounded-xl h-10 text-xs font-mono animate-none"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[11px] font-bold text-foreground">
+                                        3. Which year were you born?
+                                    </Label>
+                                    <Input
+                                        type="text"
+                                        placeholder="YYYY"
+                                        value={birthYearVal}
+                                        onChange={(e) => setBirthYearVal(e.target.value)}
+                                        className="bg-background/50 border-border/50 rounded-xl h-10 text-xs animate-none"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 pt-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setIsClearHistoryOpen(false)}
+                                        className="border-border/50 rounded-xl font-bold h-10 text-xs active:scale-95 transition-all"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={handleVerifyConditions}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold rounded-xl h-10 text-xs active:scale-95 transition-all"
+                                    >
+                                        Verify
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3.5">
+                                <div className="bg-red-500/10 border border-red-500/25 rounded-2xl p-4 flex flex-col items-center text-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center animate-pulse animate-duration-1000">
+                                        <AlertTriangle className="w-5 h-5 text-red-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black text-red-500 uppercase tracking-wider">
+                                            ⚠️ VERY IMPORTANT & HIGH RISK ⚠️
+                                        </p>
+                                        <p className="text-[11px] text-foreground font-semibold mt-2 leading-relaxed">
+                                            This is a high-risk operation! Deleting all customer ledger history (maqalka ledger) is PERMANENT and CANNOT be undone.
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground mt-1 leading-normal">
+                                            All customer ledger balances will be reset to $0. Note that Daily Book records (buuga maalinlaha) and customer profiles themselves are safe and will not be affected.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 pt-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setClearHistoryStep(1)}
+                                        className="border-border/50 rounded-xl font-bold h-10 text-xs active:scale-95 transition-all"
+                                        disabled={isClearingHistory}
+                                    >
+                                        Back
+                                    </Button>
+                                    <Button
+                                        onClick={handleClearLedgerHistory}
+                                        className="bg-red-600 text-white hover:bg-red-700 font-bold rounded-xl h-10 text-xs flex items-center justify-center shadow-lg shadow-red-600/15 active:scale-95 transition-all"
+                                        disabled={isClearingHistory}
+                                    >
+                                        {isClearingHistory ? (
+                                            <>
+                                                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                Clearing...
+                                            </>
+                                        ) : (
+                                            "Yes, Clear All History"
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* ── Create/Edit User Dialog ── */}
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>

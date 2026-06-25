@@ -10,12 +10,17 @@ import { requireSession } from '@/lib/require-session';
 // are strictly in the past (< today).  A lone trailing date (odd count) is
 // withheld until its twin appears tomorrow.
 // Today's date is NEVER included, even if saved in the daily book.
+//
+// ── OPTIONAL: startDate ────────────────────────────────────────────────────
+// If ?startDate=YYYY-MM-DD is provided, only dates >= startDate are returned.
+// The pair rule still applies on the filtered subset.
 // ──────────────────────────────────────────────────────────────────────────
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
+    const startDate = searchParams.get('startDate'); // Optional: YYYY-MM-DD
 
     if (!customerId) {
         return NextResponse.json({ error: 'Customer ID required' }, { status: 400 });
@@ -52,7 +57,7 @@ export async function GET(request: Request) {
         const todayStr = new Date().toISOString().split('T')[0];
 
         // 4. Build the list of unprocessed past entries, sorted oldest-first
-        const pastUnprocessed = (items || [])
+        let pastUnprocessed = (items || [])
             .map((item: any) => ({
                 date: item.daily_book?.date as string,
                 kg: item.kg as number,
@@ -62,7 +67,12 @@ export async function GET(request: Request) {
             .filter((item) => item.date && item.date < todayStr && !processedDates.has(item.date))
             .sort((a, b) => a.date.localeCompare(b.date));
 
-        // 5. Apply the PAIR RULE: only release complete pairs.
+        // 5. If startDate is specified, filter to only dates >= startDate
+        if (startDate) {
+            pastUnprocessed = pastUnprocessed.filter((item) => item.date >= startDate);
+        }
+
+        // 6. Apply the PAIR RULE: only release complete pairs.
         //    Iterate in steps of 2; a lone final date is withheld.
         const result: typeof pastUnprocessed = [];
         for (let i = 0; i + 1 < pastUnprocessed.length; i += 2) {
@@ -70,9 +80,17 @@ export async function GET(request: Request) {
             result.push(pastUnprocessed[i + 1]);
         }
 
-        return NextResponse.json(result);
+        // 7. Also return allUnprocessedDates so the frontend can build a date picker
+        const allUnprocessedDates = pastUnprocessed.map(d => d.date);
+
+        return NextResponse.json(result, {
+            headers: {
+                'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates),
+            }
+        });
     } catch (error: any) {
         console.error('Fetch Customer Daily Entries Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
