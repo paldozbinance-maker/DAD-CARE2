@@ -476,6 +476,55 @@ export default function LedgerPage() {
         };
     }, [history]);
 
+    const timelineOptions = useMemo(() => {
+        const options: string[] = [];
+
+        // 1. Processed dates from history
+        if (history && history.length > 0) {
+            const productDates = history
+                .filter(t => t.type === 'PRODUCT' && t.reference_date)
+                .map(t => t.reference_date)
+                .sort();
+            
+            // Get up to last 4 processed dates (2 pairs)
+            const recentDates = Array.from(new Set(productDates)).slice(-4);
+            for (let i = 0; i < recentDates.length; i += 2) {
+                const d1 = recentDates[i];
+                const d2 = recentDates[i+1];
+                if (d1 && d2) {
+                    options.push(`✅ ${format(parseISO(d1), "MMM dd")} & ${format(parseISO(d2), "MMM dd")} (Done)`);
+                } else if (d1) {
+                    options.push(`✅ ${format(parseISO(d1), "MMM dd")} (Done)`);
+                }
+            }
+        }
+
+        // 2. Unprocessed dates
+        if (allUnprocessedDates && allUnprocessedDates.length > 0) {
+            for (let i = 0; i < allUnprocessedDates.length; i += 2) {
+                const d1 = allUnprocessedDates[i];
+                const d2 = allUnprocessedDates[i+1];
+                const isCurrent = i === 0;
+                const prefix = isCurrent ? '⏳' : '❌';
+                const suffix = isCurrent ? '(Current)' : '(Pending)';
+                
+                if (d1 && d2) {
+                    options.push(`${prefix} ${format(parseISO(d1), "MMM dd")} & ${format(parseISO(d2), "MMM dd")} ${suffix}`);
+                } else if (d1) {
+                    options.push(`${prefix} ${format(parseISO(d1), "MMM dd")} ${suffix}`);
+                }
+            }
+        } else {
+            if (options.length > 0) {
+                options.push(`🎉 All Caught Up!`);
+            } else {
+                options.push(`No data available`);
+            }
+        }
+
+        return options;
+    }, [history, allUnprocessedDates]);
+
     const addDateEntry = () => {
         const nextIndex = dateEntries.length;
         // Maximum 6 date rows at a time
@@ -564,7 +613,10 @@ export default function LedgerPage() {
             return;
         }
 
-        const validEntries = dateEntries.filter(e => 
+        // When reading last maqal (no editing), only payments are allowed
+        const isReadOnlyMode = showLastMaqal && !updateLastMaqal;
+
+        const validEntries = isReadOnlyMode ? [] : dateEntries.filter(e => 
             e.date && (
                 (parseFloat(e.kg) >= 0 && parseFloat(e.pricePerKg) > 0) || 
                 (parseFloat(e.extraKg || '0') > 0 && parseFloat(e.extraPricePerKg || '0') > 0)
@@ -572,8 +624,10 @@ export default function LedgerPage() {
         );
         const validPayments = paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0);
 
-        if (validEntries.length === 0 && validPayments.length === 0 && !(summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) {
-            toast.error('No valid data to save');
+        const hasAdjustment = !isReadOnlyMode && summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0;
+
+        if (validEntries.length === 0 && validPayments.length === 0 && !hasAdjustment) {
+            toast.error(isReadOnlyMode ? 'Add a payment amount first' : 'No valid data to save');
             return;
         }
 
@@ -585,8 +639,8 @@ export default function LedgerPage() {
         // 1. Gather all items for the batch
         const items = [];
 
-        // Initial setup if first time
-        if (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0) {
+        // Initial setup if first time (only in normal mode)
+        if (hasAdjustment) {
             items.push({
                 type: 'ADJUSTMENT',
                 date: format(new Date(), 'yyyy-MM-dd'),
@@ -595,24 +649,26 @@ export default function LedgerPage() {
             });
         }
 
-        // Product entries
-        for (const entry of validEntries) {
-            if (parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0) {
-                items.push({
-                    type: 'PRODUCT',
-                    date: entry.date,
-                    kg: entry.kg,
-                    price: entry.pricePerKg
-                });
-            }
-            if (entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0) {
-                items.push({
-                    type: 'PRODUCT',
-                    date: entry.date,
-                    kg: entry.extraKg,
-                    price: entry.extraPricePerKg,
-                    note: entry.extraNote || "Notebook"
-                });
+        // Product entries (skipped in read-only mode)
+        if (!isReadOnlyMode) {
+            for (const entry of validEntries) {
+                if (parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0) {
+                    items.push({
+                        type: 'PRODUCT',
+                        date: entry.date,
+                        kg: entry.kg,
+                        price: entry.pricePerKg
+                    });
+                }
+                if (entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0) {
+                    items.push({
+                        type: 'PRODUCT',
+                        date: entry.date,
+                        kg: entry.extraKg,
+                        price: entry.extraPricePerKg,
+                        note: entry.extraNote || "Notebook"
+                    });
+                }
             }
         }
 
@@ -779,245 +835,11 @@ export default function LedgerPage() {
                                         {fetchingDetails ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <ArrowRight className="w-4 h-4 text-muted-foreground" />}
                                     </div>
                                 </div>
-
-                                {showLastMaqal && lastReceiptGroup && (
-                                    <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
-                                        {/* Receipt Header Actions */}
-                                        <div className="flex items-center justify-between px-1">
-                                            <div className="flex items-center gap-2">
-                                                {updateLastMaqal ? (
-                                                    <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-amber-500/20 flex items-center gap-1">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                                        Updating Last Maqal
-                                                    </span>
-                                                ) : (
-                                                    <span className="bg-primary/10 text-primary text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-primary/20">
-                                                        🆕 New Maqal
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <div className="flex gap-1.5">
-                                                {lastReceiptGroup.receiptId && (
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            const nextUpdate = !updateLastMaqal;
-                                                            setUpdateLastMaqal(nextUpdate);
-                                                            
-                                                            if (nextUpdate && lastReceiptGroup) {
-                                                                // POPULATE FORM WITH lastReceiptGroup DATA
-                                                                const productEntries = lastReceiptGroup.entries.filter(t => t.type === 'PRODUCT');
-                                                                const paymentTxns = lastReceiptGroup.entries.filter(t => t.type === 'PAYMENT');
-                                                                const adjustmentTxn = lastReceiptGroup.entries.find(t => t.type === 'ADJUSTMENT');
-
-                                                                const dateMap = new Map<string, DateEntry>();
-                                                                const newExpandedIds = new Set<string>();
-
-                                                                productEntries.forEach(t => {
-                                                                    const dateKey = t.reference_date || '';
-                                                                    let existing = dateMap.get(dateKey);
-                                                                    if (!existing) {
-                                                                        existing = { id: Date.now().toString() + Math.random(), date: dateKey, kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' };
-                                                                        dateMap.set(dateKey, existing);
-                                                                    }
-                                                                    if (t.note) {
-                                                                        existing.extraKg = t.kg?.toString() || '';
-                                                                        existing.extraPricePerKg = t.price_per_kg?.toString() || '';
-                                                                        existing.extraNote = t.note || 'Notebook';
-                                                                        newExpandedIds.add(existing.id);
-                                                                    } else {
-                                                                        existing.kg = t.kg?.toString() || '';
-                                                                        existing.pricePerKg = t.price_per_kg?.toString() || defaultPrice;
-                                                                    }
-                                                                });
-
-                                                                const newDateEntries = Array.from(dateMap.values());
-                                                                if (newDateEntries.length > 0) {
-                                                                    setDateEntries(newDateEntries);
-                                                                } else {
-                                                                    setDateEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
-                                                                }
-
-                                                                setExpandedExtraEntryIds(newExpandedIds);
-
-                                                                if (paymentTxns.length > 0) {
-                                                                    setPaymentEntries(paymentTxns.map(t => ({
-                                                                        id: Date.now().toString() + Math.random(),
-                                                                        date: t.reference_date || format(new Date(), 'yyyy-MM-dd'),
-                                                                        amount: t.amount?.toString() || '',
-                                                                        note: t.note || ''
-                                                                    })));
-                                                                } else {
-                                                                    setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '', note: '' }]);
-                                                                }
-
-                                                                if (adjustmentTxn) {
-                                                                    setAdjustmentAmount(adjustmentTxn.amount?.toString() || '');
-                                                                } else {
-                                                                    setAdjustmentAmount('');
-                                                                }
-
-                                                                // Notify + scroll to the form
-                                                                toast.success(`Loaded ${productEntries.length} entries — edit below ⬇️`);
-                                                                setTimeout(() => {
-                                                                    document.getElementById('maqal-form-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                                                }, 100);
-                                                            } else {
-                                                                // REVERT TO UNPROCESSED STATE
-                                                                setDateEntries(prev => {
-                                                                    const newExpandedIds = new Set<string>();
-                                                                    let newEntries;
-                                                                    const dailyData = customerDailyDates;
-                                                                    
-                                                                    if (dailyData && dailyData.length > 0) {
-                                                                        newEntries = dailyData.map((d: any, idx: number) => {
-                                                                            const entryId = (Date.now() + idx).toString();
-                                                                            const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
-                                                                            if (shouldExpandExtra) {
-                                                                                newExpandedIds.add(entryId);
-                                                                            }
-                                                                            return entry;
-                                                                        });
-                                                                    } else {
-                                                                        newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
-                                                                    }
-                                                                    
-                                                                    if (newExpandedIds.size > 0) {
-                                                                        setTimeout(() => setExpandedExtraEntryIds(newExpandedIds), 0);
-                                                                    } else {
-                                                                        setTimeout(() => setExpandedExtraEntryIds(new Set()), 0);
-                                                                    }
-                                                                    
-                                                                    return newEntries;
-                                                                });
-                                                                setPaymentEntries([{ id: Date.now().toString(), date: format(new Date(), 'yyyy-MM-dd'), amount: '' }]);
-                                                                setAdjustmentAmount('');
-                                                            }
-                                                        }}
-                                                        className={cn(
-                                                            "h-7 text-[9px] px-2.5 rounded font-black uppercase tracking-wider",
-                                                            updateLastMaqal ? "border-primary text-primary hover:bg-primary/5" : "border-border text-muted-foreground hover:bg-muted"
-                                                        )}
-                                                    >
-                                                        {updateLastMaqal ? "Start New Maqal" : "Edit Last Maqal"}
-                                                    </Button>
-                                                )}
-
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={async () => {
-                                                        setFetchingDetails(true);
-                                                        try {
-                                                            const ledgerRes = await fetch(`/api/ledger?customerId=${selectedCustomerId}&limit=200&t=${Date.now()}`);
-                                                            const ledgerData = await ledgerRes.json();
-                                                            setHistory(ledgerData.transactions || []);
-                                                            setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
-                                                            toast.success('Refreshed last maqal!');
-                                                        } catch (e) {
-                                                            toast.error('Failed to refresh data');
-                                                        } finally {
-                                                            setFetchingDetails(false);
-                                                        }
-                                                    }}
-                                                    className="h-7 text-[9px] px-2 rounded font-bold border border-border/40 text-muted-foreground hover:bg-muted"
-                                                >
-                                                    <RefreshCw className="w-3 h-3 mr-1" /> Refresh
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        {/* Notebook Receipt Style Box */}
-                                        <div className="relative overflow-hidden bg-[#fdfbf7] dark:bg-[#1e1c18] font-mono text-[11px] pb-4 rounded-xl border border-border/60 shadow-md">
-                                            {/* Vertical Notebook Lines (Margin) */}
-                                            <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
-                                            <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
-
-                                            <div className="relative z-10 pl-12 pr-4 pt-3 space-y-0 text-slate-800 dark:text-slate-300">
-                                                <p className="text-[9px] font-bold text-muted-foreground text-center mb-2 uppercase tracking-wider">
-                                                    {lastReceiptGroup.titleString}
-                                                </p>
-
-                                                {/* 1. Maqalka entries (products) */}
-                                                {lastReceiptGroup.entries.filter(e => e.type === 'PRODUCT').map(e => (
-                                                    <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium">
-                                                        <span>
-                                                            {e.note ? '↳ ' : ''}
-                                                            {format(new Date(e.reference_date), 'MMM dd')} · {Math.round(e.kg || 0)}KG @ ${e.price_per_kg}
-                                                            {e.note ? ` (${e.note})` : ''}
-                                                        </span>
-                                                        <span className="font-bold">${Math.round(e.amount).toLocaleString()}</span>
-                                                    </div>
-                                                ))}
-
-                                                {/* 2. Maqalka Total */}
-                                                {lastReceiptGroup.entries.some(e => e.type === 'PRODUCT') && (
-                                                    <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
-                                                        <span>Maqalka</span>
-                                                        <span>${Math.round(lastReceiptGroup.totalMaqalka).toLocaleString()}</span>
-                                                    </div>
-                                                )}
-
-                                                {/* 3. Reesto (Previous/Opening Balance) */}
-                                                {lastReceiptGroup.openingBalance !== 0 && (
-                                                    <div className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                        <span>Reesto</span>
-                                                        <span>{lastReceiptGroup.openingBalance > 0 ? '+' : ''}${Math.round(lastReceiptGroup.openingBalance).toLocaleString()}</span>
-                                                    </div>
-                                                )}
-
-                                                {/* 3b. Adjustment entries (also Reesto) */}
-                                                {lastReceiptGroup.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
-                                                    <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                        <span>Reesto</span>
-                                                        <span>+${Math.round(e.amount).toLocaleString()}</span>
-                                                    </div>
-                                                ))}
-
-                                                {/* 4. Lacagta Guud */}
-                                                {(lastReceiptGroup.totalMaqalka > 0 || lastReceiptGroup.totalAdjustment > 0) && (
-                                                    <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
-                                                        <span>Lacagta Guud</span>
-                                                        <span>${Math.round(lastReceiptGroup.totalMaqalka + lastReceiptGroup.totalAdjustment + lastReceiptGroup.openingBalance).toLocaleString()}</span>
-                                                    </div>
-                                                )}
-
-                                                {/* 5. Lacagaha (Payments) */}
-                                                {lastReceiptGroup.entries.some(e => e.type === 'PAYMENT') && (
-                                                    <>
-                                                        <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
-                                                        {lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').map(e => (
-                                                            <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
-                                                                <span>{format(new Date(e.reference_date), 'MMM dd')} {e.note && e.note !== 'Lacagta' ? e.note : 'Payment'}</span>
-                                                                <span>-${Math.round(e.amount).toLocaleString()}</span>
-                                                            </div>
-                                                        ))}
-                                                    </>
-                                                )}
-
-                                                {/* 6. Final Balance */}
-                                                {lastReceiptGroup.totalPaid > 0 && (
-                                                    <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
-                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">
-                                                            Reesto
-                                                        </span>
-                                                        <span className={`text-lg font-black ${lastReceiptGroup.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                                            ${Math.abs(Math.round(lastReceiptGroup.closingBalance)).toLocaleString()}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
                                 {selectedCustomerId && (
                                     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
+                                        {/* Section 1: Maqalka — HIDDEN when Read Last Maqal is active (only payments mode) */}
+                                        {!(showLastMaqal && !updateLastMaqal) && (
                                         <div id="maqal-form-section" className="space-y-4">
                                             <div className="flex flex-col gap-2 border-b border-border pb-2">
                                                 <div className="flex items-center justify-between">
@@ -1037,7 +859,22 @@ export default function LedgerPage() {
                                                         </Button>
                                                     )}
                                                 </div>
-
+                                                {(timelineOptions.length > 0) && !updateLastMaqal && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Label className="text-[10px] font-bold uppercase text-muted-foreground">Auto (Oldest First):</Label>
+                                                        <select
+                                                            value={timelineOptions.find(o => o.includes('⏳')) || timelineOptions[timelineOptions.length - 1]}
+                                                            onChange={() => {}}
+                                                            className="h-7 text-xs font-bold rounded-md border border-border/60 bg-muted/20 px-2 cursor-pointer focus:ring-1 focus:ring-primary"
+                                                        >
+                                                            {timelineOptions.map((opt, idx) => (
+                                                                <option key={idx} value={opt}>
+                                                                    {opt}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="space-y-4">
@@ -1230,6 +1067,7 @@ export default function LedgerPage() {
                                                 ))}
                                             </div>
                                         </div>
+                                        )}
 
                                         {/* 3. LACAGAHA (Payment) Section */}
                                         <div className="space-y-4 pt-4 border-t border-border/50">
@@ -1344,106 +1182,253 @@ export default function LedgerPage() {
                                         </div>
 
                                         {/* 4. BOOK MATH RECEIPT */}
+
+                                        {/* Header action buttons — shown above receipt when Read Last Maqal is active */}
+                                        {showLastMaqal && lastReceiptGroup && (
+                                            <div className="flex items-center justify-between px-1 -mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    {updateLastMaqal ? (
+                                                        <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-amber-500/20 flex items-center gap-1">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                            Updating Last Maqal
+                                                        </span>
+                                                    ) : (
+                                                        <span className="bg-primary/10 text-primary text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-primary/20">
+                                                            🆕 New Maqal
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex gap-1.5">
+                                                    {lastReceiptGroup.receiptId && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={async () => {
+                                                                setFetchingDetails(true);
+                                                                try {
+                                                                    const ledgerRes = await fetch(`/api/ledger?customerId=${selectedCustomerId}&limit=200&t=${Date.now()}`);
+                                                                    const ledgerData = await ledgerRes.json();
+                                                                    setHistory(ledgerData.transactions || []);
+                                                                    setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
+                                                                    toast.success('Refreshed last maqal!');
+                                                                } catch (e) {
+                                                                    toast.error('Failed to refresh data');
+                                                                } finally {
+                                                                    setFetchingDetails(false);
+                                                                }
+                                                            }}
+                                                            className="h-7 text-[9px] px-2 rounded font-bold border border-border/40 text-muted-foreground hover:bg-muted"
+                                                        >
+                                                            <RefreshCw className="w-3 h-3 mr-1" /> Refresh
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="relative overflow-hidden mt-4 py-3 rounded-lg bg-[#fdfbf7] dark:bg-[#1e1c18] border border-border/60 font-mono text-xs shadow-inner">
                                             {/* Vertical Notebook Lines (Margin) */}
                                             <div className="absolute left-8 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
                                             <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
 
                                             <div className="relative z-10 pl-12 pr-4 space-y-0 text-slate-800 dark:text-slate-300">
-                                                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center mb-1">Receipt</p>
-
-                                                {activeDatesForHeader.length > 0 && (
-                                                    <p className="text-[9px] font-bold text-muted-foreground text-center mb-3">
-                                                        Maqalka Taariikhda {activeDatesForHeader.join(' iyo ')}
-                                                    </p>
-                                                )}
-
-                                                {/* Maqalka breakdown lines */}
-                                                {dateEntries.filter(e => e.date && (
-                                                    (parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0) ||
-                                                    (e.extraKg && parseFloat(e.extraKg) > 0 && e.extraPricePerKg && parseFloat(e.extraPricePerKg) > 0)
-                                                )).map((entry, idx) => {
-                                                    const showMain = parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0;
-                                                    const showExtra = entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0;
-                                                    return (
-                                                        <div key={`rec-${idx}`} className="space-y-1 py-1 border-b border-border/30 text-muted-foreground">
-                                                            {showMain && (
-                                                                <div className="flex justify-between">
-                                                                    <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
-                                                                    <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
-                                                                </div>
-                                                            )}
-                                                            {showExtra && (
-                                                                <div className={cn("flex justify-between text-[10px] text-muted-foreground/80", showMain ? "pl-3" : "")}>
-                                                                    <span>{showMain ? '↳ ' : ''}{format(new Date(entry.date), 'MMM dd')} · {entry.extraKg}KG × ${entry.extraPricePerKg} ({entry.extraNote || 'Notebook'})</span>
-                                                                    <span className="font-bold text-foreground">${Math.round(parseFloat(entry.extraKg || '0') * parseFloat(entry.extraPricePerKg || '0')).toLocaleString()}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-
-                                                {/* Maqalka Total */}
-                                                <div className="flex justify-between py-1.5 border-b border-border/40 font-bold text-foreground">
-                                                    <span>{dynamicMaqalLabel}</span>
-                                                    <span>${productGrandTotal.toLocaleString()}</span>
-                                                </div>
-
-                                                {/* Reesto (Carry-over Balance) */}
-                                                {(currentReesto !== 0 || summary.currentBalance === 0) && (
-                                                    <div className="flex justify-between items-center py-1.5 border-b border-border/40">
-                                                        <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto > 0 ? 'Reesto' : 'Reesto'}</span>
-                                                        {summary.currentBalance === 0 ? (
-                                                            <Input
-                                                                type="number"
-                                                                value={adjustmentAmount}
-                                                                onChange={e => setAdjustmentAmount(e.target.value)}
-                                                                inputMode="decimal"
-                                                                placeholder="0"
-                                                                className="h-7 w-20 text-right font-black text-xs border-primary/20 bg-background/50 px-1.5"
-                                                            />
-                                                        ) : (
-                                                            <span className={cn("font-black", currentReesto < 0 ? "text-emerald-600" : "text-destructive")}>
-                                                                {currentReesto < 0 ? "-" : "+"}{Math.abs(Math.round(currentReesto)).toLocaleString()}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* Subtotal */}
-                                                {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) && (
-                                                    <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
-                                                        <span>Lacagta Guud</span>
-                                                        <span>${Math.round(subtotal).toLocaleString()}</span>
-                                                    </div>
-                                                )}
-
-                                                {/* Lacagaha (payments) */}
-                                                {activePaymentAmount > 0 && (
+                                                {/* === READ LAST MAQAL MODE: Show full last maqal + new payment preview === */}
+                                                {(showLastMaqal && !updateLastMaqal && lastReceiptGroup) ? (
                                                     <>
-                                                        <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-600/60 pt-1.5">Lacagaha</p>
-                                                        {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
-                                                            <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
-                                                                <span>{format(new Date(pay.date), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
-                                                                <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
+                                                        <p className="text-[9px] font-bold text-muted-foreground text-center mb-2 uppercase tracking-wider">
+                                                            {lastReceiptGroup.titleString}
+                                                        </p>
+
+                                                        {/* Products */}
+                                                        {lastReceiptGroup.entries.filter(e => e.type === 'PRODUCT').map(e => (
+                                                            <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium">
+                                                                <span>
+                                                                    {e.note ? '↳ ' : ''}
+                                                                    {format(new Date(e.reference_date), 'MMM dd')} · {Math.round(e.kg || 0)}KG @ ${e.price_per_kg}
+                                                                    {e.note ? ` (${e.note})` : ''}
+                                                                </span>
+                                                                <span className="font-bold">${Math.round(e.amount).toLocaleString()}</span>
                                                             </div>
                                                         ))}
-                                                    </>
-                                                )}
 
-                                                {/* Final Balance - double underline style (Only if payments were made) */}
-                                                {activePaymentAmount > 0 && (
-                                                    <div className="flex flex-col">
-                                                        <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
-                                                            <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
-                                                            <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                                                ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
-                                                            </span>
+                                                        {/* Maqalka Total */}
+                                                        {lastReceiptGroup.entries.some(e => e.type === 'PRODUCT') && (
+                                                            <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
+                                                                <span>Maqalka</span>
+                                                                <span>${Math.round(lastReceiptGroup.totalMaqalka).toLocaleString()}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Reesto (Opening Balance) */}
+                                                        {lastReceiptGroup.openingBalance !== 0 && (
+                                                            <div className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
+                                                                <span>Reesto</span>
+                                                                <span>{lastReceiptGroup.openingBalance > 0 ? '+' : ''}${Math.round(lastReceiptGroup.openingBalance).toLocaleString()}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Adjustment entries */}
+                                                        {lastReceiptGroup.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
+                                                            <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
+                                                                <span>Reesto</span>
+                                                                <span>+${Math.round(e.amount).toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+
+                                                        {/* Lacagta Guud */}
+                                                        {(lastReceiptGroup.totalMaqalka > 0 || lastReceiptGroup.totalAdjustment > 0) && (
+                                                            <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
+                                                                <span>Lacagta Guud</span>
+                                                                <span>${Math.round(lastReceiptGroup.totalMaqalka + lastReceiptGroup.totalAdjustment + lastReceiptGroup.openingBalance).toLocaleString()}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Saved payments from last receipt */}
+                                                        {lastReceiptGroup.entries.some(e => e.type === 'PAYMENT') && (
+                                                            <>
+                                                                <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
+                                                                {lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').map(e => (
+                                                                    <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
+                                                                        <span>{format(new Date(e.reference_date), 'MMM dd')} {e.note && e.note !== 'Lacagta' ? e.note : 'Payment'}</span>
+                                                                        <span>-${Math.round(e.amount).toLocaleString()}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </>
+                                                        )}
+
+                                                        {/* Closing balance from last receipt */}
+                                                        {lastReceiptGroup.totalPaid > 0 && (
+                                                            <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
+                                                                <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                                <span className={`text-lg font-black ${lastReceiptGroup.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
+                                                                    ${Math.abs(Math.round(lastReceiptGroup.closingBalance)).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Divider + new payment preview (if user is adding a payment) */}
+                                                        {activePaymentAmount > 0 && (
+                                                            <>
+                                                                <p className="text-[9px] font-black uppercase tracking-[0.15em] text-primary/60 pt-3 pb-0.5 border-t border-dashed border-primary/20 mt-2">➕ New Payment</p>
+                                                                {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
+                                                                    <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
+                                                                        <span>{format(new Date(pay.date), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
+                                                                        <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
+                                                                    </div>
+                                                                ))}
+                                                                <div className="flex flex-col">
+                                                                    <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
+                                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                                        <span className={`text-lg font-black ${(summary.currentBalance - activePaymentAmount) > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
+                                                                            ${Math.abs(Math.round(summary.currentBalance - activePaymentAmount)).toLocaleString()}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className={`text-[8px] text-right font-bold uppercase ${(summary.currentBalance - activePaymentAmount) > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
+                                                                        Reesto
+                                                                    </p>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {/* === NORMAL MODE: Full receipt with dates/kilos === */}
+                                                        {activeDatesForHeader.length > 0 && (
+                                                            <p className="text-[9px] font-bold text-muted-foreground text-center mb-3">
+                                                                Maqalka Taariikhda {activeDatesForHeader.join(' iyo ')}
+                                                            </p>
+                                                        )}
+
+                                                        {/* Maqalka breakdown lines */}
+                                                        {dateEntries.filter(e => e.date && (
+                                                            (parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0) ||
+                                                            (e.extraKg && parseFloat(e.extraKg) > 0 && e.extraPricePerKg && parseFloat(e.extraPricePerKg) > 0)
+                                                        )).map((entry, idx) => {
+                                                            const showMain = parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0;
+                                                            const showExtra = entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0;
+                                                            return (
+                                                                <div key={`rec-${idx}`} className="space-y-1 py-1 border-b border-border/30 text-muted-foreground">
+                                                                    {showMain && (
+                                                                        <div className="flex justify-between">
+                                                                            <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
+                                                                            <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {showExtra && (
+                                                                        <div className={cn("flex justify-between text-[10px] text-muted-foreground/80", showMain ? "pl-3" : "")}>
+                                                                            <span>{showMain ? '↳ ' : ''}{format(new Date(entry.date), 'MMM dd')} · {entry.extraKg}KG × ${entry.extraPricePerKg} ({entry.extraNote || 'Notebook'})</span>
+                                                                            <span className="font-bold text-foreground">${Math.round(parseFloat(entry.extraKg || '0') * parseFloat(entry.extraPricePerKg || '0')).toLocaleString()}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+
+                                                        {/* Maqalka Total */}
+                                                        <div className="flex justify-between py-1.5 border-b border-border/40 font-bold text-foreground">
+                                                            <span>{dynamicMaqalLabel}</span>
+                                                            <span>${productGrandTotal.toLocaleString()}</span>
                                                         </div>
-                                                        <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
-                                                            Reesto
-                                                        </p>
-                                                    </div>
+
+                                                        {/* Reesto (Carry-over Balance) */}
+                                                        {(currentReesto !== 0 || summary.currentBalance === 0) && (
+                                                            <div className="flex justify-between items-center py-1.5 border-b border-border/40">
+                                                                <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto > 0 ? 'Reesto' : 'Reesto'}</span>
+                                                                {summary.currentBalance === 0 ? (
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={adjustmentAmount}
+                                                                        onChange={e => setAdjustmentAmount(e.target.value)}
+                                                                        inputMode="decimal"
+                                                                        placeholder="0"
+                                                                        className="h-7 w-20 text-right font-black text-xs border-primary/20 bg-background/50 px-1.5"
+                                                                    />
+                                                                ) : (
+                                                                    <span className={cn("font-black", currentReesto < 0 ? "text-emerald-600" : "text-destructive")}>
+                                                                        {currentReesto < 0 ? "-" : "+"}{Math.abs(Math.round(currentReesto)).toLocaleString()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Subtotal */}
+                                                        {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) && (
+                                                            <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
+                                                                <span>Lacagta Guud</span>
+                                                                <span>${Math.round(subtotal).toLocaleString()}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Lacagaha (payments) */}
+                                                        {activePaymentAmount > 0 && (
+                                                            <>
+                                                                <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-600/60 pt-1.5">Lacagaha</p>
+                                                                {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
+                                                                    <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
+                                                                        <span>{format(new Date(pay.date), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
+                                                                        <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </>
+                                                        )}
+
+                                                        {/* Final Balance - double underline style (Only if payments were made) */}
+                                                        {activePaymentAmount > 0 && (
+                                                            <div className="flex flex-col">
+                                                                <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
+                                                                    <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                                    <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
+                                                                        ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
+                                                                    </span>
+                                                                </div>
+                                                                <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
+                                                                    Reesto
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
