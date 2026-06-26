@@ -83,31 +83,39 @@ export async function GET(request: Request) {
         );
         const total = parseInt(countRows[0]?.total || '0', 10);
 
-        // Per-user activity summary (all time)
-        const { rows: userStats } = await pool.query(`
-            SELECT
-                a.username,
-                COALESCE(MAX(u.name), MAX(a.name)) as name,
-                COALESCE(MAX(u.role)::text, MAX(a.role)) as role,
-                MAX(u.avatar_url) as avatar_url,
-                COUNT(a.id) as total_actions,
-                MAX(a.created_at) as last_activity,
-                MIN(CASE WHEN a.action = 'LOGIN' THEN a.created_at END) as first_login,
-                MAX(CASE WHEN a.action = 'LOGIN' THEN a.created_at END) as last_login,
-                COUNT(CASE WHEN a.action = 'LOGIN' THEN 1 END) as login_count,
-                COUNT(CASE WHEN a.action = 'LOGOUT' THEN 1 END) as logout_count,
-                COUNT(CASE WHEN a.action = 'LOGIN_FAILED' THEN 1 END) as failed_logins
-            FROM "AuditLog" a
-            LEFT JOIN "User" u ON a.username = u.username
-            GROUP BY a.username
-            ORDER BY last_activity DESC NULLS LAST
-        `);
+        const includeStats = searchParams.get('stats') === 'true';
 
-        // Unique actions list for filter dropdown
-        const { rows: actionRows } = await pool.query(
-            `SELECT DISTINCT action FROM "AuditLog" ORDER BY action`
-        );
-        const actions = actionRows.map(r => r.action);
+        let userStats = [];
+        let actions: string[] = [];
+
+        if (includeStats) {
+            // Per-user activity summary (all time)
+            const { rows: userStatsRows } = await pool.query(`
+                SELECT
+                    a.username,
+                    COALESCE(MAX(u.name), MAX(a.name)) as name,
+                    COALESCE(MAX(u.role)::text, MAX(a.role)) as role,
+                    MAX(u.avatar_url) as avatar_url,
+                    COUNT(a.id) as total_actions,
+                    MAX(a.created_at) as last_activity,
+                    MIN(CASE WHEN a.action = 'LOGIN' THEN a.created_at END) as first_login,
+                    MAX(CASE WHEN a.action = 'LOGIN' THEN a.created_at END) as last_login,
+                    COUNT(CASE WHEN a.action = 'LOGIN' THEN 1 END) as login_count,
+                    COUNT(CASE WHEN a.action = 'LOGOUT' THEN 1 END) as logout_count,
+                    COUNT(CASE WHEN a.action = 'LOGIN_FAILED' THEN 1 END) as failed_logins
+                FROM "AuditLog" a
+                LEFT JOIN "User" u ON a.username = u.username
+                GROUP BY a.username
+                ORDER BY last_activity DESC NULLS LAST
+            `);
+            userStats = userStatsRows;
+
+            // Unique actions list for filter dropdown
+            const { rows: actionRows } = await pool.query(
+                `SELECT DISTINCT action FROM "AuditLog" ORDER BY action`
+            );
+            actions = actionRows.map(r => r.action);
+        }
 
         return NextResponse.json({
             logs,

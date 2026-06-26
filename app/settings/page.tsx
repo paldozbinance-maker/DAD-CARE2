@@ -288,7 +288,7 @@ export default function SettingsPage() {
                 loadAuditLogs();
                 loadOnlineSessions();
 
-                // ── Heartbeat every 30s to stay marked ONLINE in the DB ──
+                // ── Heartbeat every 5 minutes (300s) to stay marked ONLINE in the DB ──
                 const heartbeat = setInterval(async () => {
                     const token = localStorage.getItem('dadwork_session_token') || '';
                     if (token) {
@@ -297,13 +297,7 @@ export default function SettingsPage() {
                             headers: { 'x-session-token': token }
                         }).catch(() => {});
                     }
-                }, 30_000);
-
-                // ── Auto-refresh "Who's Online" and "Audit Logs" every 30s (fallback) ──
-                const refresh = setInterval(() => {
-                    loadOnlineSessions();
-                    loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true);
-                }, 30000);
+                }, 300_000);
 
                 // ── Supabase Realtime for INSTANT updates ──
                 const supabase = createClient();
@@ -313,27 +307,26 @@ export default function SettingsPage() {
                         'postgres_changes',
                         { event: 'INSERT', schema: 'public', table: 'AuditLog' },
                         () => {
-                            // Instant silent reload when an action happens
+                            // Instant silent reload when an action happens (no heavy stats fetch)
                             loadOnlineSessions();
-                            loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true);
+                            loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true, false);
                         }
                     )
                     .subscribe();
 
                 return () => {
                     clearInterval(heartbeat);
-                    clearInterval(refresh);
                     supabase.removeChannel(channel);
                 };
             }
         }
     }, []);
 
-    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false) => {
+    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = true) => {
         if (!silent) setAuditLoading(true);
         try {
             const token = localStorage.getItem('dadwork_session_token') || '';
-            const params = new URLSearchParams({ limit: '200' });
+            const params = new URLSearchParams({ limit: '200', stats: includeStats ? 'true' : 'false' });
             if (userFilter) params.set('user', userFilter);
             if (actionFilter) params.set('action', actionFilter);
             const res = await fetch(`/api/audit-logs?${params}`, {
@@ -343,8 +336,10 @@ export default function SettingsPage() {
                 const data = await res.json();
                 setAuditLogs(data.logs || []);
                 setAuditTotal(data.total || 0);
-                setAuditUserStats(data.userStats || []);
-                setAuditActions(data.actions || []);
+                if (includeStats) {
+                    setAuditUserStats(data.userStats || []);
+                    setAuditActions(data.actions || []);
+                }
             }
         } catch (e) {
             console.error('Failed to load audit logs:', e);
