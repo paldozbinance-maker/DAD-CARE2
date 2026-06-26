@@ -42,7 +42,8 @@ const getCachedDailyBookInit = unstable_cache(
                         WHERE dbi.daily_book_id = db.id
                     ), '[]'::json) as items
                 FROM "DailyBook" db
-                ORDER BY db.date DESC;
+                ORDER BY db.date DESC
+                LIMIT 30;
             `)
         ]);
 

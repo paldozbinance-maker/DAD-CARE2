@@ -14,6 +14,7 @@ import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Se
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
+import { useDailyBookInit, useDailyBookDate, useLedgerStatusForDate } from '@/hooks/useDailyBook';
 interface Customer {
     id: string;
     name: string;
@@ -63,47 +64,56 @@ export default function DailyBookPage() {
     const [historyLedgerStatus, setHistoryLedgerStatus] = useState<Record<string, Set<string>>>({});
     const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isInitialized, setIsInitialized] = useState(false);
 
-    // ⚡ Single merged init call — replaces 3 separate API calls
-    const loadInit = async () => {
-        try {
-            const res = await fetch('/api/daily-book-init');
-            const data = await res.json();
-            if (!res.ok) { console.error('Init failed:', data.error); return; }
+    // ⚡ SWR Hooks for Lightning Fast Caching
+    const { data: initData, mutate: mutateInit } = useDailyBookInit();
+    const loadInit = () => mutateInit(); // Used by AddCustomerDialog to refresh after adding a customer
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const { data: bookData } = useDailyBookDate(isInitialized && !editingDate ? dateStr : null);
+    const { processedCustomerIds: swrLedgerIds, isLoading: swrLedgerLoading, mutate: mutateLedger } = useLedgerStatusForDate(dateStr);
 
-            if (Array.isArray(data.customers)) setCustomers(data.customers);
-            if (Array.isArray(data.history)) setSavedEntries(data.history);
-            if (data.latestDate) {
-                setLatestSavedDateStr(data.latestDate);
-                if (!editingDate) {
-                    setDate(addDays(parseISO(data.latestDate), 1));
+    // Sync SWR Init Data to Local State (Protects Optimistic UI)
+    useEffect(() => {
+        if (initData) {
+            setCustomers(initData.customers);
+            setSavedEntries(initData.history);
+            
+            if (!isInitialized) {
+                if (initData.latestDate) {
+                    setLatestSavedDateStr(initData.latestDate);
+                    if (!editingDate) {
+                        setDate(addDays(parseISO(initData.latestDate), 1));
+                    }
                 }
+                setIsInitialized(true);
             }
-        } catch (e) {
-            console.error('Failed to load daily book init:', e);
+        } else if (initData === undefined) {
+             // Still loading, do nothing
+        } else {
+             // Failed or empty, safely release lock
+             setIsInitialized(true);
         }
-    };
+    }, [initData, editingDate, isInitialized]);
 
-    const loadDailyBook = async (selectedDate: Date) => {
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        try {
-            const res = await fetch(`/api/daily-book?date=${dateStr}`);
-            const data = await res.json();
-
-            if (data && data.items) {
-                const loadedEntries: { [key: string]: { kg: number, present: boolean, note: string } } = {};
-                data.items.forEach((item: DailyBookItem) => {
-                    loadedEntries[item.customer_id] = { kg: item.kg || 0, present: item.present ?? true, note: item.note || '' };
-                });
-                setEntries(loadedEntries);
-            } else {
-                setEntries({});
-            }
-        } catch (e) {
-            console.error('Failed to load daily book');
+    // Sync SWR Book Data to Local Entries
+    useEffect(() => {
+        if (bookData && bookData.items) {
+            const loadedEntries: { [key: string]: { kg: number, present: boolean, note: string } } = {};
+            bookData.items.forEach((item: DailyBookItem) => {
+                loadedEntries[item.customer_id] = { kg: item.kg || 0, present: item.present ?? true, note: item.note || '' };
+            });
+            setEntries(loadedEntries);
+        } else if (bookData === null) {
             setEntries({});
         }
-    };
+    }, [bookData]);
+
+    // Sync SWR Ledger Status to Local State
+    useEffect(() => {
+        setProcessedCustomerIds(swrLedgerIds);
+        setLoadingLedgerStatus(swrLedgerLoading);
+    }, [swrLedgerIds, swrLedgerLoading]);
 
     const fetchLatestDate = async () => {
         try {
@@ -119,33 +129,6 @@ export default function DailyBookPage() {
             }
         } catch (err) {
             console.error('Failed to fetch latest date', err);
-        }
-    };
-
-    useEffect(() => {
-        loadInit(); // ⚡ One call instead of three
-    }, []);
-
-    useEffect(() => {
-        if (!editingDate) {
-            loadDailyBook(date);
-        }
-        fetchLedgerStatusForDate(date);
-    }, [date]);
-
-    const fetchLedgerStatusForDate = async (selectedDate: Date) => {
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        setLoadingLedgerStatus(true);
-        try {
-            const res = await fetch(`/api/ledger-by-date?date=${dateStr}`);
-            if (res.ok) {
-                const ids: string[] = await res.json();
-                setProcessedCustomerIds(new Set(ids));
-            }
-        } catch (e) {
-            console.error('Failed to fetch ledger status', e);
-        } finally {
-            setLoadingLedgerStatus(false);
         }
     };
 
@@ -176,6 +159,30 @@ export default function DailyBookPage() {
                 customer: customers.find(c => c.id === customer_id)
             }));
 
+        // OPTIMISTIC UI UPDATE: Instantly reflect the change locally
+        const newEntry: SavedEntry = {
+            date: dateStr,
+            totalKg: items.reduce((sum, item) => sum + item.kg, 0),
+            items: items.map(item => ({
+                ...item,
+                customer: customers.find(c => c.id === item.customer_id)
+            }))
+        };
+
+        const previousEntries = [...savedEntries];
+        setSavedEntries(prev => {
+            const filtered = prev.filter(e => e.date !== dateStr);
+            return [newEntry, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        });
+        toast.success('Book saved successfully!', { description: 'Updated instantly' });
+        
+        // Reset the UI states immediately for a fast UX
+        setEntries({});
+        setEditingDate(null);
+        setLatestSavedDateStr(dateStr);
+        setDate(addDays(date, 1));
+        setViewMode('details');
+
         try {
             if (editingDate && editingDate !== dateStr) {
                 // Delete the old daily book entry to prevent duplicate keys or outdated records
@@ -196,31 +203,23 @@ export default function DailyBookPage() {
                 body: JSON.stringify({ date: dateStr, items })
             });
 
-            if (res.ok) {
-                const newEntry: SavedEntry = {
-                    date: dateStr,
-                    totalKg: totalKg,
-                    items: items
-                };
-
-                const updated = [...savedEntries.filter(e => e.date !== dateStr && e.date !== editingDate), newEntry];
-                setSavedEntries(updated);
-
-                toast.success(`Entry saved for ${format(date, 'MMMM dd, yyyy')}`);
-                setEntries({});
-                setEditingDate(null);
-                setViewMode('details');
-            } else {
+            if (!res.ok) {
+                // Rollback if the server fails
+                setSavedEntries(previousEntries);
                 const errData = await res.json().catch(() => ({}));
-                toast.error(errData.error || 'Failed to save entry');
+                toast.error(errData.error || 'Failed to save entry, rolled back');
+                return;
             }
+
+            // Success side effects
+            setViewMode('details');
         } catch (e: any) {
             console.error('Save error:', e);
             toast.error(e.message || 'Network error');
         } finally {
             setSaving(false);
             fetchLatestDate(); // Refresh sequence after save
-            fetchLedgerStatusForDate(date); // Refresh ledger indicators after save
+            mutateLedger(); // Refresh ledger indicators after save via SWR
         }
     };
 

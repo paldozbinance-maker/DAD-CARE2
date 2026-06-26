@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import { revalidateTag } from 'next/cache';
+import pool from '@/lib/db';
 
 export async function POST(request: Request) {
     const { errorResponse } = await requireSession(request);
@@ -177,19 +178,17 @@ export async function GET(request: Request) {
 
         const currentBalance = latestEntry?.[0]?.new_debt || 0;
 
-        // Still aggregate totals for information
-        const { data: allEntries } = await supabase
-            .from('Ledger')
-            .select('type, kg, amount')
-            .eq('customer_id', customerId);
+        // Still aggregate totals for information - OPTIMIZED: Database side math
+        const result = await pool.query(`
+            SELECT 
+                SUM(CASE WHEN type = 'PRODUCT' THEN kg ELSE 0 END) as total_kg,
+                SUM(CASE WHEN type = 'PAYMENT' THEN amount ELSE 0 END) as total_paid
+            FROM "Ledger"
+            WHERE customer_id = $1
+        `, [customerId]);
 
-        const totalKg = allEntries
-            ?.filter(e => e.type === 'PRODUCT')
-            .reduce((sum, e) => sum + (e.kg || 0), 0) || 0;
-
-        const totalPaid = allEntries
-            ?.filter(e => e.type === 'PAYMENT')
-            .reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+        const totalKg = result.rows[0]?.total_kg || 0;
+        const totalPaid = result.rows[0]?.total_paid || 0;
 
         return NextResponse.json({
             transactions: transactions || [],

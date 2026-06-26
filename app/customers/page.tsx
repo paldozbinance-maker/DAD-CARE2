@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useEffect, useState } from 'react';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { toast } from 'sonner';
-import { Phone, Search, ChevronRight, Users, Star, Filter, Check } from 'lucide-react';
+import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
     DropdownMenu,
@@ -13,6 +13,9 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
 
 interface Customer {
     id: string;
@@ -24,28 +27,19 @@ interface Customer {
 }
 
 export default function CustomersPage() {
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
 
-    const loadCustomers = async () => {
-        try {
-            const res = await fetch('/api/customers');
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to fetch customers');
-            setCustomers(Array.isArray(data) ? data : []);
-        } catch (e: unknown) {
-            const error = e as Error;
-            toast.error(error.message || 'Failed to load customers');
-        } finally {
-            setLoading(false);
-        }
-    };
+    // ⚡ SWR: Instant cache — no more spinner every time you visit this page
+    const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
+        '/api/customers',
+        fetcher,
+        { revalidateOnFocus: false, dedupingInterval: 30000 }
+    );
+    const customers = customersData || [];
 
     useEffect(() => {
-        loadCustomers();
         const userStr = localStorage.getItem('currentUser');
         if (userStr) {
             try {
@@ -104,7 +98,7 @@ export default function CustomersPage() {
                         </div>
                         <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Customers</h2>
                         <span className="text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full ml-2">
-                            {loading ? '—' : customers.length}
+                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin inline" /> : customers.length}
                         </span>
                     </div>
                     <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
@@ -154,14 +148,14 @@ export default function CustomersPage() {
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <AddCustomerDialog onSuccess={loadCustomers} />
+                        <AddCustomerDialog onSuccess={() => mutateCustomers()} />
                     </div>
                 </div>
             </div>
 
             {/* List */}
             <div className="rounded-xl border border-border/40 overflow-hidden bg-card/30 backdrop-blur-sm">
-                {loading ? (
+                {isLoading ? (
                     <div className="divide-y divide-border/30">
                         {[1, 2, 3].map(i => (
                             <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
@@ -181,7 +175,7 @@ export default function CustomersPage() {
                         </p>
                         {!searchTerm && (
                             <div className="mt-4">
-                                <AddCustomerDialog onSuccess={loadCustomers} />
+                                <AddCustomerDialog onSuccess={() => mutateCustomers()} />
                             </div>
                         )}
                     </div>

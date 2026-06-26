@@ -20,6 +20,9 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { GlobalSearch } from '@/components/global-search';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
 
 interface DashboardData {
     totalCustomers: number;
@@ -35,36 +38,29 @@ interface DashboardData {
 
 export default function DashboardPage() {
     const { theme, setTheme } = useTheme();
-    const [data, setData] = useState<DashboardData | null>(null);
-    const [loading, setLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
     const [dates, setDates] = useState({ standard: '', hijri: '' });
+
+    // ⚡ SWR: Shows instantly from cache, silently refreshes every 30s in background
+    const { data, isLoading } = useSWR<DashboardData>('/api/dashboard', fetcher, {
+        refreshInterval: 30000,       // Auto-refresh every 30 seconds
+        revalidateOnFocus: true,      // Refresh when user comes back to the tab
+        dedupingInterval: 10000,      // No duplicate requests within 10 seconds
+    });
 
     useEffect(() => {
         // Calculate dates safely on client to prevent hydration mismatch
         const todayDate = new Date();
         const standardDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
         const hijriDateFull = new Intl.DateTimeFormat('en-GB-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(todayDate);
-        setDates({ 
-            standard: standardDate, 
-            hijri: hijriDateFull.replace(/ AH$/, '').replace(/,/, '') 
+        setDates({
+            standard: standardDate,
+            hijri: hijriDateFull.replace(/ AH$/, '').replace(/,/, '')
         });
-
-        const fetchDashboard = async () => {
-            try {
-                const res = await fetch('/api/dashboard');
-                const json = await res.json();
-                if (res.ok) setData(json);
-            } catch (e) {
-                console.error('Dashboard fetch failed:', e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchDashboard();
     }, []);
 
-    if (loading) {
+    // Only show the full-page spinner on the very first load (no cached data yet)
+    if (isLoading && !data) {
         return (
             <div className="flex items-center justify-center h-[60vh]">
                 <div className="flex flex-col items-center gap-4">
