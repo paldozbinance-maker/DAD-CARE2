@@ -6,91 +6,102 @@ export const dynamic = 'force-dynamic';
 
 const getDashboardData = async (today: string) => {
     try {
-        // Run queries sequentially to prevent connection pool exhaustion (max: 2)
-        // 1. Total customers count
-        const totalCustomersResult = await pool.query('SELECT count(*)::int as count FROM "Customer"');
-        
-        // 2. Total Current Debt (Lacagta Guud)
-        const totalDebtResult = await pool.query(`
-            SELECT COALESCE(SUM(new_debt), 0)::float as total_debt
-            FROM (
-                SELECT DISTINCT ON (customer_id) 
-                    new_debt,
-                    (type = 'PAYMENT') as is_reesto
+        // Run queries concurrently for maximum speed
+        const [
+            totalCustomersResult,
+            totalDebtResult,
+            totalReestoResult,
+            totalPaidResult,
+            totalKgResult,
+            todayStatsResult,
+            topDebtorsResult,
+            recentTransactionsResult
+        ] = await Promise.all([
+            // 1. Total customers count
+            pool.query('SELECT count(*)::int as count FROM "Customer"'),
+            
+            // 2. Total Current Debt (Lacagta Guud)
+            pool.query(`
+                SELECT COALESCE(SUM(new_debt), 0)::float as total_debt
+                FROM (
+                    SELECT DISTINCT ON (customer_id) 
+                        new_debt,
+                        (type = 'PAYMENT') as is_reesto
+                    FROM "Ledger"
+                    ORDER BY customer_id, created_at DESC, id DESC
+                ) latest_balances
+                WHERE is_reesto = false AND new_debt != 0
+            `),
+
+            // 2b. Total Reesto
+            pool.query(`
+                SELECT ABS(COALESCE(SUM(new_debt), 0))::float as total_reesto
+                FROM (
+                    SELECT DISTINCT ON (customer_id) 
+                        new_debt,
+                        (type = 'PAYMENT') as is_reesto
+                    FROM "Ledger"
+                    ORDER BY customer_id, created_at DESC, id DESC
+                ) latest_balances
+                WHERE is_reesto = true AND new_debt != 0
+            `),
+
+            // 3. Total Payments
+            pool.query(`
+                SELECT COALESCE(SUM(amount), 0)::float as total_paid
                 FROM "Ledger"
-                ORDER BY customer_id, created_at DESC, id DESC
-            ) latest_balances
-            WHERE is_reesto = false AND new_debt != 0
-        `);
+                WHERE type = 'PAYMENT'
+            `),
 
-        // 2b. Total Reesto
-        const totalReestoResult = await pool.query(`
-            SELECT ABS(COALESCE(SUM(new_debt), 0))::float as total_reesto
-            FROM (
-                SELECT DISTINCT ON (customer_id) 
-                    new_debt,
-                    (type = 'PAYMENT') as is_reesto
+            // 4. Total KG all time
+            pool.query(`
+                SELECT COALESCE(SUM(kg), 0)::float as total_kg
                 FROM "Ledger"
-                ORDER BY customer_id, created_at DESC, id DESC
-            ) latest_balances
-            WHERE is_reesto = true AND new_debt != 0
-        `);
+                WHERE type = 'PRODUCT'
+            `),
 
-        // 3. Total Payments
-        const totalPaidResult = await pool.query(`
-            SELECT COALESCE(SUM(amount), 0)::float as total_paid
-            FROM "Ledger"
-            WHERE type = 'PAYMENT'
-        `);
+            // 5. Today's daily book stats (KG and active customer count)
+            pool.query(`
+                SELECT 
+                    COALESCE(SUM(dbi.kg), 0)::float as today_kg, 
+                    COUNT(dbi.id)::int as today_customer_count
+                FROM "DailyBookItem" dbi
+                JOIN "DailyBook" db ON dbi.daily_book_id = db.id
+                WHERE db.date = $1
+            `, [today]),
 
-        // 4. Total KG all time
-        const totalKgResult = await pool.query(`
-            SELECT COALESCE(SUM(kg), 0)::float as total_kg
-            FROM "Ledger"
-            WHERE type = 'PRODUCT'
-        `);
+            // 6. Top Debtors and Creditors (all non-zero balances)
+            pool.query(`
+                SELECT 
+                    l.customer_id as id, 
+                    c.name, 
+                    c.customer_code as code, 
+                    l.new_debt::float as debt,
+                    l.is_reesto
+                FROM (
+                    SELECT DISTINCT ON (customer_id) 
+                        customer_id, 
+                        new_debt,
+                        (type = 'PAYMENT') as is_reesto
+                    FROM "Ledger"
+                    ORDER BY customer_id, created_at DESC, id DESC
+                ) l
+                JOIN "Customer" c ON l.customer_id = c.id
+                WHERE l.new_debt != 0
+                ORDER BY ABS(l.new_debt) DESC
+            `),
 
-        // 5. Today's daily book stats (KG and active customer count)
-        const todayStatsResult = await pool.query(`
-            SELECT 
-                COALESCE(SUM(dbi.kg), 0)::float as today_kg, 
-                COUNT(dbi.id)::int as today_customer_count
-            FROM "DailyBookItem" dbi
-            JOIN "DailyBook" db ON dbi.daily_book_id = db.id
-            WHERE db.date = $1
-        `, [today]);
-
-        // 6. Top Debtors and Creditors (all non-zero balances)
-        const topDebtorsResult = await pool.query(`
-            SELECT 
-                l.customer_id as id, 
-                c.name, 
-                c.customer_code as code, 
-                l.new_debt::float as debt,
-                l.is_reesto
-            FROM (
-                SELECT DISTINCT ON (customer_id) 
-                    customer_id, 
-                    new_debt,
-                    (type = 'PAYMENT') as is_reesto
-                FROM "Ledger"
-                ORDER BY customer_id, created_at DESC, id DESC
-            ) l
-            JOIN "Customer" c ON l.customer_id = c.id
-            WHERE l.new_debt != 0
-            ORDER BY ABS(l.new_debt) DESC
-        `);
-
-        // 7. Recent transactions (last 5)
-        const recentTransactionsResult = await pool.query(`
-            SELECT 
-                l.*, 
-                c.name as "customerName"
-            FROM "Ledger" l
-            JOIN "Customer" c ON l.customer_id = c.id
-            ORDER BY l.created_at DESC
-            LIMIT 5
-        `);
+            // 7. Recent transactions (last 5)
+            pool.query(`
+                SELECT 
+                    l.*, 
+                    c.name as "customerName"
+                FROM "Ledger" l
+                JOIN "Customer" c ON l.customer_id = c.id
+                ORDER BY l.created_at DESC
+                LIMIT 5
+            `)
+        ]);
 
         const totalCustomers = totalCustomersResult.rows[0]?.count || 0;
         const totalDebt = totalDebtResult.rows[0]?.total_debt || 0;
