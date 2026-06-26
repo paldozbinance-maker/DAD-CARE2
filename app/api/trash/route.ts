@@ -2,7 +2,7 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
-import { revalidateTag } from 'next/cache';
+
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +51,6 @@ export async function POST(request: Request) {
         } else if (type === 'ledger') {
             await pool.query('UPDATE "Ledger" SET deleted_at = NULL, deleted_by = NULL WHERE id = $1', [id]);
             await logAudit(request, 'RESTORE_TRASH', `Restored ledger entry (ID: ${id}) by ${session?.username}`);
-            revalidateTag('customers');
         } else {
             return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
         }
