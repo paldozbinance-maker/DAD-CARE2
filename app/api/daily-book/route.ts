@@ -92,11 +92,11 @@ export async function POST(request: Request) {
                     `INSERT INTO "DailyBookItem" (id, daily_book_id, customer_id, kg, present, note)
                      SELECT gen_random_uuid(), * FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[], $4::boolean[], $5::text[])`,
                     [
-                        itemsToInsert.map(i => i[0]),
-                        itemsToInsert.map(i => i[1]),
-                        itemsToInsert.map(i => i[2]),
-                        itemsToInsert.map(i => i[3]),
-                        itemsToInsert.map(i => i[4])
+                        itemsToInsert.map((i: any[]) => i[0]),
+                        itemsToInsert.map((i: any[]) => i[1]),
+                        itemsToInsert.map((i: any[]) => i[2]),
+                        itemsToInsert.map((i: any[]) => i[3]),
+                        itemsToInsert.map((i: any[]) => i[4])
                     ]
                 );
             }
