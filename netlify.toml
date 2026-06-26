@@ -1,2 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
 [build.environment]
   SECRETS_SCAN_ENABLED = "false"
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
