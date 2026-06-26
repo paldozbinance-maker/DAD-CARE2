@@ -1,20 +1,30 @@
-const CACHE_NAME = 'dadcare-v4';
+const CACHE_NAME = 'dadcare-v5-fast';
 const STATIC_ASSETS = [
   '/',
-  '/manifest.json'
+  '/dashboard',
+  '/customers',
+  '/ledger',
+  '/daily-book',
+  '/payments',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
 ];
 
-// Install: pre-cache critical pages
+// Install: pre-cache critical pages robustly
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      // Use Promise.allSettled so one failed fetch doesn't crash the entire caching process
+      return Promise.allSettled(
+        STATIC_ASSETS.map(url => cache.add(url).catch(err => console.warn('SW cache add failed for:', url, err)))
+      );
     })
   );
   self.skipWaiting();
 });
 
-// Activate: clean up old caches
+// Activate: clean up old caches immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -24,7 +34,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first strategy for API calls, cache-first for assets
+// Fetch: network-first strategy for API calls, cache-first with stale-while-revalidate for assets
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -48,7 +58,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Pages and assets: stale-while-revalidate
+  // Next.js specific build files and chunks (highly cacheable)
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // General Pages and assets: stale-while-revalidate
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
