@@ -287,7 +287,8 @@ export default function SettingsPage() {
             loadCustomers();
 
             if (parsedUser.role === 'SUPER_ADMIN') {
-                loadAuditLogs();
+                loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, false, false);
+                loadAuditStats();
                 loadOnlineSessions();
 
                 // ── Heartbeat every 5 minutes (300s) to stay marked ONLINE in the DB ──
@@ -324,7 +325,7 @@ export default function SettingsPage() {
         }
     }, []);
 
-    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = true) => {
+    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = false) => {
         if (!silent) setAuditLoading(true);
         try {
             const token = localStorage.getItem('dadwork_session_token') || '';
@@ -347,6 +348,23 @@ export default function SettingsPage() {
             console.error('Failed to load audit logs:', e);
         } finally {
             if (!silent) setAuditLoading(false);
+        }
+    };
+
+    const loadAuditStats = async () => {
+        try {
+            const token = localStorage.getItem('dadwork_session_token') || '';
+            const params = new URLSearchParams({ limit: '1', stats: 'true' });
+            const res = await fetch(`/api/audit-logs?${params}`, {
+                headers: { 'x-session-token': token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAuditUserStats(data.userStats || []);
+                setAuditActions(data.actions || []);
+            }
+        } catch (e) {
+            console.error('Failed to load audit stats:', e);
         }
     };
 

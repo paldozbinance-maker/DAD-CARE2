@@ -36,6 +36,7 @@ const getCachedCustomers = unstable_cache(
                 COALESCE(l.new_debt, 0)::float as current_balance,
                 COALESCE(l.type, null) as last_transaction_type,
                 COALESCE(p.total_paid, 0)::float as total_paid,
+                COALESCE(dbk.total_daily_kg, 0)::float as total_kg,
                 COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
                 COALESCE(dbk.total_books_count, 0) as total_books_count,
                 CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,

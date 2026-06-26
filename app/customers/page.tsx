@@ -5,8 +5,14 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useEffect, useState } from 'react';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { toast } from 'sonner';
-import { Phone, Search, ChevronRight, Users, Star } from 'lucide-react';
+import { Phone, Search, ChevronRight, Users, Star, Filter, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Customer {
     id: string;
@@ -22,6 +28,7 @@ export default function CustomersPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [currentUser, setCurrentUser] = useState<any | null>(null);
+    const [filterType, setFilterType] = useState<string>('default');
 
     const loadCustomers = async () => {
         try {
@@ -53,7 +60,23 @@ export default function CustomersPage() {
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.customer_code.toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a, b) => {
-        // Prioritize assigned customers of the logged-in user
+        if (filterType === 'most_paid') {
+            return ((b as any).total_paid || 0) - ((a as any).total_paid || 0);
+        } else if (filterType === 'least_paid') {
+            return ((a as any).total_paid || 0) - ((b as any).total_paid || 0);
+        } else if (filterType === 'most_kg') {
+            return ((b as any).total_kg || 0) - ((a as any).total_kg || 0);
+        } else if (filterType === 'least_kg') {
+            return ((a as any).total_kg || 0) - ((b as any).total_kg || 0);
+        } else if (filterType === 'best') {
+            const scoreA = ((a as any).total_paid || 0) - ((a as any).current_balance || 0);
+            const scoreB = ((b as any).total_paid || 0) - ((b as any).current_balance || 0);
+            return scoreB - scoreA;
+        } else if (filterType === 'worst') {
+            return ((b as any).current_balance || 0) - ((a as any).current_balance || 0);
+        }
+
+        // default behavior
         const assignedIds = currentUser?.assigned_customer_ids || [];
         const isAAssigned = assignedIds.includes(a.id);
         const isBAssigned = assignedIds.includes(b.id);
@@ -99,7 +122,38 @@ export default function CustomersPage() {
                             className="pl-9 h-11 bg-background/50 backdrop-blur-sm border-border/60 focus:border-primary transition-colors w-full rounded-xl"
                         />
                     </div>
-                    <div className="shrink-0 flex items-center">
+                    <div className="shrink-0 flex items-center gap-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button className={`h-11 px-3 rounded-xl border flex items-center justify-center gap-2 transition-colors ${filterType !== 'default' ? 'bg-primary/10 text-primary border-primary/30' : 'bg-background/50 text-foreground border-border/60 hover:bg-muted/50'}`}>
+                                    <Filter className="w-4 h-4" />
+                                    <span className="text-xs font-bold hidden sm:inline-block">Filter</span>
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
+                                <DropdownMenuItem onClick={() => setFilterType('default')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'default' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    Default View {filterType === 'default' && <Check className="w-3 h-3 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterType('most_paid')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'most_paid' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    Most Paid {filterType === 'most_paid' && <Check className="w-3 h-3 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterType('least_paid')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'least_paid' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    Least Paid {filterType === 'least_paid' && <Check className="w-3 h-3 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterType('most_kg')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'most_kg' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    Most KG {filterType === 'most_kg' && <Check className="w-3 h-3 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterType('least_kg')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'least_kg' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    Least KG {filterType === 'least_kg' && <Check className="w-3 h-3 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterType('best')} className={`text-xs font-bold cursor-pointer rounded-xl text-emerald-500 focus:text-emerald-600 focus:bg-emerald-500/10 ${filterType === 'best' ? 'bg-emerald-500/10' : ''}`}>
+                                    Best Customer {filterType === 'best' && <Check className="w-3 h-3 ml-auto" />}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterType('worst')} className={`text-xs font-bold cursor-pointer rounded-xl text-destructive focus:text-destructive focus:bg-destructive/10 ${filterType === 'worst' ? 'bg-destructive/10' : ''}`}>
+                                    Worst Customer {filterType === 'worst' && <Check className="w-3 h-3 ml-auto" />}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <AddCustomerDialog onSuccess={loadCustomers} />
                     </div>
                 </div>
@@ -133,17 +187,21 @@ export default function CustomersPage() {
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {filteredCustomers.map((customer) => {
+                        {filteredCustomers.map((customer, index) => {
                             const isMale = customer.gender === 'Male';
                             const isFemale = customer.gender === 'Female';
                             const accentColor = isMale ? 'text-blue-400' : isFemale ? 'text-pink-400' : 'text-primary';
                             const avatarBg = isMale ? 'bg-blue-500/10 border-blue-500/30' : isFemale ? 'bg-pink-500/10 border-pink-500/30' : 'bg-primary/10 border-primary/30';
 
+                            let performanceColor = '';
+                            if (filterType === 'best' && index < 5) performanceColor = 'bg-emerald-500/10';
+                            else if (filterType === 'worst' && index < 5) performanceColor = 'bg-destructive/10';
+
                             return (
                                 <Link
                                     href={`/customers/${customer.id}`}
                                     key={customer.id}
-                                    className="group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors cursor-pointer"
+                                    className={`group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors cursor-pointer ${performanceColor}`}
                                 >
                                     {/* Avatar */}
                                     <Avatar className={`h-8 w-8 border shrink-0 ${avatarBg}`}>
@@ -163,7 +221,7 @@ export default function CustomersPage() {
                                                 </span>
                                             )}
                                         </p>
-                                        <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
                                             <span className="text-[10px] font-bold text-muted-foreground/70">
                                                 #{customer.customer_code}
                                             </span>
@@ -171,6 +229,16 @@ export default function CustomersPage() {
                                                 <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground">
                                                     <Phone className="w-2.5 h-2.5" />
                                                     {customer.phone}
+                                                </span>
+                                            )}
+                                            {(filterType === 'most_paid' || filterType === 'least_paid' || filterType === 'best') && (
+                                                <span className="text-[9px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 rounded">
+                                                    Paid: ${(customer as any).total_paid || 0}
+                                                </span>
+                                            )}
+                                            {(filterType === 'most_kg' || filterType === 'least_kg') && (
+                                                <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-1.5 rounded">
+                                                    Total KG: {(customer as any).total_kg || 0}
                                                 </span>
                                             )}
                                         </div>
