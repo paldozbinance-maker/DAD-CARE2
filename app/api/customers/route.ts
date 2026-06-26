@@ -7,106 +7,100 @@ import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 
-import { unstable_cache } from 'next/cache';
-
-const getCachedCustomers = unstable_cache(
-    async () => {
-        const query = `
-            WITH past_dates AS (
-                SELECT date::date as db_date
-                FROM "DailyBook"
-                WHERE date::date < CURRENT_DATE
-                ORDER BY date::date ASC
-            ),
-            numbered_dates AS (
-                SELECT db_date,
-                       ROW_NUMBER() OVER (ORDER BY db_date ASC) as rn
-                FROM past_dates
-            ),
-            target_pair AS (
-                SELECT n1.db_date as date1, n2.db_date as date2
-                FROM numbered_dates n1
-                JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
-                WHERE n1.rn % 2 = 1
-                ORDER BY n1.db_date DESC
-                LIMIT 1
-            )
+async function getCustomers() {
+    const query = `
+        WITH past_dates AS (
+            SELECT date::date as db_date
+            FROM "DailyBook"
+            WHERE date::date < CURRENT_DATE
+            ORDER BY date::date ASC
+        ),
+        numbered_dates AS (
+            SELECT db_date,
+                   ROW_NUMBER() OVER (ORDER BY db_date ASC) as rn
+            FROM past_dates
+        ),
+        target_pair AS (
+            SELECT n1.db_date as date1, n2.db_date as date2
+            FROM numbered_dates n1
+            JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
+            WHERE n1.rn % 2 = 1
+            ORDER BY n1.db_date DESC
+            LIMIT 1
+        )
+        SELECT 
+            c.*,
+            COALESCE(l.new_debt, 0)::float as current_balance,
+            COALESCE(l.type, null) as last_transaction_type,
+            COALESCE(p.total_paid, 0)::float as total_paid,
+            COALESCE(dbk.total_daily_kg, 0)::float as total_kg,
+            COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
+            COALESCE(dbk.total_books_count, 0) as total_books_count,
+            CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
+            CASE WHEN COALESCE(td.target_days_count, 0) >= 2 THEN true ELSE false END as is_target_days_done
+        FROM "Customer" c
+        LEFT JOIN (
+            SELECT DISTINCT ON (customer_id) 
+                customer_id, 
+                new_debt, 
+                type,
+                EXISTS (
+                    SELECT 1 FROM "Ledger" l2 
+                    WHERE l2.customer_id = l1.customer_id 
+                      AND (
+                          (l1.receipt_id IS NOT NULL AND l2.receipt_id = l1.receipt_id)
+                          OR
+                          (l1.receipt_id IS NULL AND l2.id = l1.id)
+                      )
+                      AND l2.type = 'PAYMENT'
+                ) as last_receipt_has_payment
+            FROM "Ledger" l1
+            ORDER BY customer_id, created_at DESC, id DESC
+        ) l ON c.id = l.customer_id
+        LEFT JOIN (
+            SELECT customer_id, SUM(amount) as total_paid
+            FROM "Ledger"
+            WHERE type = 'PAYMENT'
+            GROUP BY customer_id
+        ) p ON c.id = p.customer_id
+        LEFT JOIN (
             SELECT 
-                c.*,
-                COALESCE(l.new_debt, 0)::float as current_balance,
-                COALESCE(l.type, null) as last_transaction_type,
-                COALESCE(p.total_paid, 0)::float as total_paid,
-                COALESCE(dbk.total_daily_kg, 0)::float as total_kg,
-                COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
-                COALESCE(dbk.total_books_count, 0) as total_books_count,
-                CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
-                CASE WHEN COALESCE(td.target_days_count, 0) >= 2 THEN true ELSE false END as is_target_days_done
-            FROM "Customer" c
-            LEFT JOIN (
-                SELECT DISTINCT ON (customer_id) 
-                    customer_id, 
-                    new_debt, 
-                    type,
-                    EXISTS (
-                        SELECT 1 FROM "Ledger" l2 
-                        WHERE l2.customer_id = l1.customer_id 
-                          AND (
-                              (l1.receipt_id IS NOT NULL AND l2.receipt_id = l1.receipt_id)
-                              OR
-                              (l1.receipt_id IS NULL AND l2.id = l1.id)
-                          )
-                          AND l2.type = 'PAYMENT'
-                    ) as last_receipt_has_payment
-                FROM "Ledger" l1
-                ORDER BY customer_id, created_at DESC, id DESC
-            ) l ON c.id = l.customer_id
-            LEFT JOIN (
-                SELECT customer_id, SUM(amount) as total_paid
-                FROM "Ledger"
-                WHERE type = 'PAYMENT'
-                GROUP BY customer_id
-            ) p ON c.id = p.customer_id
-            LEFT JOIN (
-                SELECT 
-                    dbi.customer_id,
-                    COUNT(DISTINCT dbi.id) as total_books_count,
-                    SUM(dbi.kg) as total_daily_kg
-                FROM "DailyBookItem" dbi
-                WHERE dbi.kg > 0
-                GROUP BY dbi.customer_id
-            ) dbk ON c.id = dbk.customer_id
-            LEFT JOIN (
-                SELECT 
-                    customer_id,
-                    SUM(kg) as total_ledger_kg
-                FROM "Ledger"
-                WHERE type = 'PRODUCT'
-                GROUP BY customer_id
-            ) lk ON c.id = lk.customer_id
-            LEFT JOIN (
-                SELECT 
-                    customer_id,
-                    COUNT(DISTINCT reference_date::date) as target_days_count
-                FROM "Ledger"
-                WHERE type = 'PRODUCT' 
-                AND reference_date::date IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
-                GROUP BY customer_id
-            ) td ON c.id = td.customer_id
-            ORDER BY c.name ASC;
-        `;
+                dbi.customer_id,
+                COUNT(DISTINCT dbi.id) as total_books_count,
+                SUM(dbi.kg) as total_daily_kg
+            FROM "DailyBookItem" dbi
+            WHERE dbi.kg > 0
+            GROUP BY dbi.customer_id
+        ) dbk ON c.id = dbk.customer_id
+        LEFT JOIN (
+            SELECT 
+                customer_id,
+                SUM(kg) as total_ledger_kg
+            FROM "Ledger"
+            WHERE type = 'PRODUCT'
+            GROUP BY customer_id
+        ) lk ON c.id = lk.customer_id
+        LEFT JOIN (
+            SELECT 
+                customer_id,
+                COUNT(DISTINCT reference_date::date) as target_days_count
+            FROM "Ledger"
+            WHERE type = 'PRODUCT' 
+            AND reference_date::date IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
+            GROUP BY customer_id
+        ) td ON c.id = td.customer_id
+        ORDER BY c.name ASC;
+    `;
 
-        const { rows } = await pool.query(query);
-        return rows;
-    },
-    ['customers-list'],
-    { revalidate: 2, tags: ['customers'] }
-);
+    const { rows } = await pool.query(query);
+    return rows;
+}
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     try {
-        const rows = await getCachedCustomers();
+        const rows = await getCustomers();
         return NextResponse.json(rows);
     } catch (error: any) {
         console.error('Fetch Error:', error);

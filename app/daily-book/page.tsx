@@ -75,7 +75,7 @@ export default function DailyBookPage() {
 
     // Sync SWR Init Data to Local State (Protects Optimistic UI)
     useEffect(() => {
-        if (initData) {
+        if (initData && typeof initData === 'object' && initData.customers) {
             setCustomers(initData.customers);
             setSavedEntries(initData.history);
             
@@ -91,7 +91,7 @@ export default function DailyBookPage() {
         } else if (initData === undefined) {
              // Still loading, do nothing
         } else {
-             // Failed or empty, safely release lock
+             // null (error) or empty — safely release the initialized lock
              setIsInitialized(true);
         }
     }, [initData, editingDate, isInitialized]);
@@ -487,7 +487,7 @@ export default function DailyBookPage() {
                                         <Calendar mode="single" selected={date} onSelect={(newDate) => newDate && handleDateChange(newDate)} className="rounded-md border-0" />
                                     </PopoverContent>
                                 </Popover>
-                                <AddCustomerDialog onSuccess={loadInit} nextId={(Math.max(...customers.map(c => parseInt(c.customer_code.replace(/\D/g, '')) || 0), 0) + 1).toString()} />
+                                <AddCustomerDialog onSuccess={loadInit} nextId={(Math.max(0, ...customers.map(c => parseInt(c.customer_code.replace(/\D/g, '')) || 0)) + 1).toString()} />
                                 <Button variant="outline" size="icon" onClick={() => setIsFullScreen(true)} className="h-10 w-10 text-muted-foreground hover:text-primary border-border" title="Enter Full Screen">
                                     <Maximize2 className="h-4 w-4" />
                                 </Button>

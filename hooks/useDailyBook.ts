@@ -1,14 +1,22 @@
 import useSWR from 'swr';
 import { Customer, SavedEntry, DailyBookItem } from '@/types';
 
-// Generic fetcher for SWR
+// Generic fetcher for SWR — returns null on error instead of throwing
+// so the page doesn't crash with "Application error"
 export const fetcher = async (url: string) => {
-    const res = await fetch(url);
-    if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'An error occurred while fetching the data.');
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            // Log the error but return null so UI degrades gracefully
+            console.error(`[SWR] Fetch error for ${url}:`, errorData.error || res.status);
+            return null;
+        }
+        return res.json();
+    } catch (err) {
+        console.error(`[SWR] Network error for ${url}:`, err);
+        return null;
     }
-    return res.json();
 };
 
 export interface DailyBookInitData {
@@ -19,10 +27,17 @@ export interface DailyBookInitData {
 
 // Hook for the initial Daily Book load (Customers + History)
 export function useDailyBookInit() {
-    const { data, error, mutate, isLoading } = useSWR<DailyBookInitData>('/api/daily-book-init', fetcher, {
-        revalidateOnFocus: false, // Don't constantly reload this massive file on tab focus
-        dedupingInterval: 60000, // Deduplicate requests within 1 minute
-    });
+    const { data, error, mutate, isLoading } = useSWR<DailyBookInitData | null>(
+        '/api/daily-book-init',
+        fetcher,
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 30000, // Deduplicate requests within 30 seconds
+            onError: (err) => {
+                console.error('[useDailyBookInit] SWR error:', err);
+            },
+        }
+    );
 
     return {
         data,
@@ -37,7 +52,12 @@ export function useDailyBookDate(dateStr: string | null) {
     const { data, error, mutate, isLoading } = useSWR(
         dateStr ? `/api/daily-book?date=${dateStr}` : null,
         fetcher,
-        { revalidateOnFocus: false }
+        {
+            revalidateOnFocus: false,
+            onError: (err) => {
+                console.error('[useDailyBookDate] SWR error:', err);
+            },
+        }
     );
 
     return {
@@ -50,13 +70,18 @@ export function useDailyBookDate(dateStr: string | null) {
 
 // Hook for fetching ledger status for a date
 export function useLedgerStatusForDate(dateStr: string | null) {
-    const { data, error, mutate, isLoading } = useSWR<string[]>(
+    const { data, error, mutate, isLoading } = useSWR<string[] | null>(
         dateStr ? `/api/ledger-by-date?date=${dateStr}` : null,
-        fetcher
+        fetcher,
+        {
+            onError: (err) => {
+                console.error('[useLedgerStatusForDate] SWR error:', err);
+            },
+        }
     );
 
     return {
-        processedCustomerIds: data ? new Set(data) : new Set<string>(),
+        processedCustomerIds: Array.isArray(data) ? new Set(data) : new Set<string>(),
         isLoading,
         isError: error,
         mutate
