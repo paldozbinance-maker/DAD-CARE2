@@ -165,7 +165,10 @@ export async function GET(request: Request) {
         
         const data = await getDashboardData(today);
 
-        return NextResponse.json(data);
+        const response = NextResponse.json(data);
+        // Cache dashboard for 30s — user rarely needs real-time on every load
+        response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
+        return response;
 
     } catch (error: any) {
         console.error('Dashboard Fetch Error:', error);

@@ -73,7 +73,10 @@ export async function GET(request: Request) {
     if (errorResponse) return errorResponse;
     try {
         const data = await getDailyBookInit();
-        return NextResponse.json(data);
+        const response = NextResponse.json(data);
+        // Cache for 30s, serve stale for up to 2 min — saves Netlify function calls
+        response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
+        return response;
     } catch (error: any) {
         console.error('Daily Book Init Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

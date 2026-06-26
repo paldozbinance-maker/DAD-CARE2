@@ -34,7 +34,8 @@ export function useDailyBookInit() {
         {
             revalidateOnFocus: false,
             keepPreviousData: true,
-            dedupingInterval: 60000, // Deduplicate requests within 60 seconds
+            dedupingInterval: 300000, // 5 min — init data is heavy, don't re-fetch unless user explicitly refreshes
+            revalidateIfStale: false, // don't auto-revalidate stale data in background
             onError: (err) => {
                 console.error('[useDailyBookInit] SWR error:', err);
             },
@@ -57,7 +58,8 @@ export function useDailyBookDate(dateStr: string | null) {
         {
             revalidateOnFocus: false,
             keepPreviousData: true,
-            dedupingInterval: 10000,
+            dedupingInterval: 120000, // 2 min — per-date data doesn't change often
+            revalidateIfStale: false,
             onError: (err) => {
                 console.error('[useDailyBookDate] SWR error:', err);
             },
@@ -78,6 +80,9 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         dateStr ? `/api/ledger-by-date?date=${dateStr}` : null,
         fetcher,
         {
+            revalidateOnFocus: false,
+            dedupingInterval: 120000, // 2 min
+            revalidateIfStale: false,
             onError: (err) => {
                 console.error('[useLedgerStatusForDate] SWR error:', err);
             },

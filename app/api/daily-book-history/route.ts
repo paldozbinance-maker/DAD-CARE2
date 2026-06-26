@@ -56,7 +56,9 @@ export async function GET(request: Request) {
             };
         });
 
-        return NextResponse.json(history);
+        const response = NextResponse.json(history);
+        response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=180');
+        return response;
     } catch (error: any) {
         console.error('Fetch Daily Book History Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

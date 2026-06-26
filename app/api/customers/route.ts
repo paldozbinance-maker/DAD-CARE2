@@ -115,11 +115,15 @@ export async function GET(request: Request) {
                 ORDER BY c.customer_code ASC;
             `;
             const { rows } = await pool.query(query);
-            return NextResponse.json(rows);
+            const res = NextResponse.json(rows);
+            res.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=180');
+            return res;
         }
 
         const rows = await getCustomers();
-        return NextResponse.json(rows);
+        const res = NextResponse.json(rows);
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
+        return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
