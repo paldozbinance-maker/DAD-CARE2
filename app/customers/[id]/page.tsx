@@ -64,6 +64,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { downloadReceiptPDF, shareReceiptToWhatsApp } from '@/lib/generate-receipt-pdf';
 import { MessageCircle, FileDown } from 'lucide-react';
+import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 
 interface Customer {
     id: string;
@@ -136,6 +137,7 @@ export default function CustomerDetailPage() {
     const [editCode, setEditCode] = useState('');
     const [editGender, setEditGender] = useState('');
     const [updating, setUpdating] = useState(false);
+    const [pendingSecurityAction, setPendingSecurityAction] = useState<'clear_history' | 'delete_customer' | null>(null);
 
     const toggleReceipt = (id: string) => {
         setExpandedReceipts(prev => {
@@ -378,12 +380,12 @@ export default function CustomerDetailPage() {
         }
     };
 
-    const handleClearAllHistory = async () => {
-        const userInput = prompt('Are you sure you want to DELETE ALL ledger history for this customer? This cannot be undone. Type "DELETE" to confirm:');
-        if (userInput !== 'DELETE') {
-            if (userInput !== null) toast.error('Confirmation failed. History not cleared.');
-            return;
-        }
+    const handleClearAllHistory = () => {
+        setPendingSecurityAction('clear_history');
+    };
+
+    const executeClearAllHistory = async () => {
+        setPendingSecurityAction(null);
         setUpdating(true);
         try {
             const res = await fetch(`/api/ledger?customerId=${customerId}`, {
@@ -400,13 +402,13 @@ export default function CustomerDetailPage() {
         }
     };
 
-    const handleDeleteCustomer = async () => {
+    const handleDeleteCustomer = () => {
+        setPendingSecurityAction('delete_customer');
+    };
+
+    const executeDeleteCustomer = async () => {
+        setPendingSecurityAction(null);
         if (!customer) return;
-        const userInput = prompt(`Are you sure you want to delete ${customer.name}? This removes ALL their data permanently. Type "DELETE" to confirm:`);
-        if (userInput !== 'DELETE') {
-            if (userInput !== null) toast.error('Confirmation failed. Customer not deleted.');
-            return;
-        }
         try {
             const res = await fetch(`/api/customers?id=${customerId}`, { method: 'DELETE' });
             if (res.ok) {
@@ -449,6 +451,19 @@ export default function CustomerDetailPage() {
 
     return (
         <div className="max-w-2xl mx-auto space-y-3 pb-20">
+            <SecurityVerificationDialog
+                isOpen={!!pendingSecurityAction}
+                onOpenChange={(open) => {
+                    if (!open) setPendingSecurityAction(null);
+                }}
+                onConfirm={() => {
+                    if (pendingSecurityAction === 'clear_history') executeClearAllHistory();
+                    if (pendingSecurityAction === 'delete_customer') executeDeleteCustomer();
+                }}
+                title={pendingSecurityAction === 'clear_history' ? 'Clear History' : 'Delete Customer'}
+                description={pendingSecurityAction === 'clear_history' ? 'Permanently clear all ledger history for this customer?' : 'Permanently delete this customer and all their data?'}
+                isProcessing={updating}
+            />
             {/* 1. Header Navigation */}
             <div className="flex items-center justify-between">
                 <Button variant="ghost" size="sm" onClick={() => router.push('/customers')} className="rounded-full gap-1.5 text-muted-foreground hover:text-foreground text-xs h-8 px-2">

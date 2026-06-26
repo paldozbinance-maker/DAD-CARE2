@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { UserCog, Plus, Shield, User, Trash2, Search, UserPlus } from 'lucide-react';
+import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 
 interface UserData {
     id: string;
@@ -45,6 +46,7 @@ export default function UsersPage() {
         password: '123',
         role: 'CUSTOMER' as 'ADMIN' | 'CUSTOMER'
     });
+    const [pendingSecurityAction, setPendingSecurityAction] = useState<{ userId: string, username: string } | null>(null);
 
     const loadUsers = async () => {
         try {
@@ -117,21 +119,14 @@ export default function UsersPage() {
         }
     };
 
-    const handleDeleteUser = async (userId: string, username: string) => {
-        const userToDelete = users.find(u => u.id === userId);
-        const isAdmin = userToDelete?.role === 'ADMIN';
+    const handleDeleteUser = (userId: string, username: string) => {
+        setPendingSecurityAction({ userId, username });
+    };
 
-        if (isAdmin) {
-            const confirmation = prompt(`To delete admin user "${username}", please type PALDOZ in capital letters to confirm:`);
-            if (confirmation !== 'PALDOZ') {
-                toast.error('Incorrect confirmation code. Deletion cancelled.');
-                return;
-            }
-        } else {
-            if (!confirm(`Are you sure you want to delete user "${username}"? This cannot be undone.`)) {
-                return;
-            }
-        }
+    const executeDeleteUser = async () => {
+        if (!pendingSecurityAction) return;
+        const { userId } = pendingSecurityAction;
+        setPendingSecurityAction(null);
 
         try {
             const res = await fetch(`/api/users?id=${userId}`, {
@@ -168,6 +163,15 @@ export default function UsersPage() {
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto w-full px-1 md:px-0">
+            <SecurityVerificationDialog
+                isOpen={!!pendingSecurityAction}
+                onOpenChange={(open) => {
+                    if (!open) setPendingSecurityAction(null);
+                }}
+                onConfirm={executeDeleteUser}
+                title="Delete User"
+                description={`Permanently delete user "${pendingSecurityAction?.username}"?`}
+            />
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>

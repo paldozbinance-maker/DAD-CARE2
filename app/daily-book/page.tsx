@@ -13,7 +13,7 @@ import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare, Maximize2, Minimize2, Download, ShieldAlert, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
-
+import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 interface Customer {
     id: string;
     name: string;
@@ -62,7 +62,6 @@ export default function DailyBookPage() {
     const [loadingLedgerStatus, setLoadingLedgerStatus] = useState(false);
     const [historyLedgerStatus, setHistoryLedgerStatus] = useState<Record<string, Set<string>>>({});
     const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
-    const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
 
     // ⚡ Single merged init call — replaces 3 separate API calls
@@ -238,7 +237,7 @@ export default function DailyBookPage() {
     };
 
     const handleDeleteEntry = async () => {
-        if (!deleteConfirmDate || deleteConfirmInput !== 'PALDOZ') return;
+        if (!deleteConfirmDate) return;
         setIsDeleting(true);
         try {
             const res = await fetch(`/api/daily-book?date=${deleteConfirmDate}`, { method: 'DELETE' });
@@ -246,7 +245,6 @@ export default function DailyBookPage() {
             setSavedEntries(prev => prev.filter(e => e.date !== deleteConfirmDate));
             toast.success('Entry deleted successfully');
             setDeleteConfirmDate(null);
-            setDeleteConfirmInput('');
         } catch (err: any) {
             toast.error('Failed to delete: ' + (err.message || 'Server error'));
         } finally {
@@ -727,76 +725,16 @@ export default function DailyBookPage() {
                     );
                 })()}
 
-                {/* ── PALDOZ DELETE CONFIRMATION MODAL ── */}
-                {deleteConfirmDate && (
-                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-                        <div className="bg-card border border-destructive/30 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-                            {/* Modal Header */}
-                            <div className="flex items-start gap-3 mb-5">
-                                <div className="p-2.5 rounded-xl bg-destructive/10 text-destructive shrink-0">
-                                    <ShieldAlert className="w-5 h-5" />
-                                </div>
-                                <div className="min-w-0">
-                                    <h3 className="font-black text-base text-foreground tracking-tight">Delete Entry?</h3>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        This will permanently delete the entry for <span className="font-bold text-foreground">{format(new Date(deleteConfirmDate), 'MMMM dd, yyyy')}</span>. This action cannot be undone.
-                                    </p>
-                                </div>
-                                <button onClick={() => { setDeleteConfirmDate(null); setDeleteConfirmInput(''); }} className="shrink-0 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-
-                            {/* Confirm word input */}
-                            <div className="space-y-2 mb-5">
-                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Type <span className="text-destructive font-black">PALDOZ</span> to confirm deletion</p>
-                                <input
-                                    type="text"
-                                    value={deleteConfirmInput}
-                                    onChange={e => setDeleteConfirmInput(e.target.value)}
-                                    placeholder="Type PALDOZ here..."
-                                    autoFocus
-                                    className={`w-full h-11 px-4 rounded-xl border text-sm font-black tracking-widest transition-all outline-none bg-background ${
-                                        deleteConfirmInput === 'PALDOZ'
-                                            ? 'border-destructive text-destructive bg-destructive/5 ring-2 ring-destructive/20'
-                                            : 'border-border text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20'
-                                    }`}
-                                />
-                                {deleteConfirmInput.length > 0 && deleteConfirmInput !== 'PALDOZ' && (
-                                    <p className="text-[11px] text-destructive/70 font-bold">⚠ Must type exactly: PALDOZ</p>
-                                )}
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => { setDeleteConfirmDate(null); setDeleteConfirmInput(''); }}
-                                    className="flex-1 h-10 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:bg-muted/50 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleDeleteEntry}
-                                    disabled={deleteConfirmInput !== 'PALDOZ' || isDeleting}
-                                    className={`flex-1 h-10 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 ${
-                                        deleteConfirmInput === 'PALDOZ' && !isDeleting
-                                            ? 'bg-destructive text-white hover:bg-destructive/90 shadow-lg shadow-destructive/25 active:scale-95'
-                                            : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                                    }`}
-                                >
-                                    {isDeleting ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <>
-                                            <Trash2 className="w-4 h-4" />
-                                            Delete
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <SecurityVerificationDialog
+                    isOpen={!!deleteConfirmDate}
+                    onOpenChange={(open) => {
+                        if (!open) setDeleteConfirmDate(null);
+                    }}
+                    onConfirm={handleDeleteEntry}
+                    title="Delete Entry"
+                    description={`Permanently delete the entry for ${deleteConfirmDate ? format(new Date(deleteConfirmDate), 'MMMM dd, yyyy') : ''}?`}
+                    isProcessing={isDeleting}
+                />
 
                 <Card className="glass-card">
                     <CardHeader className="border-b border-border">
@@ -935,7 +873,6 @@ export default function DailyBookPage() {
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setDeleteConfirmDate(entry.date);
-                                                        setDeleteConfirmInput('');
                                                     }}
                                                     variant="destructive"
                                                     size="sm"

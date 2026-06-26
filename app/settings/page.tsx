@@ -55,6 +55,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { createClient } from '@/lib/supabase/client';
+import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 
 interface UserData {
     id: string;
@@ -134,6 +135,7 @@ export default function SettingsPage() {
     const [phoneVal, setPhoneVal] = useState('');
     const [birthYearVal, setBirthYearVal] = useState('');
     const [isClearingHistory, setIsClearingHistory] = useState(false);
+    const [pendingSecurityAction, setPendingSecurityAction] = useState<{ type: 'delete_user', userId: string, username: string } | { type: 'clear_history' } | null>(null);
 
     // Admin Detail Dialog state
     const [adminDetailOpen, setAdminDetailOpen] = useState(false);
@@ -546,21 +548,14 @@ export default function SettingsPage() {
         }
     };
 
-    const handleDeleteUser = async (userId: string, username: string) => {
-        const userToDelete = users.find(u => u.id === userId);
-        const isAdmin = userToDelete?.role === 'ADMIN' || userToDelete?.role === 'SUPER_ADMIN';
+    const handleDeleteUser = (userId: string, username: string) => {
+        setPendingSecurityAction({ type: 'delete_user', userId, username });
+    };
 
-        if (isAdmin) {
-            const confirmation = prompt(`To delete admin user "${username}", please type PALDOZ in capital letters to confirm:`);
-            if (confirmation !== 'PALDOZ') {
-                toast.error('Incorrect confirmation code. Deletion cancelled.');
-                return;
-            }
-        } else {
-            if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
-                return;
-            }
-        }
+    const executeDeleteUser = async () => {
+        if (!pendingSecurityAction || pendingSecurityAction.type !== 'delete_user') return;
+        const { userId } = pendingSecurityAction;
+        setPendingSecurityAction(null);
 
         try {
             const res = await fetch(`/api/users?id=${userId}`, {
@@ -594,7 +589,14 @@ export default function SettingsPage() {
         setClearHistoryStep(2);
     };
 
-    const handleClearLedgerHistory = async () => {
+    const handleClearLedgerHistory = () => {
+        setPendingSecurityAction({ type: 'clear_history' });
+    };
+
+    const executeClearLedgerHistory = async () => {
+        setPendingSecurityAction(null);
+        setIsClearHistoryOpen(false);
+        setClearHistoryStep(1);
         setIsClearingHistory(true);
         try {
             const token = localStorage.getItem('dadwork_session_token') || '';
@@ -605,7 +607,6 @@ export default function SettingsPage() {
             const data = await res.json();
             if (res.ok && data.success) {
                 toast.success(`Successfully cleared all customer ledger history (${data.deletedCount} entries deleted)`);
-                setIsClearHistoryOpen(false);
                 loadCustomers();
             } else {
                 toast.error(data.error || 'Failed to clear history');
@@ -699,6 +700,23 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-4 max-w-4xl mx-auto w-full pb-24" suppressHydrationWarning>
+            <SecurityVerificationDialog
+                isOpen={!!pendingSecurityAction}
+                onOpenChange={(open) => {
+                    if (!open) setPendingSecurityAction(null);
+                }}
+                onConfirm={() => {
+                    if (pendingSecurityAction?.type === 'clear_history') executeClearLedgerHistory();
+                    if (pendingSecurityAction?.type === 'delete_user') executeDeleteUser();
+                }}
+                title={pendingSecurityAction?.type === 'clear_history' ? 'Clear History' : 'Delete User'}
+                description={
+                    pendingSecurityAction?.type === 'clear_history'
+                        ? 'Permanently clear all ledger history?'
+                        : `Permanently delete user "${pendingSecurityAction?.type === 'delete_user' ? pendingSecurityAction.username : ''}"?`
+                }
+                isProcessing={isClearingHistory}
+            />
             {/* Compact Header */}
             <div className="relative px-4 pt-4 pb-3 rounded-2xl bg-card overflow-hidden border border-border/50 mx-1 shadow-sm">
                 <div className="absolute -top-20 -right-20 w-52 h-52 bg-primary/8 rounded-full blur-[80px] pointer-events-none" />
