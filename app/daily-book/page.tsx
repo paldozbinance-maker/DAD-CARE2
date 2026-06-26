@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 import { useDailyBookInit, useDailyBookDate, useLedgerStatusForDate } from '@/hooks/useDailyBook';
+import { DailyBookErrorBoundary } from './error-boundary';
 interface Customer {
     id: string;
     name: string;
@@ -44,7 +45,7 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
-export default function DailyBookPage() {
+function DailyBookPageInner() {
     const [date, setDate] = useState<Date>(new Date());
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [entries, setEntries] = useState<{ [key: string]: { kg: number, present: boolean, note: string } }>({});
@@ -964,6 +965,14 @@ export default function DailyBookPage() {
                 </>
             )}
         </div>
+    );
+}
+
+export default function DailyBookPage() {
+    return (
+        <DailyBookErrorBoundary>
+            <DailyBookPageInner />
+        </DailyBookErrorBoundary>
     );
 }
 
