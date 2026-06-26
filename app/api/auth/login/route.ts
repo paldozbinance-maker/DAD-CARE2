@@ -38,8 +38,8 @@ export async function POST(request: Request) {
         }
         if (user.username === 'admin') user.role = 'SUPER_ADMIN';
         
-        // Support both plaintext (for existing accounts) and bcrypt (for new/updated accounts)
-        const isPasswordValid = user.password === password || await bcrypt.compare(password, user.password);
+        // Strictly enforce bcrypt hashing (no plaintext fallback allowed)
+        const isPasswordValid = await bcrypt.compare(password, user.password);
         
         if (!isPasswordValid) {
             await logAuditDirect({
