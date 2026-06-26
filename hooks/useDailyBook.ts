@@ -1,4 +1,5 @@
 import useSWR from 'swr';
+import { useMemo } from 'react';
 import { Customer, SavedEntry, DailyBookItem } from '@/types';
 
 // Generic fetcher for SWR — returns null on error instead of throwing
@@ -80,8 +81,12 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         }
     );
 
+    const processedCustomerIds = useMemo(() => {
+        return Array.isArray(data) ? new Set(data) : new Set<string>();
+    }, [data]);
+
     return {
-        processedCustomerIds: Array.isArray(data) ? new Set(data) : new Set<string>(),
+        processedCustomerIds,
         isLoading,
         isError: error,
         mutate
