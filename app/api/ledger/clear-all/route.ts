@@ -12,14 +12,17 @@ export async function DELETE(request: Request) {
     if (errorResponse) return errorResponse;
 
     try {
-        // 2. Delete all records from "Ledger" table using pg pool
-        const result = await pool.query('DELETE FROM "Ledger"');
+        // 2. Soft-delete all records from "Ledger" table using pg pool
+        const result = await pool.query(
+            'UPDATE "Ledger" SET deleted_at = NOW(), deleted_by = $1 WHERE deleted_at IS NULL',
+            [session?.username || 'unknown']
+        );
 
         // 3. Log this action to the Audit Trail
         await logAudit(
             request,
             'CLEAR_ALL_LEDGER_HISTORY',
-            `Cleared all customer ledger history (${result.rowCount || 0} entries deleted) by Super Admin ${session.username}`
+            `Soft-cleared all customer ledger history (${result.rowCount || 0} entries) by Super Admin ${session.username}`
         );
 
         // 4. Revalidate cache tags for customers to update frontend balance aggregates
@@ -41,3 +44,4 @@ export async function DELETE(request: Request) {
         );
     }
 }
+

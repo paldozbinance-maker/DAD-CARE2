@@ -57,6 +57,7 @@ import { useTheme } from 'next-themes';
 import { createClient } from '@/lib/supabase/client';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 import { AppearanceTab } from '@/components/settings/AppearanceTab';
+import { TrashTab } from '@/components/settings/TrashTab';
 
 interface UserData {
     id: string;
@@ -792,6 +793,16 @@ export default function SettingsPage() {
                         )}
                         {isSuperAdmin && (
                             <TabsTrigger
+                                value="trash"
+                                className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
+                            >
+                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                <span className="hidden xs:inline">Trash</span>
+                                <span className="xs:hidden">🗑️</span>
+                            </TabsTrigger>
+                        )}
+                        {isSuperAdmin && (
+                            <TabsTrigger
                                 value="audit"
                                 className="flex-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md rounded-xl text-[11px] font-bold py-2.5 px-1 gap-1.5 transition-all"
                             >
@@ -988,6 +999,13 @@ export default function SettingsPage() {
                     <TabsContent value="appearance" className="mt-3">
                         <AppearanceTab />
                     </TabsContent>
+
+                    {/* ── Recycle Bin / Trash ── */}
+                    {isSuperAdmin && (
+                        <TabsContent value="trash" className="mt-3">
+                            <TrashTab currentUser={currentUser} />
+                        </TabsContent>
+                    )}
 
                     {/* ── Backup ── */}
                     {isAnyAdmin && (

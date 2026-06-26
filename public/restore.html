@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Restore June 24</title></head>
+<body>
+<h1>Restoring June 24 Daily Book...</h1>
+<pre id="result">Loading...</pre>
+<script>
+fetch('/api/restore-june24', { method: 'POST' })
+  .then(r => r.json())
+  .then(d => {
+    document.getElementById('result').textContent = JSON.stringify(d, null, 2);
+  })
+  .catch(e => {
+    document.getElementById('result').textContent = 'Error: ' + e.message;
+  });
+</script>
+</body>
+</html>

@@ -152,6 +152,7 @@ export async function GET(request: Request) {
             .from('Ledger')
             .select('*')
             .eq('customer_id', customerId)
+            .is('deleted_at', null)
             .order('created_at', { ascending: false })
             .order('id', { ascending: false })
             .range(offset, offset + limit - 1);
@@ -172,6 +173,7 @@ export async function GET(request: Request) {
             .from('Ledger')
             .select('new_debt')
             .eq('customer_id', customerId)
+            .is('deleted_at', null)
             .order('created_at', { ascending: false })
             .order('id', { ascending: false })
             .limit(1);
@@ -184,7 +186,7 @@ export async function GET(request: Request) {
                 SUM(CASE WHEN type = 'PRODUCT' THEN kg ELSE 0 END) as total_kg,
                 SUM(CASE WHEN type = 'PAYMENT' THEN amount ELSE 0 END) as total_paid
             FROM "Ledger"
-            WHERE customer_id = $1
+            WHERE customer_id = $1 AND deleted_at IS NULL
         `, [customerId]);
 
         const totalKg = result.rows[0]?.total_kg || 0;
@@ -206,29 +208,29 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-    const { errorResponse } = await requireSession(request);
+    const { errorResponse, session } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const customerId = searchParams.get('customerId');
-    const supabase = await createClient();
 
     if (!id && !customerId) return NextResponse.json({ error: 'ID or Customer ID required' }, { status: 400 });
 
     try {
-        let query = supabase.from('Ledger').delete();
+        let query = `UPDATE "Ledger" SET deleted_at = NOW(), deleted_by = $1`;
+        const params: any[] = [session?.username || 'unknown'];
 
         if (id) {
-            query = query.eq('id', id);
+            query += ` WHERE id = $2`;
+            params.push(id);
         } else if (customerId) {
-            query = query.eq('customer_id', customerId);
+            query += ` WHERE customer_id = $2`;
+            params.push(customerId);
         }
 
-        const { error } = await query;
+        const result = await pool.query(query, params);
 
-        if (error) throw error;
-
-        await logAudit(request, 'DELETE_LEDGER_ENTRIES', `Deleted ledger entry (ID: ${id || 'ALL'}, Customer: ${customerId || 'UNKNOWN'})`);
+        await logAudit(request, 'DELETE_LEDGER_ENTRIES', `Soft deleted ledger entry (ID: ${id || 'ALL'}, Customer: ${customerId || 'UNKNOWN'})`);
 
         try {
             revalidateTag('customers', 'max');
@@ -236,7 +238,7 @@ export async function DELETE(request: Request) {
             console.error('Failed to revalidate customers tag:', cacheErr);
         }
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, count: result.rowCount });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

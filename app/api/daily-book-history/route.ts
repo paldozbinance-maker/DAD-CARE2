@@ -1,38 +1,46 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
+import pool from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
-    const supabase = await createClient();
 
     try {
-        const { data: books, error: booksError } = await supabase
-            .from('DailyBook')
-            .select(`
-                id, 
-                date,
-                items:DailyBookItem (
-                    id,
-                    kg,
-                    present,
-                    note,
-                    customer:Customer (
-                        id,
-                        name,
-                        customer_code,
-                        gender,
-                        avatar_url
-                    )
-                )
-            `)
-            .order('date', { ascending: false });
-
-        if (booksError) throw booksError;
+        const { rows: historyResult } = await pool.query(`
+            SELECT 
+                db.id, 
+                db.date,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', dbi.id,
+                            'kg', dbi.kg,
+                            'present', dbi.present,
+                            'note', dbi.note,
+                            'customer', json_build_object(
+                                'id', c.id,
+                                'name', c.name,
+                                'customer_code', c.customer_code,
+                                'gender', c.gender,
+                                'avatar_url', c.avatar_url
+                            )
+                        )
+                    ) FILTER (WHERE dbi.id IS NOT NULL), 
+                    '[]'::json
+                ) as items
+            FROM "DailyBook" db
+            LEFT JOIN "DailyBookItem" dbi ON dbi.daily_book_id = db.id AND dbi.deleted_at IS NULL
+            LEFT JOIN "Customer" c ON c.id = dbi.customer_id
+            WHERE db.deleted_at IS NULL
+            GROUP BY db.id, db.date
+            ORDER BY db.date DESC
+        `);
 
         // Transform data to match the SavedEntry format expected by the frontend
-        const history = books.map((book: any) => {
+        const history = (historyResult || []).map((book: any) => {
             const totalKg = book.items.reduce((sum: number, item: any) => sum + (item.kg || 0), 0);
             return {
                 id: book.id,

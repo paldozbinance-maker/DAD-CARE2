@@ -33,7 +33,8 @@ export function useDailyBookInit() {
         fetcher,
         {
             revalidateOnFocus: false,
-            dedupingInterval: 30000, // Deduplicate requests within 30 seconds
+            keepPreviousData: true,
+            dedupingInterval: 60000, // Deduplicate requests within 60 seconds
             onError: (err) => {
                 console.error('[useDailyBookInit] SWR error:', err);
             },
@@ -55,6 +56,8 @@ export function useDailyBookDate(dateStr: string | null) {
         fetcher,
         {
             revalidateOnFocus: false,
+            keepPreviousData: true,
+            dedupingInterval: 10000,
             onError: (err) => {
                 console.error('[useDailyBookDate] SWR error:', err);
             },

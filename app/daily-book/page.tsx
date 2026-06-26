@@ -45,6 +45,18 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
+function getVipInfo(note?: string) {
+    if (!note) return null;
+    const match = note.match(/(\d+(?:\.\d+)?)\s*vip/i);
+    if (match) {
+        return { count: parseFloat(match[1]), text: `${match[1]} VIP` };
+    }
+    if (note.toLowerCase().includes('vip')) {
+        return { count: 0, text: 'VIP' };
+    }
+    return null;
+}
+
 function DailyBookPageInner() {
     const [date, setDate] = useState<Date>(new Date());
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -243,10 +255,10 @@ function DailyBookPageInner() {
             const res = await fetch(`/api/daily-book?date=${deleteConfirmDate}`, { method: 'DELETE' });
             if (!res.ok) throw new Error(await res.text());
             setSavedEntries(prev => prev.filter(e => e.date !== deleteConfirmDate));
-            toast.success('Entry deleted successfully');
+            toast.success('Moved to Recycle Bin');
             setDeleteConfirmDate(null);
         } catch (err: any) {
-            toast.error('Failed to delete: ' + (err.message || 'Server error'));
+            toast.error('Failed to move to trash: ' + (err.message || 'Server error'));
         } finally {
             setIsDeleting(false);
         }
@@ -281,7 +293,10 @@ function DailyBookPageInner() {
     };
 
     const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
-
+    const totalVip = Object.values(entries).reduce((sum, entry) => {
+        const vip = getVipInfo(entry.note);
+        return sum + (vip ? vip.count : 0);
+    }, 0);
     const filteredEntries = searchDate
         ? savedEntries.filter(e => e.date && e.date.substring(0, 10) === format(searchDate, 'yyyy-MM-dd'))
         : savedEntries;
@@ -362,6 +377,7 @@ function DailyBookPageInner() {
                                 <BookOpen className="w-4 h-4 text-primary shrink-0" />
                                 <span className="font-black text-sm uppercase tracking-tight truncate text-foreground">{format(date, 'MMM dd, yyyy')}</span>
                                 {totalKg > 0 && <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">{Math.round(totalKg)} KG</span>}
+                                {totalVip > 0 && <span className="text-[10px] font-black text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full shrink-0">{totalVip} VIP</span>}
                                 {editingDate && (
                                     <Popover>
                                         <PopoverTrigger asChild>
@@ -448,7 +464,17 @@ function DailyBookPageInner() {
                                                 </Popover>
                                             </div>
                                             <div className="col-span-3 flex items-center justify-end gap-1">
-                                                <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
+                                                <div className="flex items-center justify-end gap-1 relative w-full">
+                                                    {(() => {
+                                                        const vipInfo = getVipInfo(entries[customer.id]?.note);
+                                                        return vipInfo ? (
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse">
+                                                                {vipInfo.text}
+                                                            </span>
+                                                        ) : null;
+                                                    })()}
+                                                    <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
+                                                </div>
                                                 {(entries[customer.id]?.kg > 0 || entries[customer.id]?.present === false || entries[customer.id]?.note) && (
                                                     <Button variant="ghost" size="sm" onClick={() => { const n = { ...entries }; delete n[customer.id]; setEntries(n); }} className="h-8 w-8 md:h-6 md:w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
                                                         <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
@@ -557,7 +583,15 @@ function DailyBookPageInner() {
                                                 </Popover>
                                             </div>
                                             <div className="col-span-3 flex items-center justify-end gap-1">
-                                                <div className="relative inline-block">
+                                                <div className="flex items-center justify-end gap-1 relative w-full">
+                                                    {(() => {
+                                                        const vipInfo = getVipInfo(entries[customer.id]?.note);
+                                                        return vipInfo ? (
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse">
+                                                                {vipInfo.text}
+                                                            </span>
+                                                        ) : null;
+                                                    })()}
                                                     <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
                                                 </div>
                                                 {(entries[customer.id]?.kg > 0 || entries[customer.id]?.present === false || entries[customer.id]?.note) && (
@@ -582,6 +616,12 @@ function DailyBookPageInner() {
                                         <div className="flex items-baseline gap-2">
                                             <span className="text-xl font-black text-primary tracking-tighter tabular-nums">{Math.round(totalKg)}</span>
                                             <span className="text-[9px] font-black text-primary uppercase opacity-60">Total KG</span>
+                                            {totalVip > 0 && (
+                                                <>
+                                                    <span className="text-xl font-black text-amber-600 tracking-tighter tabular-nums ml-2">{totalVip}</span>
+                                                    <span className="text-[9px] font-black text-amber-600 uppercase opacity-60">VIP</span>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -673,6 +713,21 @@ function DailyBookPageInner() {
                                     <span className="font-black text-primary text-sm">{Math.round(entry.totalKg)}</span>
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase">Total KG</span>
                                 </div>
+                                {(() => {
+                                    const entryVipCount = entry.items.reduce((sum, i) => sum + (getVipInfo(i.note)?.count || 0), 0);
+                                    if (entryVipCount > 0) {
+                                        return (
+                                            <>
+                                                <div className="h-3 w-px bg-border" />
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-black text-amber-600 text-sm">{entryVipCount}</span>
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase">VIP</span>
+                                                </div>
+                                            </>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </div>
 
                             {/* Scrollable content — book style */}
@@ -707,9 +762,19 @@ function DailyBookPageInner() {
                                                     {item.present === false ? (
                                                         <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase">Absent</span>
                                                     ) : (
-                                                        <span className="font-black text-primary text-sm md:text-base">{Math.round(item.kg)} <span className="text-[9px] opacity-60">KG</span></span>
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            {(() => {
+                                                                const vipInfo = getVipInfo(item.note);
+                                                                return vipInfo ? (
+                                                                    <span className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] md:text-xs uppercase tracking-widest inline-block whitespace-nowrap shadow-[0_0_8px_rgba(251,191,36,0.3)]">
+                                                                        {vipInfo.text}
+                                                                    </span>
+                                                                ) : null;
+                                                            })()}
+                                                            <span className="font-black text-primary text-sm md:text-base">{Math.round(item.kg)} <span className="text-[9px] opacity-60">KG</span></span>
+                                                        </div>
                                                     )}
-                                                    {item.note && <div className="text-[9px] text-muted-foreground truncate max-w-[90px] ml-auto">{item.note}</div>}
+                                                    {item.note && !item.note.toLowerCase().trim().match(/^\d*\s*vip$/i) && <div className="text-[9px] text-muted-foreground truncate max-w-[90px] ml-auto mt-0.5">{item.note}</div>}
                                                 </div>
                                             </div>
                                         );
@@ -718,7 +783,15 @@ function DailyBookPageInner() {
                                 {/* Footer total */}
                                 <div className="sticky bottom-0 bg-[#f4ece0]/95 dark:bg-slate-950/95 border-t-2 border-double border-primary/20 backdrop-blur-sm flex items-center justify-between px-4 md:px-6 py-3">
                                     <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Quantity</span>
-                                    <span className="font-black text-primary text-xl">{Math.round(entry.totalKg)} <span className="text-xs opacity-60">KG</span></span>
+                                    <div className="flex items-center gap-4">
+                                        {(() => {
+                                            const entryVipCount = entry.items.reduce((sum, i) => sum + (getVipInfo(i.note)?.count || 0), 0);
+                                            return entryVipCount > 0 ? (
+                                                <span className="font-black text-amber-600 text-xl">{entryVipCount} <span className="text-xs opacity-60">VIP</span></span>
+                                            ) : null;
+                                        })()}
+                                        <span className="font-black text-primary text-xl">{Math.round(entry.totalKg)} <span className="text-xs opacity-60">KG</span></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -731,8 +804,8 @@ function DailyBookPageInner() {
                         if (!open) setDeleteConfirmDate(null);
                     }}
                     onConfirm={handleDeleteEntry}
-                    title="Delete Entry"
-                    description={`Permanently delete the entry for ${deleteConfirmDate ? format(new Date(deleteConfirmDate), 'MMMM dd, yyyy') : ''}?`}
+                    title="Move to Trash"
+                    description={`Move the entry for ${deleteConfirmDate ? format(new Date(deleteConfirmDate), 'MMMM dd, yyyy') : ''} to the Recycle Bin?`}
                     isProcessing={isDeleting}
                 />
 
@@ -878,7 +951,7 @@ function DailyBookPageInner() {
                                                     size="sm"
                                                     className="flex-1 md:flex-none h-10 md:h-8"
                                                 >
-                                                    <Trash2 className="w-4 h-4 mr-2 md:mr-1" /> <span>Delete</span>
+                                                    <Trash2 className="w-4 h-4 mr-2 md:mr-1" /> <span className="hidden md:inline">Move to Trash</span><span className="md:hidden">Trash</span>
                                                 </Button>
                                             </div>
                                         </div>

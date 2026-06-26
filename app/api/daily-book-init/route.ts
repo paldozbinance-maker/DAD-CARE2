@@ -15,29 +15,29 @@ async function getDailyBookInit() {
             SELECT 
                 db.id, 
                 db.date,
-                COALESCE((
-                    SELECT json_agg(
+                COALESCE(
+                    json_agg(
                         json_build_object(
                             'id', dbi.id,
                             'kg', dbi.kg,
                             'present', dbi.present,
                             'note', dbi.note,
-                            'customer', (
-                                SELECT json_build_object(
-                                    'id', c.id,
-                                    'name', c.name,
-                                    'customer_code', c.customer_code,
-                                    'gender', c.gender,
-                                    'avatar_url', c.avatar_url
-                                )
-                                FROM "Customer" c WHERE c.id = dbi.customer_id
+                            'customer', json_build_object(
+                                'id', c.id,
+                                'name', c.name,
+                                'customer_code', c.customer_code,
+                                'gender', c.gender,
+                                'avatar_url', c.avatar_url
                             )
                         )
-                    )
-                    FROM "DailyBookItem" dbi 
-                    WHERE dbi.daily_book_id = db.id
-                ), '[]'::json) as items
+                    ) FILTER (WHERE dbi.id IS NOT NULL), 
+                    '[]'::json
+                ) as items
             FROM "DailyBook" db
+            LEFT JOIN "DailyBookItem" dbi ON dbi.daily_book_id = db.id AND dbi.deleted_at IS NULL
+            LEFT JOIN "Customer" c ON c.id = dbi.customer_id
+            WHERE db.deleted_at IS NULL
+            GROUP BY db.id, db.date
             ORDER BY db.date DESC
             LIMIT 30
         `)

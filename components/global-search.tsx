@@ -18,7 +18,7 @@ export function GlobalSearch() {
         const fetchCustomers = async () => {
             setLoading(true);
             try {
-                const res = await fetch('/api/customers');
+                const res = await fetch('/api/customers?lite=true');
                 if (res.ok) {
                     const data = await res.json();
                     setCustomers(data);

@@ -12,7 +12,7 @@ async function getCustomers() {
         WITH past_dates AS (
             SELECT date::date as db_date
             FROM "DailyBook"
-            WHERE date::date < CURRENT_DATE
+            WHERE date::date < CURRENT_DATE AND deleted_at IS NULL
             ORDER BY date::date ASC
         ),
         numbered_dates AS (
@@ -55,12 +55,13 @@ async function getCustomers() {
                       AND l2.type = 'PAYMENT'
                 ) as last_receipt_has_payment
             FROM "Ledger" l1
+            WHERE l1.deleted_at IS NULL
             ORDER BY customer_id, created_at DESC, id DESC
         ) l ON c.id = l.customer_id
         LEFT JOIN (
             SELECT customer_id, SUM(amount) as total_paid
             FROM "Ledger"
-            WHERE type = 'PAYMENT'
+            WHERE type = 'PAYMENT' AND deleted_at IS NULL
             GROUP BY customer_id
         ) p ON c.id = p.customer_id
         LEFT JOIN (
@@ -69,7 +70,7 @@ async function getCustomers() {
                 COUNT(DISTINCT dbi.id) as total_books_count,
                 SUM(dbi.kg) as total_daily_kg
             FROM "DailyBookItem" dbi
-            WHERE dbi.kg > 0
+            WHERE dbi.kg > 0 AND dbi.deleted_at IS NULL
             GROUP BY dbi.customer_id
         ) dbk ON c.id = dbk.customer_id
         LEFT JOIN (
@@ -77,7 +78,7 @@ async function getCustomers() {
                 customer_id,
                 SUM(kg) as total_ledger_kg
             FROM "Ledger"
-            WHERE type = 'PRODUCT'
+            WHERE type = 'PRODUCT' AND deleted_at IS NULL
             GROUP BY customer_id
         ) lk ON c.id = lk.customer_id
         LEFT JOIN (
@@ -85,7 +86,7 @@ async function getCustomers() {
                 customer_id,
                 COUNT(DISTINCT reference_date::date) as target_days_count
             FROM "Ledger"
-            WHERE type = 'PRODUCT' 
+            WHERE type = 'PRODUCT' AND deleted_at IS NULL
             AND reference_date::date IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
             GROUP BY customer_id
         ) td ON c.id = td.customer_id
@@ -99,7 +100,24 @@ async function getCustomers() {
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
+    const { searchParams } = new URL(request.url);
+    const isLite = searchParams.get('lite') === 'true';
+
     try {
+        if (isLite) {
+            const query = `
+                SELECT 
+                    c.id, c.name, c.customer_code, c.phone,
+                    COALESCE(
+                        (SELECT new_debt FROM "Ledger" WHERE customer_id = c.id AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1), 
+                    0)::float as current_balance
+                FROM "Customer" c
+                ORDER BY c.customer_code ASC;
+            `;
+            const { rows } = await pool.query(query);
+            return NextResponse.json(rows);
+        }
+
         const rows = await getCustomers();
         return NextResponse.json(rows);
     } catch (error: any) {

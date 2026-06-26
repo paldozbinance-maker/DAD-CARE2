@@ -5,7 +5,7 @@ export const SESSION_COOKIE = 'dadwork_session';
 
 // Routes that do NOT require authentication
 const PUBLIC_PAGE_ROUTES = ['/login'];
-const PUBLIC_API_ROUTES = ['/api/auth/login', '/api/auth/verify', '/api/temp-cleanup'];
+const PUBLIC_API_ROUTES = ['/api/auth/login', '/api/auth/verify', '/api/temp-cleanup', '/api/recover-check', '/api/restore-june24', '/api/verify-june24', '/api/run-migration'];
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
