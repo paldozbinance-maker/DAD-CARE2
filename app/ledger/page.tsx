@@ -348,7 +348,6 @@ export default function LedgerPage() {
         setSelectedCustomerId(customerId);
         setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
         setPaymentEntries([{ id: Date.now().toString(), date: '', amount: '' }]);
-        setHistory([]);
         setCustomerDailyDates([]);
         setShowLastMaqal(false);
         setUpdateLastMaqal(false);
