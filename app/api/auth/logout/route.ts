@@ -11,8 +11,15 @@ export async function POST(request: Request) {
 
         const response = NextResponse.json({ success: true });
 
-        // Always clear the session cookie
+        // Always clear both auth cookies
         response.cookies.set('dadwork_session', '', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 0,
+        });
+        response.cookies.set('dadwork_claim', '', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',

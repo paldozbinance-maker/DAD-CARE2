@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
@@ -156,7 +155,7 @@ export async function GET(request: Request) {
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limit = parseInt(searchParams.get('limit') || '100');
     const offset = parseInt(searchParams.get('offset') || '0');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
@@ -165,62 +164,52 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Customer ID required' }, { status: 400 });
     }
 
-    const supabase = await createClient();
-
     try {
-        let query = supabase
-            .from('Ledger')
-            .select('*')
-            .eq('customer_id', customerId)
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false })
-            .order('id', { ascending: false })
-            .range(offset, offset + limit - 1);
+        // Build date filter clauses
+        const dateFilters: string[] = [];
+        const params: any[] = [customerId];
+        if (startDate) { params.push(startDate); dateFilters.push(`AND reference_date >= $${params.length}`); }
+        if (endDate)   { params.push(endDate);   dateFilters.push(`AND reference_date <= $${params.length}`); }
+        const dateClause = dateFilters.join(' ');
 
-        if (startDate) {
-            query = query.gte('reference_date', startDate);
-        }
-        if (endDate) {
-            query = query.lte('reference_date', endDate);
-        }
+        // Single parallel query: transactions + summary in one round-trip
+        const [txnResult, summaryResult] = await Promise.all([
+            pool.query(
+                `SELECT * FROM "Ledger"
+                 WHERE customer_id = $1 AND deleted_at IS NULL ${dateClause}
+                 ORDER BY created_at DESC, id DESC
+                 LIMIT ${limit} OFFSET ${offset}`,
+                params
+            ),
+            pool.query(
+                `SELECT
+                    COALESCE(SUM(CASE WHEN type = 'PRODUCT' THEN kg    ELSE 0 END), 0)::float as total_kg,
+                    COALESCE(SUM(CASE WHEN type = 'PAYMENT' THEN amount ELSE 0 END), 0)::float as total_paid,
+                    (SELECT new_debt FROM "Ledger"
+                     WHERE customer_id = $1 AND deleted_at IS NULL
+                     ORDER BY created_at DESC, id DESC LIMIT 1)::float as current_balance,
+                    (SELECT type FROM "Ledger"
+                     WHERE customer_id = $1 AND deleted_at IS NULL
+                     ORDER BY created_at DESC, id DESC LIMIT 1) as last_transaction_type
+                 FROM "Ledger"
+                 WHERE customer_id = $1 AND deleted_at IS NULL`,
+                [customerId]
+            )
+        ]);
 
-        const { data: transactions, error: txnError } = await query;
-
-        if (txnError) throw txnError;
-
-        // Get current balance from the LATEST entry's new_debt (source of truth)
-        const { data: latestEntry } = await supabase
-            .from('Ledger')
-            .select('new_debt')
-            .eq('customer_id', customerId)
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false })
-            .order('id', { ascending: false })
-            .limit(1);
-
-        const currentBalance = latestEntry?.[0]?.new_debt || 0;
-
-        // Still aggregate totals for information - OPTIMIZED: Database side math
-        const result = await pool.query(`
-            SELECT 
-                SUM(CASE WHEN type = 'PRODUCT' THEN kg ELSE 0 END) as total_kg,
-                SUM(CASE WHEN type = 'PAYMENT' THEN amount ELSE 0 END) as total_paid
-            FROM "Ledger"
-            WHERE customer_id = $1 AND deleted_at IS NULL
-        `, [customerId]);
-
-        const totalKg = result.rows[0]?.total_kg || 0;
-        const totalPaid = result.rows[0]?.total_paid || 0;
-
-        return NextResponse.json({
-            transactions: transactions || [],
+        const s = summaryResult.rows[0] || {};
+        const response = NextResponse.json({
+            transactions: txnResult.rows,
             summary: {
-                totalKg,
-                totalPaid,
-                currentBalance,
-                lastTransactionType: transactions && transactions.length > 0 ? transactions[0].type : null
+                totalKg:             s.total_kg || 0,
+                totalPaid:           s.total_paid || 0,
+                currentBalance:      s.current_balance || 0,
+                lastTransactionType: s.last_transaction_type || null,
             }
         });
+        // Cache per-customer ledger for 20s — short enough to stay fresh
+        response.headers.set('Cache-Control', 'private, max-age=20, stale-while-revalidate=60');
+        return response;
     } catch (error: any) {
         console.error('Fetch Ledger Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

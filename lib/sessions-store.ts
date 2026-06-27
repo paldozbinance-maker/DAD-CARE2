@@ -88,13 +88,18 @@ export async function createSession(
 export async function validateSession(token: string): Promise<{ userId: string; username: string; role: string } | null> {
     try {
         await ensureTable();
+        // Combine SELECT + touch last_seen_at into a single round-trip
         const { rows } = await pool.query(
-            `SELECT * FROM "AdminSession" WHERE token = $1 AND expires_at > NOW() LIMIT 1`,
+            `WITH updated AS (
+                UPDATE "AdminSession"
+                SET last_seen_at = NOW()
+                WHERE token = $1 AND expires_at > NOW()
+                RETURNING *
+             )
+             SELECT * FROM updated LIMIT 1`,
             [token]
         );
         if (!rows.length) return null;
-        // Touch last_seen_at
-        await pool.query(`UPDATE "AdminSession" SET last_seen_at = NOW() WHERE token = $1`, [token]);
         const r = rows[0];
         return { userId: r.user_id, username: r.username, role: r.role };
     } catch {

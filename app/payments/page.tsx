@@ -55,10 +55,18 @@ const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
 ];
 
 export default function PaymentsPage() {
-    const { data: rawCustomers } = useSWR<{ id: string; name: string; customer_code: string }[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    const { data: rawCustomers } = useSWR<{ id: string; name: string; customer_code: string }[]>('/api/customers', fetcher, {
+        revalidateOnFocus: false,
+        dedupingInterval: 120000,   // 2 min — don't re-fetch on every navigation
+        keepPreviousData: true,
+    });
     const customers = rawCustomers || [];
     
-    const { data: rawData, isLoading: loading } = useSWR<PaymentData>('/api/payments', fetcher, { revalidateOnFocus: false });
+    const { data: rawData, isLoading: loading } = useSWR<PaymentData>('/api/payments', fetcher, {
+        revalidateOnFocus: false,
+        dedupingInterval: 60000,    // 1 min
+        keepPreviousData: true,
+    });
     const data = rawData || { payments: [], todayTotal: 0, totalAllTime: 0, count: 0 };
 
     const [searchTerm, setSearchTerm] = useState('');

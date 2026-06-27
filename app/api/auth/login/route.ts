@@ -2,6 +2,7 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { createSession } from '@/lib/sessions-store';
 import { logAuditDirect } from '@/lib/audit';
+import { signClaim } from '@/lib/token';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -81,13 +82,24 @@ export async function POST(request: Request) {
         });
 
         const response = NextResponse.json({ ...resolvedUser, sessionToken: token });
-        // Set secure httpOnly cookie so middleware can enforce auth on page routes
+        const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+        // Primary session cookie (opaque, used for DB-backed validation in API routes)
         response.cookies.set('dadwork_session', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
-            maxAge: 30 * 24 * 60 * 60, // 30 days – matches SESSION_TTL_HOURS
+            maxAge: 30 * 24 * 60 * 60, // 30 days
+        });
+        // Signed claim cookie — readable by Edge middleware without any DB call.
+        // Contains: username, role, expiry. HMAC-signed so it cannot be forged.
+        const claim = await signClaim(resolvedUser.username, resolvedUser.role, TTL_MS);
+        response.cookies.set('dadwork_claim', claim, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 30 * 24 * 60 * 60, // 30 days
         });
         return response;
     } catch (error: any) {

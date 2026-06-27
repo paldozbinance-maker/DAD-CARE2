@@ -159,14 +159,22 @@ export default function LedgerPage() {
     const SESSION_KEY = 'dadwork_ledger_session_active';
 
     // Data state
-    const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
+        revalidateOnFocus: false,
+        dedupingInterval: 120000,   // 2 min — customer list rarely changes
+        keepPreviousData: true,
+    });
     const allCustomers = rawCustomers || [];
     
     // Form state
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     
     const ledgerUrl = selectedCustomerId ? `/api/ledger?customerId=${selectedCustomerId}&limit=200` : null;
-    const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, { revalidateOnFocus: false });
+    const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, {
+        revalidateOnFocus: false,
+        dedupingInterval: 30000,    // 30s — per-customer ledger can change after a save
+        keepPreviousData: true,     // Show old data while new data loads
+    });
     
     const history: Transaction[] = ledgerData?.transactions || [];
     const summary: CustomerSummary = ledgerData?.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 };

@@ -284,14 +284,22 @@ export default function CustomerDetailPage() {
         );
     };
 
-    const { data: allCustomers } = useSWR<Customer[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    const { data: allCustomers } = useSWR<Customer[]>('/api/customers', fetcher, {
+        revalidateOnFocus: false,
+        dedupingInterval: 120000,   // 2 min — shared cache with other pages
+        keepPreviousData: true,
+    });
     
     // Construct the base URL for the first page of ledger data
     let baseLedgerUrl = `/api/ledger?customerId=${customerId}&limit=200&offset=0`;
     if (startDate) baseLedgerUrl += `&startDate=${startDate}`;
     if (endDate) baseLedgerUrl += `&endDate=${endDate}`;
     
-    const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, { revalidateOnFocus: false });
+    const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, {
+        revalidateOnFocus: false,
+        dedupingInterval: 30000,    // 30s
+        keepPreviousData: true,     // Show old data while refreshing
+    });
 
     // Sync SWR cache instantly to local state
     useEffect(() => {

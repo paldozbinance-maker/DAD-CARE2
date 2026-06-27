@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifyClaim } from '@/lib/token';
 
 export const SESSION_COOKIE = 'dadwork_session';
+export const CLAIM_COOKIE = 'dadwork_claim';
 
 // Routes that do NOT require authentication
 const PUBLIC_PAGE_ROUTES = ['/login'];
-const PUBLIC_API_ROUTES = ['/api/auth/login', '/api/auth/verify', '/api/temp-cleanup', '/api/recover-check', '/api/restore-june24', '/api/verify-june24', '/api/run-migration'];
+const PUBLIC_API_ROUTES = [
+    '/api/auth/login',
+    '/api/auth/verify',
+    '/api/temp-cleanup',
+    '/api/recover-check',
+    '/api/restore-june24',
+    '/api/verify-june24',
+    '/api/run-migration',
+];
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -15,61 +25,59 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // Allow public API routes (login only – logout is intentionally excluded so it can clear the cookie)
+    // Allow public API routes
     if (PUBLIC_API_ROUTES.some(r => pathname.startsWith(r))) {
         return NextResponse.next();
     }
 
-    // Read session token from httpOnly cookie (set on login) OR legacy header
+    // Allow logout unconditionally (idempotent, must always work)
+    if (pathname.startsWith('/api/auth/logout')) {
+        return NextResponse.next();
+    }
+
+    // ── Check session token presence ───────────────────────────────────────────
     const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
     const headerToken = request.headers.get('x-session-token');
     const token = cookieToken || headerToken;
 
-    // Quick reject — no token at all
+    // No token at all — reject immediately
     if (!token) {
         if (pathname.startsWith('/api/')) {
-            if (pathname.startsWith('/api/auth/logout')) return NextResponse.next();
             return NextResponse.json({ error: 'Unauthorized – please log in' }, { status: 401 });
         }
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // ── API routes ────────────────────────────────────────────────────────────
-    // API routes are protected by requireSession() inside each handler (DB check).
-    // The middleware just ensures a token is present so we don't hit the DB twice.
+    // ── API routes: token present → let the route handler do the real DB check ─
+    // requireSession() inside each handler validates against the DB, so we don't
+    // need to do it here. This removes an entire DB round-trip from every request.
     if (pathname.startsWith('/api/')) {
-        // Allow logout even without a valid token (idempotent operation)
-        if (pathname.startsWith('/api/auth/logout')) {
+        return NextResponse.next();
+    }
+
+    // ── Page routes: verify the signed claim cookie (ZERO DB calls) ───────────
+    // On login, we set a `dadwork_claim` cookie with HMAC-signed payload
+    // (username + role + expiry). We verify the signature here locally.
+    // This replaces the old internal fetch → /api/auth/verify which caused
+    // 15-20 second cold-start delays on Netlify.
+    const claim = request.cookies.get(CLAIM_COOKIE)?.value;
+
+    if (claim) {
+        const payload = await verifyClaim(claim);
+        if (payload) {
+            // Claim is valid — allow the page to render immediately
             return NextResponse.next();
         }
-        // Token present → let the route handler's requireSession() do the real DB check
-        return NextResponse.next();
+        // Claim is expired or tampered — redirect to login
+        return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // ── Page routes — verify token is genuinely valid in DB ───────────────────
-    // We call our own /api/auth/verify endpoint (which uses the pg pool on the
-    // Node.js runtime) because middleware runs on the Edge and cannot use `pg` directly.
-    try {
-        const verifyUrl = new URL('/api/auth/verify', request.url);
-        const verifyRes = await fetch(verifyUrl.toString(), {
-            headers: {
-                // Forward the original cookie so the verify route can read it
-                cookie: request.headers.get('cookie') || '',
-            },
-        });
-
-        if (!verifyRes.ok) {
-            // Token exists but is expired/fake/not in DB → kick to login
-            const loginUrl = new URL('/login', request.url);
-            return NextResponse.redirect(loginUrl);
-        }
-    } catch {
-        // If the verify call itself fails (cold start, DB hiccup), fail open
-        // so we don't lock users out during a transient error.
-        // You can change this to fail closed (redirect to /login) if you prefer.
-        return NextResponse.next();
-    }
-
+    // ── Fallback: no claim cookie (e.g. old login before this deploy) ─────────
+    // If they have a session token but no claim cookie, they logged in before
+    // this update. We allow them through once — the first API call will do
+    // the real DB check via requireSession(). On their next login they will
+    // get the claim cookie and everything will be fast.
+    // This prevents locking out existing users after deploy.
     return NextResponse.next();
 }
 
