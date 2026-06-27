@@ -24,6 +24,7 @@ export async function POST(request: Request) {
         const client = await pool.connect();
         let runningDebt = 0;
         let customerName = '';
+        let entriesToInsert: any[] = [];
 
         try {
             await client.query('BEGIN');
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
             runningDebt = lastEntries[0]?.new_debt || 0;
 
             // 3. PROCESS ENTRIES
-            const entriesToInsert = [];
+            entriesToInsert = [];
             const entriesToProcess = isBatch ? items : [body];
 
             const hasReset = entriesToProcess.some((item: any) => {
