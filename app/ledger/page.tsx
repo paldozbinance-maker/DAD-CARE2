@@ -163,6 +163,7 @@ export default function LedgerPage() {
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [showLastMaqal, setShowLastMaqal] = useState(false);
     const [updateLastMaqal, setUpdateLastMaqal] = useState(false);
+    const [isVoiding, setIsVoiding] = useState(false);
 
     // Form state
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -752,6 +753,42 @@ export default function LedgerPage() {
             toast.error(err.message || 'Failed to save receipt');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleVoidReceipt = async () => {
+        if (!lastReceiptGroup?.receiptId) return;
+        if (!confirm('Are you sure you want to void this receipt? This will add reverse adjustments to reset the debt.')) return;
+        
+        setIsVoiding(true);
+        try {
+            const res = await fetch('/api/ledger/void', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-session-token': localStorage.getItem('dadwork_session_token') || ''
+                },
+                body: JSON.stringify({ receipt_id: lastReceiptGroup.receiptId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            
+            toast.success('Receipt voided successfully');
+            setSummary(prev => ({ ...prev, currentBalance: data.finalDebt }));
+            
+            // Re-fetch customer data
+            await handleCustomerChange(selectedCustomerId);
+            
+            // Re-fetch customers list
+            const custRes = await fetch('/api/customers');
+            const custData = await custRes.json();
+            if (Array.isArray(custData)) {
+                setAllCustomers(custData);
+            }
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to void receipt');
+        } finally {
+            setIsVoiding(false);
         }
     };
 

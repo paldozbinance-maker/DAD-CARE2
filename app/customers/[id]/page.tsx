@@ -760,12 +760,17 @@ export default function CustomerDetailPage() {
                                                     )}
 
                                                     {/* 1. Maqalka entries (products) */}
-                                                    {receipt.entries.filter(e => e.type === 'PRODUCT').map(e => (
-                                                        <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium">
-                                                            <span>{format(new Date(e.reference_date), 'MMM dd')} · {Math.round(e.kg || 0)}KG @ ${e.price_per_kg}</span>
-                                                            <span className="font-bold">${Math.round(e.amount).toLocaleString()}</span>
+                                                    {receipt.entries.filter(e => e.type === 'PRODUCT').map(e => {
+                                                        const isAbsent = Math.round(e.kg || 0) === 0;
+                                                        return (
+                                                        <div key={e.id} className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium ${isAbsent ? 'opacity-60 line-through-none' : ''}`}>
+                                                            <span>
+                                                                {format(new Date(e.reference_date), 'MMM dd')} · {isAbsent ? '❌ Baaqatay' : `${Math.round(e.kg || 0)}KG @ $${e.price_per_kg}`}
+                                                            </span>
+                                                            <span className="font-bold">{isAbsent ? '$0' : `$${Math.round(e.amount).toLocaleString()}`}</span>
                                                         </div>
-                                                    ))}
+                                                        );
+                                                    })}
 
                                                     {/* 2. Maqalka Total (products subtotal only) */}
                                                     {receipt.entries.some(e => e.type === 'PRODUCT') && (

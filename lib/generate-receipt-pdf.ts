@@ -88,8 +88,9 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
 
         productEntries.forEach(entry => {
             const dateStr = format(new Date(entry.reference_date), 'MMM dd');
-            const kgStr = `${Math.round(entry.kg || 0)}KG × $${entry.price_per_kg}`;
-            const amountStr = `$${Math.round(entry.amount).toLocaleString()}`;
+            const isAbsent = Math.round(entry.kg || 0) === 0;
+            const kgStr = isAbsent ? 'Baaqatay' : `${Math.round(entry.kg || 0)}KG x $${entry.price_per_kg}`;
+            const amountStr = isAbsent ? '$0' : `$${Math.round(entry.amount).toLocaleString()}`;
 
             doc.text(`${dateStr} · ${kgStr}`, margin, y);
             doc.text(amountStr, pageWidth - margin, y, { align: 'right' });
@@ -227,7 +228,12 @@ export function shareReceiptToWhatsApp(data: ReceiptData, phone?: string) {
         lines.push('📦 *MAQALKA:*');
         products.forEach(e => {
             const dateStr = format(new Date(e.reference_date), 'MMM dd');
-            lines.push(`  ${dateStr} · ${Math.round(e.kg || 0)}KG × $${e.price_per_kg} = *$${Math.round(e.amount).toLocaleString()}*`);
+            const isAbsent = Math.round(e.kg || 0) === 0;
+            if (isAbsent) {
+                lines.push(`  ${dateStr} · \u274c Baaqatay = *$0*`);
+            } else {
+                lines.push(`  ${dateStr} · ${Math.round(e.kg || 0)}KG \u00d7 $${e.price_per_kg} = *$${Math.round(e.amount).toLocaleString()}*`);
+            }
         });
         lines.push(`  📊 *Maqalka Total: $${Math.round(data.totalMaqalka).toLocaleString()}*`);
         lines.push('');

@@ -47,6 +47,31 @@ export async function POST(request: Request) {
     const { date: dateStr, items } = body;
 
     try {
+        // 0. Pre-check: Ensure none of these customers have already been processed into the Ledger for this date
+        if (items && items.length > 0) {
+            const customerIds = items.map((i: any) => i.customer_id).filter(Boolean);
+            if (customerIds.length > 0) {
+                const { rows: processed } = await pool.query(
+                    `SELECT DISTINCT c.name 
+                     FROM "Ledger" l
+                     JOIN "Customer" c ON l.customer_id = c.id
+                     WHERE l.reference_date = $1::date 
+                     AND l.type = 'PRODUCT' 
+                     AND l.deleted_at IS NULL
+                     AND l.customer_id = ANY($2::uuid[])`,
+                    [dateStr, customerIds]
+                );
+
+                if (processed.length > 0) {
+                    const names = processed.map(p => p.name).join(', ');
+                    return NextResponse.json(
+                        { error: `Cannot edit ${dateStr} because ${names} have already been processed into the Master Ledger.` },
+                        { status: 400 }
+                    );
+                }
+            }
+        }
+
         // 1. Get or Create DailyBook (recycle if soft-deleted)
         let bookId;
         const { rows: existing } = await pool.query(

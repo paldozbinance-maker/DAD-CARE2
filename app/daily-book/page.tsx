@@ -78,6 +78,7 @@ function DailyBookPageInner() {
     const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [openNoteForCustomerId, setOpenNoteForCustomerId] = useState<string | null>(null);
 
     // ⚡ SWR Hooks for Lightning Fast Caching
     const { data: initData, mutate: mutateInit } = useDailyBookInit();
@@ -449,16 +450,18 @@ function DailyBookPageInner() {
                                                 <button onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })} className={`h-5 w-5 md:h-6 md:w-6 rounded flex items-center justify-center text-[10px] md:text-[11px] font-black transition-colors border ${entries[customer.id]?.present !== false ? 'bg-green-100/50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400' : 'bg-red-100/50 border-red-200 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400'}`}>
                                                     {entries[customer.id]?.present !== false ? 'P' : 'A'}
                                                 </button>
-                                                <Popover>
+                                                <Popover open={openNoteForCustomerId === customer.id} onOpenChange={(o) => setOpenNoteForCustomerId(o ? customer.id : null)}>
                                                     <PopoverTrigger asChild>
                                                         <Button variant="ghost" size="sm" className={`h-5 w-5 md:h-6 md:w-6 p-0 rounded-md hover:bg-blue-100 dark:hover:bg-slate-800 ${entries[customer.id]?.note ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 dark:text-slate-600'}`}>
                                                             <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl z-[10000]">
+                                                    <PopoverContent className="w-60 p-3 bg-popover border-border shadow-xl rounded-xl z-[10000]">
                                                         <div className="space-y-2">
                                                             <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
-                                                            <Input placeholder="Add a remark..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
+                                                            <p className="text-[10px] text-muted-foreground/60">Tip: type <span className="font-bold text-amber-600">5 vip</span> to mark 5KG as VIP</p>
+                                                            <Input placeholder="e.g. 5 vip, special note..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
+                                                            <Button size="sm" className="w-full h-7 text-xs" onClick={() => setOpenNoteForCustomerId(null)}>Done</Button>
                                                         </div>
                                                     </PopoverContent>
                                                 </Popover>
@@ -468,9 +471,9 @@ function DailyBookPageInner() {
                                                     {(() => {
                                                         const vipInfo = getVipInfo(entries[customer.id]?.note);
                                                         return vipInfo ? (
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse">
-                                                                {vipInfo.text}
-                                                            </span>
+                                                            <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform">
+                                                                ✏️ {vipInfo.text}
+                                                            </button>
                                                         ) : null;
                                                     })()}
                                                     <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
@@ -568,16 +571,18 @@ function DailyBookPageInner() {
                                                 <button onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })} className={`h-5 w-5 md:h-6 md:w-6 rounded flex items-center justify-center text-[10px] md:text-[11px] font-black transition-colors border ${entries[customer.id]?.present !== false ? 'bg-green-100/50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400' : 'bg-red-100/50 border-red-200 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400'}`}>
                                                     {entries[customer.id]?.present !== false ? 'P' : 'A'}
                                                 </button>
-                                                <Popover>
+                                                <Popover open={openNoteForCustomerId === customer.id} onOpenChange={(o) => setOpenNoteForCustomerId(o ? customer.id : null)}>
                                                     <PopoverTrigger asChild>
                                                         <Button variant="ghost" size="sm" className={`h-5 w-5 md:h-6 md:w-6 p-0 rounded-md hover:bg-blue-100 dark:hover:bg-slate-800 ${entries[customer.id]?.note ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 dark:text-slate-600'}`}>
                                                             <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-56 p-2 bg-popover border-border shadow-xl rounded-xl z-[10000]">
+                                                    <PopoverContent className="w-60 p-3 bg-popover border-border shadow-xl rounded-xl z-[10000]">
                                                         <div className="space-y-2">
                                                             <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
-                                                            <Input placeholder="Add a remark..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
+                                                            <p className="text-[10px] text-muted-foreground/60">Tip: type <span className="font-bold text-amber-600">5 vip</span> to mark 5KG as VIP</p>
+                                                            <Input placeholder="e.g. 5 vip, special note..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
+                                                            <Button size="sm" className="w-full h-7 text-xs" onClick={() => setOpenNoteForCustomerId(null)}>Done</Button>
                                                         </div>
                                                     </PopoverContent>
                                                 </Popover>
@@ -587,9 +592,9 @@ function DailyBookPageInner() {
                                                     {(() => {
                                                         const vipInfo = getVipInfo(entries[customer.id]?.note);
                                                         return vipInfo ? (
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse">
-                                                                {vipInfo.text}
-                                                            </span>
+                                                            <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform">
+                                                                ✏️ {vipInfo.text}
+                                                            </button>
                                                         ) : null;
                                                     })()}
                                                     <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
@@ -912,6 +917,14 @@ function DailyBookPageInner() {
                                                             <span className="font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full ml-2 md:ml-0">
                                                                 {Math.round(entry.totalKg)} KG
                                                             </span>
+                                                            {(() => {
+                                                                const entryVipCount = entry.items.reduce((sum, i) => sum + (getVipInfo(i.note)?.count || 0), 0);
+                                                                return entryVipCount > 0 ? (
+                                                                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse ml-1 md:ml-0">
+                                                                        {entryVipCount} VIP
+                                                                    </span>
+                                                                ) : null;
+                                                            })()}
                                                             {/* Ledger status summary badge */}
                                                             {historyLedgerStatus[entry.date] ? (() => {
                                                                 const withKg = entry.items.filter(i => i.kg > 0);

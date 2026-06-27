@@ -21,102 +21,121 @@ export async function POST(request: Request) {
 
         if (!customerId) throw new Error('Customer ID is required');
 
-        // 1. Verify customer exists
-        const { data: customer, error: custError } = await supabase
-            .from('Customer')
-            .select('name')
-            .eq('id', customerId)
-            .single();
+        const client = await pool.connect();
+        let runningDebt = 0;
+        let customerName = '';
 
-        if (custError || !customer) throw new Error('Customer not found');
+        try {
+            await client.query('BEGIN');
 
-        // 2. GET CURRENT LATEST DEBT (Atomic start point)
-        const { data: lastEntry } = await supabase
-            .from('Ledger')
-            .select('new_debt')
-            .eq('customer_id', customerId)
-            .order('created_at', { ascending: false })
-            .order('id', { ascending: false })
-            .limit(1);
+            // 1. Verify customer and acquire row lock
+            const { rows: customers } = await client.query(
+                `SELECT name FROM "Customer" WHERE id = $1 FOR UPDATE`,
+                [customerId]
+            );
+            if (customers.length === 0) throw new Error('Customer not found');
+            customerName = customers[0].name;
 
-        let runningDebt = lastEntry?.[0]?.new_debt || 0;
+            // 2. GET CURRENT LATEST DEBT (Atomic start point)
+            const { rows: lastEntries } = await client.query(
+                `SELECT new_debt FROM "Ledger" 
+                 WHERE customer_id = $1 AND deleted_at IS NULL 
+                 ORDER BY created_at DESC, id DESC LIMIT 1`,
+                [customerId]
+            );
+            
+            runningDebt = lastEntries[0]?.new_debt || 0;
 
-        // 3. PROCESS ENTRIES
-        const entriesToInsert = [];
-        const entriesToProcess = isBatch ? items : [body];
+            // 3. PROCESS ENTRIES
+            const entriesToInsert = [];
+            const entriesToProcess = isBatch ? items : [body];
 
-        // PRE-SCAN: If any item in the batch is an "Initial Debt Setup", 
-        // we must CLEAR the runningDebt so this batch acts as a FRESH START.
-        const hasReset = entriesToProcess.some(item => {
-            const lowerNote = (item.note || '').toLowerCase();
-            return item.type === 'ADJUSTMENT' && (lowerNote.includes('setup') || lowerNote.includes('initial') || lowerNote.includes('reesto'));
-        });
-
-        if (hasReset) {
-            runningDebt = 0;
-        }
-
-        const now = new Date();
-        for (let i = 0; i < entriesToProcess.length; i++) {
-            const item = entriesToProcess[i];
-            const { type, date, kg, price, amount, note } = item;
-
-            // Basic dupe check for PRODUCT entries on same date (if provided)
-            if (type === 'PRODUCT' && date) {
-                const { data: existing } = await supabase
-                    .from('Ledger')
-                    .select('id')
-                    .eq('customer_id', customerId)
-                    .eq('reference_date', date)
-                    .eq('type', 'PRODUCT')
-                    .maybeSingle();
-                if (existing) throw new Error(`Product entry already exists for ${date}`);
-            }
-
-            let entryAmount = 0;
-            const prevDebt = runningDebt;
-
-            if (type === 'PRODUCT') {
-                entryAmount = Math.round(parseFloat(kg) * parseFloat(price));
-                runningDebt = Math.round(runningDebt + entryAmount);
-            } else if (type === 'PAYMENT') {
-                entryAmount = Math.round(parseFloat(amount));
-                runningDebt = Math.round(runningDebt - entryAmount);
-            } else if (type === 'ADJUSTMENT') {
-                entryAmount = Math.round(parseFloat(amount));
-                const lowerNote = (note || '').toLowerCase();
-                // If it's a "Setup" or "Initial" adjustment, we RESET the running debt to this amount
-                // This prevents old historical debt from polluting a new "Fresh Start" setup
-                if (lowerNote.includes('setup') || lowerNote.includes('initial') || lowerNote.includes('reesto')) {
-                    runningDebt = entryAmount;
-                } else {
-                    runningDebt = Math.round(runningDebt + entryAmount);
-                }
-            }
-
-            entriesToInsert.push({
-                customer_id: customerId,
-                type: type,
-                reference_date: date || new Date().toISOString().split('T')[0],
-                kg: type === 'PRODUCT' ? parseFloat(kg) : null,
-                price_per_kg: type === 'PRODUCT' ? parseFloat(price) : null,
-                amount: entryAmount,
-                previous_debt: prevDebt,
-                new_debt: runningDebt,
-                note: note || body.note || null,
-                receipt_id: receipt_id,
-                created_at: new Date(now.getTime() + i).toISOString()
+            const hasReset = entriesToProcess.some((item: any) => {
+                const lowerNote = (item.note || '').toLowerCase();
+                return item.type === 'ADJUSTMENT' && (lowerNote.includes('setup') || lowerNote.includes('initial') || lowerNote.includes('reesto'));
             });
+
+            if (hasReset) {
+                runningDebt = 0;
+            }
+
+            const now = new Date();
+            for (let i = 0; i < entriesToProcess.length; i++) {
+                const item = entriesToProcess[i];
+                const { type, date, kg, price, amount, note } = item;
+
+                if (type === 'PRODUCT' && date) {
+                    const { rows: existing } = await client.query(
+                        `SELECT id FROM "Ledger" WHERE customer_id = $1 AND reference_date = $2 AND type = 'PRODUCT' AND deleted_at IS NULL LIMIT 1`,
+                        [customerId, date]
+                    );
+                    if (existing.length > 0) throw new Error(`Product entry already exists for ${date}`);
+                }
+
+                let entryAmount = 0;
+                const prevDebt = runningDebt;
+
+                if (type === 'PRODUCT') {
+                    entryAmount = Math.round(parseFloat(kg) * parseFloat(price));
+                    runningDebt = Math.round(runningDebt + entryAmount);
+                } else if (type === 'PAYMENT') {
+                    entryAmount = Math.round(parseFloat(amount));
+                    runningDebt = Math.round(runningDebt - entryAmount);
+                } else if (type === 'ADJUSTMENT') {
+                    entryAmount = Math.round(parseFloat(amount));
+                    const lowerNote = (note || '').toLowerCase();
+                    if (lowerNote.includes('setup') || lowerNote.includes('initial') || lowerNote.includes('reesto')) {
+                        runningDebt = entryAmount;
+                    } else {
+                        runningDebt = Math.round(runningDebt + entryAmount);
+                    }
+                }
+
+                entriesToInsert.push({
+                    customer_id: customerId,
+                    type: type,
+                    reference_date: date || new Date().toISOString().split('T')[0],
+                    kg: type === 'PRODUCT' ? parseFloat(kg) : null,
+                    price_per_kg: type === 'PRODUCT' ? parseFloat(price) : null,
+                    amount: entryAmount,
+                    previous_debt: prevDebt,
+                    new_debt: runningDebt,
+                    note: note || body.note || null,
+                    receipt_id: receipt_id,
+                    created_at: new Date(now.getTime() + i).toISOString()
+                });
+            }
+
+            // 4. SEQUENTIAL INSERT
+            for (const entry of entriesToInsert) {
+                await client.query(
+                    `INSERT INTO "Ledger" (id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at)
+                     VALUES (gen_random_uuid(), $1, $2::"LedgerType", $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    [
+                        entry.customer_id, 
+                        entry.type, 
+                        entry.reference_date, 
+                        entry.kg, 
+                        entry.price_per_kg, 
+                        entry.amount, 
+                        entry.previous_debt, 
+                        entry.new_debt, 
+                        entry.note, 
+                        entry.receipt_id, 
+                        entry.created_at
+                    ]
+                );
+            }
+
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
         }
 
-        // 4. BULK INSERT
-        const { error: insertError } = await supabase
-            .from('Ledger')
-            .insert(entriesToInsert);
-
-        if (insertError) throw insertError;
-
-        await logAudit(request, 'ADD_LEDGER_ENTRIES', `Added ${entriesToInsert.length} ledger entries for customer ${customer.name}`);
+        await logAudit(request, 'ADD_LEDGER_ENTRIES', `Added receipt with new debt ${runningDebt} for customer ${customerName}`);
 
         try {
             revalidateTag('customers', 'max');
