@@ -765,12 +765,19 @@ export default function CustomerDetailPage() {
                                                     )}
 
                                                     {/* 1. Maqalka entries (products) */}
-                                                    {receipt.entries.filter(e => e.type === 'PRODUCT').map(e => {
+                                                    {receipt.entries.filter(e => e.type === 'PRODUCT').filter((e, idx, arr) => {
+                                                        if (Math.round(e.kg || 0) > 0) return true;
+                                                        const hasOther = arr.some(other => other.reference_date === e.reference_date && other.id !== e.id && Math.round(other.kg || 0) > 0);
+                                                        return !hasOther;
+                                                    }).map((e, idx, arr) => {
                                                         const isAbsent = Math.round(e.kg || 0) === 0;
+                                                        const hasMain = arr.some(other => other.reference_date === e.reference_date && !other.note && Math.round(other.kg || 0) > 0);
                                                         return (
                                                         <div key={e.id} className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium ${isAbsent ? 'opacity-60 line-through-none' : ''}`}>
                                                             <span>
+                                                                {(e.note && hasMain) ? '↳ ' : ''}
                                                                 {format(new Date(e.reference_date), 'MMM dd')} · {isAbsent ? '❌ Baaqatay' : `${Math.round(e.kg || 0)}KG @ $${e.price_per_kg}`}
+                                                                {e.note ? ` (${e.note})` : ''}
                                                             </span>
                                                             <span className="font-bold">{isAbsent ? '$0' : `$${Math.round(e.amount).toLocaleString()}`}</span>
                                                         </div>
