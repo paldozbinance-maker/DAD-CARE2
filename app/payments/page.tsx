@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
 
 interface Payment {
     id: string;
@@ -52,33 +55,17 @@ const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
 ];
 
 export default function PaymentsPage() {
-    const [data, setData] = useState<PaymentData | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { data: rawCustomers } = useSWR<{ id: string; name: string; customer_code: string }[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    const customers = rawCustomers || [];
+    
+    const { data: rawData, isLoading: loading } = useSWR<PaymentData>('/api/payments', fetcher, { revalidateOnFocus: false });
+    const data = rawData || { payments: [], todayTotal: 0, totalAllTime: 0, count: 0 };
+
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCustomerId, setFilterCustomerId] = useState('all');
     const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
-    const [customers, setCustomers] = useState<{ id: string; name: string; customer_code: string }[]>([]);
     const [filterOpen, setFilterOpen] = useState(false);
 
-    useEffect(() => {
-        const fetchPayments = async () => {
-            try {
-                const res = await fetch('/api/payments');
-                const json = await res.json();
-                if (res.ok) setData(json);
-            } catch (e) { console.error(e); }
-            finally { setLoading(false); }
-        };
-        const fetchCustomers = async () => {
-            try {
-                const res = await fetch('/api/customers');
-                const json = await res.json();
-                if (Array.isArray(json)) setCustomers(json);
-            } catch (e) { console.error(e); }
-        };
-        fetchPayments();
-        fetchCustomers();
-    }, []);
 
     const filteredPayments = useMemo(() => {
         let list = data?.payments || [];

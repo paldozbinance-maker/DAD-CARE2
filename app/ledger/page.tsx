@@ -11,6 +11,9 @@ import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
 
 interface DateEntry {
     id: string;
@@ -149,7 +152,6 @@ const buildEntryFromDailyRecord = (
 
 export default function LedgerPage() {
     const [loading, setLoading] = useState(false);
-    const [fetchingCustomers, setFetchingCustomers] = useState(true);
     const [fetchingDetails, setFetchingDetails] = useState(false);
     const [defaultPrice, setDefaultPrice] = useState('35');
     const [isRestored, setIsRestored] = useState(false);
@@ -157,16 +159,23 @@ export default function LedgerPage() {
     const SESSION_KEY = 'dadwork_ledger_session_active';
 
     // Data state
-    const [allCustomers, setAllCustomers] = useState<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>([]);
-    const [history, setHistory] = useState<Transaction[]>([]);
-    const [summary, setSummary] = useState<CustomerSummary>({ totalKg: 0, totalPaid: 0, currentBalance: 0 });
+    const { data: allCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    
+    // Form state
+    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    
+    const ledgerUrl = selectedCustomerId ? `/api/ledger?customerId=${selectedCustomerId}&limit=200` : null;
+    const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, { revalidateOnFocus: false });
+    
+    const history = ledgerData?.transactions || [];
+    const summary = ledgerData?.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 };
+
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [showLastMaqal, setShowLastMaqal] = useState(false);
     const [updateLastMaqal, setUpdateLastMaqal] = useState(false);
     const [isVoiding, setIsVoiding] = useState(false);
 
-    // Form state
-    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    // Form state (continued)
     const [customerDailyDates, setCustomerDailyDates] = useState<DailyBookRecord[]>([]);
     const [dateEntries, setDateEntries] = useState<DateEntry[]>([]);
     const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([{ id: Date.now().toString(), date: '', amount: '' }]);
@@ -234,20 +243,7 @@ export default function LedgerPage() {
         }
         setIsRestored(true);
 
-        const fetchCustomers = async () => {
-            try {
-                const res = await fetch('/api/customers');
-                const data = await res.json();
-                if (Array.isArray(data)) {
-                    setAllCustomers(data);
-                }
-            } catch (err) {
-                console.error('Failed to fetch customers:', err);
-            } finally {
-                setFetchingCustomers(false);
-            }
-        };
-        fetchCustomers();
+        // Customer fetching is now handled seamlessly by SWR!
     }, []);
 
     // Save draft to localStorage on every change (survives navigation)
@@ -270,21 +266,12 @@ export default function LedgerPage() {
 
     useEffect(() => {
         if (!selectedCustomerId) {
-            setHistory([]);
-            setSummary({ totalKg: 0, totalPaid: 0, currentBalance: 0 });
             return;
         }
 
-        const fetchCustomerDetails = async () => {
+        const fetchDailyData = async () => {
             setFetchingDetails(true);
             try {
-                // Fetch ledger history (increased limit for duplicate checking)
-                const ledgerRes = await fetch(`/api/ledger?customerId=${selectedCustomerId}&limit=200&t=${Date.now()}`);
-                const ledgerData = await ledgerRes.json();
-                setHistory(ledgerData.transactions || []);
-                setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
-
-                // Fetch daily book records for this customer
                 const url = new URL(`/api/customer-daily-entries`, window.location.origin);
                 url.searchParams.set('customerId', selectedCustomerId);
                 if (startDate) {
@@ -354,8 +341,8 @@ export default function LedgerPage() {
             }
         };
 
-        fetchCustomerDetails();
-    }, [selectedCustomerId, defaultPrice, startDate]);
+        fetchDailyData();
+    }, [selectedCustomerId, startDate, defaultPrice]);
 
     const handleCustomerChange = (customerId: string) => {
         setSelectedCustomerId(customerId);
@@ -734,20 +721,24 @@ export default function LedgerPage() {
             setSummary(prev => ({ ...prev, currentBalance: data.finalDebt }));
             toast.success('Receipt saved successfully!');
 
-            // 3. Reset form
+            // 4. Refresh data (fast sync)
+            mutateCustomers();
+            mutateLedger();
+            // We still need to call handleCustomerChange to fetch unprocessed dates again, but it won't flicker history anymore.
+            // Actually, we don't need handleCustomerChange, we just need to re-fetch daily book records or reset the form.
             setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
             setPaymentEntries([{ id: (Date.now() + 1).toString(), date: '', amount: '' }]);
             setAdjustmentAmount('');
-
-            // 4. Refresh data (full sync)
-            await handleCustomerChange(selectedCustomerId);
             
-            // Re-fetch customers to update warning/correct symbols in real-time
-            const custRes = await fetch('/api/customers');
-            const custData = await custRes.json();
-            if (Array.isArray(custData)) {
-                setAllCustomers(custData);
+            // Re-fetch only daily dates in the background
+            const url = new URL(`/api/customer-daily-entries`, window.location.origin);
+            url.searchParams.set('customerId', selectedCustomerId);
+            if (startDate) {
+                url.searchParams.set('startDate', startDate);
             }
+            fetch(url.toString()).then(res => res.json()).then(data => {
+                setCustomerDailyDates(data || []);
+            });
 
         } catch (err: any) {
             toast.error(err.message || 'Failed to save receipt');

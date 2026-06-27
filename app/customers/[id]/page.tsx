@@ -11,6 +11,7 @@ const getBalanceLabel = (totalPaid: number): string =>
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -109,6 +110,8 @@ interface ReceiptGroup {
     note?: string;
     titleString?: string;
 }
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
 
 export default function CustomerDetailPage() {
     const params = useParams();
@@ -281,37 +284,41 @@ export default function CustomerDetailPage() {
         );
     };
 
+    const { data: allCustomers } = useSWR<Customer[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    
+    // Construct the base URL for the first page of ledger data
+    let baseLedgerUrl = `/api/ledger?customerId=${customerId}&limit=200&offset=0`;
+    if (startDate) baseLedgerUrl += `&startDate=${startDate}`;
+    if (endDate) baseLedgerUrl += `&endDate=${endDate}`;
+    
+    const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, { revalidateOnFocus: false });
+
+    // Sync SWR cache instantly to local state
+    useEffect(() => {
+        if (allCustomers) {
+            setCustomer(allCustomers.find((c: Customer) => c.id === customerId) || null);
+        }
+    }, [allCustomers, customerId]);
+
+    useEffect(() => {
+        if (initialLedgerData) {
+            const allTxns = initialLedgerData.transactions || [];
+            setTransactions(allTxns);
+            setReceipts(groupTransactionsInfoReceipts(allTxns));
+            setSummary(initialLedgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
+            setHasMore(allTxns.length === 200);
+            setLoading(false);
+        }
+    }, [initialLedgerData]);
+
     const loadCustomerData = async (reset = false) => {
         if (reset) {
             setTransactions([]);
             setReceipts([]);
             setHasMore(true);
+            setLoading(true);
         }
-        setLoading(true);
-        try {
-            const custRes = await fetch('/api/customers');
-            const allCustomers = await custRes.json();
-            const foundCustomer = allCustomers.find((c: Customer) => c.id === customerId);
-            setCustomer(foundCustomer);
-
-            let url = `/api/ledger?customerId=${customerId}&limit=200&offset=0&t=${Date.now()}`;
-            if (startDate) url += `&startDate=${startDate}`;
-            if (endDate) url += `&endDate=${endDate}`;
-
-            const ledgerRes = await fetch(url);
-            const ledgerData = await ledgerRes.json();
-
-            const allTxns = ledgerData.transactions || [];
-            setTransactions(allTxns);
-            setReceipts(groupTransactionsInfoReceipts(allTxns));
-            setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
-            setHasMore(allTxns.length === 200);
-        } catch (error) {
-            console.error('Failed to load profile:', error);
-            toast.error('Failed to load customer profile');
-        } finally {
-            setLoading(false);
-        }
+        mutateLedger();
     };
 
     const loadMore = async () => {
@@ -340,9 +347,7 @@ export default function CustomerDetailPage() {
         }
     };
 
-    useEffect(() => {
-        if (customerId) loadCustomerData();
-    }, [customerId]);
+
 
     const handleOpenEdit = () => {
         if (!customer) return;
