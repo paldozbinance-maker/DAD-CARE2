@@ -591,16 +591,27 @@ export default function LedgerPage() {
     }, 0);
 
     const activePaymentAmount = paymentEntries.reduce((sum, pay) => {
+        const lowerNote = (pay.note || '').toLowerCase();
+        if (lowerNote.includes('heyn') || lowerNote.includes('cafis')) return sum;
         const amount = parseFloat(pay.amount);
         return sum + (isNaN(amount) ? 0 : amount);
     }, 0);
 
+    const activeAdjustmentsAmount = paymentEntries.reduce((sum, pay) => {
+        const lowerNote = (pay.note || '').toLowerCase();
+        if (lowerNote.includes('heyn') || lowerNote.includes('cafis')) {
+            const amount = parseFloat(pay.amount);
+            return sum + (isNaN(amount) ? 0 : amount);
+        }
+        return sum;
+    }, 0);
+
     const currentReesto = summary.currentBalance === 0 ? (parseFloat(adjustmentAmount) || 0) : summary.currentBalance;
-    const subtotal = productGrandTotal + currentReesto;
+    const subtotal = productGrandTotal - activeAdjustmentsAmount + currentReesto;
     const finalLacagtaGuud = subtotal - activePaymentAmount;
 
     const activeDatesForHeader = dateEntries
-        .filter(e => e.date && (parseFloat(e.kg) > 0 || parseFloat(e.extraKg || '0') > 0))
+        .filter(e => e.date && (parseFloat(e.kg) >= 0 || parseFloat(e.extraKg || '0') > 0))
         .map(e => format(new Date(e.date), 'dd MMM'));
 
     const dynamicMaqalLabel = 'Maqalka';
@@ -622,7 +633,10 @@ export default function LedgerPage() {
                 (parseFloat(e.extraKg || '0') > 0 && parseFloat(e.extraPricePerKg || '0') > 0)
             )
         );
-        const validPayments = paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0);
+        const validPayments = paymentEntries.filter(p => {
+            const isAdjustment = (p.note || '').toLowerCase().includes('heyn') || (p.note || '').toLowerCase().includes('cafis');
+            return (p.date || isAdjustment) && parseFloat(p.amount) > 0;
+        });
 
         const hasAdjustment = !isReadOnlyMode && summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0;
 
@@ -652,7 +666,7 @@ export default function LedgerPage() {
         // Product entries (skipped in read-only mode)
         if (!isReadOnlyMode) {
             for (const entry of validEntries) {
-                if (parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0) {
+                if (parseFloat(entry.kg) >= 0 && parseFloat(entry.pricePerKg) > 0) {
                     items.push({
                         type: 'PRODUCT',
                         date: entry.date,
@@ -672,14 +686,26 @@ export default function LedgerPage() {
             }
         }
 
-        // Payment entries
+        // Payment and Adjustment entries
         for (const pay of validPayments) {
-            items.push({
-                type: 'PAYMENT',
-                date: pay.date,
-                amount: pay.amount,
-                note: pay.note || "Lacagta"
-            });
+            const lowerNote = (pay.note || '').toLowerCase();
+            const isAdjustment = lowerNote.includes('heyn') || lowerNote.includes('cafis');
+            
+            if (isAdjustment) {
+                items.push({
+                    type: 'ADJUSTMENT',
+                    date: pay.date,
+                    amount: -parseFloat(pay.amount),
+                    note: pay.note
+                });
+            } else {
+                items.push({
+                    type: 'PAYMENT',
+                    date: pay.date,
+                    amount: pay.amount,
+                    note: pay.note || "Lacagta"
+                });
+            }
         }
 
         try {
@@ -909,7 +935,7 @@ export default function LedgerPage() {
                                                                                             const extraKg = parseFloat(entry.extraKg || '0') || 0;
                                                                                             const dateStr = format(parseISO(entry.date), "MMM dd, yyyy");
                                                                                             if (mainKg === 0 && extraKg === 0) {
-                                                                                                return `${dateStr} ❌ Absent`;
+                                                                                                return `${dateStr} ❌ Baaqatay`;
                                                                                             }
                                                                                             const parts = [];
                                                                                             if (mainKg > 0) parts.push(`📦 ${mainKg} KG`);
@@ -1246,7 +1272,7 @@ export default function LedgerPage() {
                                                             <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium">
                                                                 <span>
                                                                     {e.note ? '↳ ' : ''}
-                                                                    {format(new Date(e.reference_date), 'MMM dd')} · {Math.round(e.kg || 0)}KG @ ${e.price_per_kg}
+                                                                    {format(new Date(e.reference_date), 'MMM dd')} · {e.kg === 0 ? '❌ Baaqatay' : `${Math.round(e.kg || 0)}KG @ $${e.price_per_kg}`}
                                                                     {e.note ? ` (${e.note})` : ''}
                                                                 </span>
                                                                 <span className="font-bold">${Math.round(e.amount).toLocaleString()}</span>
@@ -1272,8 +1298,8 @@ export default function LedgerPage() {
                                                         {/* Adjustment entries */}
                                                         {lastReceiptGroup.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
                                                             <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                                <span>Reesto</span>
-                                                                <span>+${Math.round(e.amount).toLocaleString()}</span>
+                                                                <span>{e.note || 'Reesto'}</span>
+                                                                <span>{e.amount > 0 ? '+' : '-'}${Math.abs(Math.round(e.amount)).toLocaleString()}</span>
                                                             </div>
                                                         ))}
 
@@ -1312,9 +1338,12 @@ export default function LedgerPage() {
                                                         {activePaymentAmount > 0 && (
                                                             <>
                                                                 <p className="text-[9px] font-black uppercase tracking-[0.15em] text-primary/60 pt-3 pb-0.5 border-t border-dashed border-primary/20 mt-2">➕ New Payment</p>
-                                                                {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
+                                                                {paymentEntries.filter(p => {
+                                                                    const ln = (p.note || '').toLowerCase();
+                                                                    return !(ln.includes('heyn') || ln.includes('cafis')) && parseFloat(p.amount) > 0;
+                                                                }).map((pay, idx) => (
                                                                     <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
-                                                                        <span>{format(new Date(pay.date), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
+                                                                        <span>{format(new Date(pay.date || new Date()), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
                                                                         <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
                                                                     </div>
                                                                 ))}
@@ -1343,16 +1372,16 @@ export default function LedgerPage() {
 
                                                         {/* Maqalka breakdown lines */}
                                                         {dateEntries.filter(e => e.date && (
-                                                            (parseFloat(e.kg) > 0 && parseFloat(e.pricePerKg) > 0) ||
+                                                            (parseFloat(e.kg) >= 0 && parseFloat(e.pricePerKg) > 0) ||
                                                             (e.extraKg && parseFloat(e.extraKg) > 0 && e.extraPricePerKg && parseFloat(e.extraPricePerKg) > 0)
                                                         )).map((entry, idx) => {
-                                                            const showMain = parseFloat(entry.kg) > 0 && parseFloat(entry.pricePerKg) > 0;
+                                                            const showMain = parseFloat(entry.kg) >= 0 && parseFloat(entry.pricePerKg) > 0;
                                                             const showExtra = entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0;
                                                             return (
                                                                 <div key={`rec-${idx}`} className="space-y-1 py-1 border-b border-border/30 text-muted-foreground">
                                                                     {showMain && (
                                                                         <div className="flex justify-between">
-                                                                            <span>{format(new Date(entry.date), 'MMM dd')} · {entry.kg}KG × ${entry.pricePerKg}</span>
+                                                                            <span>{format(new Date(entry.date), 'MMM dd')} · {parseFloat(entry.kg) === 0 ? '❌ Baaqatay' : `${entry.kg}KG × $${entry.pricePerKg}`}</span>
                                                                             <span className="font-bold text-foreground">${Math.round(parseFloat(entry.kg) * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
                                                                         </div>
                                                                     )}
@@ -1393,8 +1422,19 @@ export default function LedgerPage() {
                                                             </div>
                                                         )}
 
+                                                        {/* Active Adjustments in preview */}
+                                                        {activeAdjustmentsAmount > 0 && paymentEntries.filter(p => {
+                                                            const ln = (p.note || '').toLowerCase();
+                                                            return (ln.includes('heyn') || ln.includes('cafis')) && parseFloat(p.amount) > 0;
+                                                        }).map((pay, idx) => (
+                                                            <div key={`adj-${idx}`} className="flex justify-between items-center py-1.5 border-b border-border/40 font-bold">
+                                                                <span className="text-amber-600 dark:text-amber-500">{pay.note}</span>
+                                                                <span className="text-amber-600 dark:text-amber-500">-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+
                                                         {/* Subtotal */}
-                                                        {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0)) && (
+                                                        {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0) || activeAdjustmentsAmount > 0) && (
                                                             <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
                                                                 <span>Lacagta Guud</span>
                                                                 <span>${Math.round(subtotal).toLocaleString()}</span>
@@ -1405,9 +1445,12 @@ export default function LedgerPage() {
                                                         {activePaymentAmount > 0 && (
                                                             <>
                                                                 <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-600/60 pt-1.5">Lacagaha</p>
-                                                                {paymentEntries.filter(p => p.date && parseFloat(p.amount) > 0).map((pay, idx) => (
+                                                                {paymentEntries.filter(p => {
+                                                                    const ln = (p.note || '').toLowerCase();
+                                                                    return !(ln.includes('heyn') || ln.includes('cafis')) && parseFloat(p.amount) > 0;
+                                                                }).map((pay, idx) => (
                                                                     <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
-                                                                        <span>{format(new Date(pay.date), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
+                                                                        <span>{format(new Date(pay.date || new Date()), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
                                                                         <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
                                                                     </div>
                                                                 ))}
