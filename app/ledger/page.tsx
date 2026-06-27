@@ -159,7 +159,8 @@ export default function LedgerPage() {
     const SESSION_KEY = 'dadwork_ledger_session_active';
 
     // Data state
-    const { data: allCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, { revalidateOnFocus: false });
+    const allCustomers = rawCustomers || [];
     
     // Form state
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -167,8 +168,8 @@ export default function LedgerPage() {
     const ledgerUrl = selectedCustomerId ? `/api/ledger?customerId=${selectedCustomerId}&limit=200` : null;
     const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, { revalidateOnFocus: false });
     
-    const history = ledgerData?.transactions || [];
-    const summary = ledgerData?.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 };
+    const history: Transaction[] = ledgerData?.transactions || [];
+    const summary: CustomerSummary = ledgerData?.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 };
 
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [showLastMaqal, setShowLastMaqal] = useState(false);
@@ -716,20 +717,17 @@ export default function LedgerPage() {
                 throw new Error(data.error || 'Failed to save receipt');
             }
 
-            // Update summary locally for zero-lag accuracy
-            setSummary(prev => ({ ...prev, currentBalance: data.finalDebt }));
+            // We are using Optimistic UI via SWR now. `mutateLedger` handles this.
             toast.success('Receipt saved successfully!');
 
             // 4. Refresh data (fast sync)
             mutateCustomers();
             mutateLedger();
-            // We still need to call handleCustomerChange to fetch unprocessed dates again, but it won't flicker history anymore.
-            // Actually, we don't need handleCustomerChange, we just need to re-fetch daily book records or reset the form.
+            mutateCustomers();
             setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
             setPaymentEntries([{ id: (Date.now() + 1).toString(), date: '', amount: '' }]);
             setAdjustmentAmount('');
             
-            // Re-fetch only daily dates in the background
             const url = new URL(`/api/customer-daily-entries`, window.location.origin);
             url.searchParams.set('customerId', selectedCustomerId);
             if (startDate) {
@@ -763,18 +761,9 @@ export default function LedgerPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
             
-            toast.success('Receipt voided successfully');
-            setSummary(prev => ({ ...prev, currentBalance: data.finalDebt }));
-            
-            // Re-fetch customer data
-            await handleCustomerChange(selectedCustomerId);
-            
-            // Re-fetch customers list
-            const custRes = await fetch('/api/customers');
-            const custData = await custRes.json();
-            if (Array.isArray(custData)) {
-                setAllCustomers(custData);
-            }
+            mutateLedger();
+            mutateCustomers();
+            toast.success('Receipt voided successfully!');
         } catch (err: any) {
             toast.error(err.message || 'Failed to void receipt');
         } finally {
@@ -1261,10 +1250,7 @@ export default function LedgerPage() {
                                                             onClick={async () => {
                                                                 setFetchingDetails(true);
                                                                 try {
-                                                                    const ledgerRes = await fetch(`/api/ledger?customerId=${selectedCustomerId}&limit=200&t=${Date.now()}`);
-                                                                    const ledgerData = await ledgerRes.json();
-                                                                    setHistory(ledgerData.transactions || []);
-                                                                    setSummary(ledgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
+                                                                    await mutateLedger();
                                                                     toast.success('Refreshed last maqal!');
                                                                 } catch (e) {
                                                                     toast.error('Failed to refresh data');
