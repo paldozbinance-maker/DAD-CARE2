@@ -75,7 +75,7 @@ export async function verifyClaim(claim: string): Promise<TokenPayload | null> {
         const valid = await crypto.subtle.verify(
             'HMAC',
             key,
-            b64urlDecode(sigStr),
+            b64urlDecode(sigStr) as any,
             new TextEncoder().encode(encoded)
         );
         if (!valid) return null;

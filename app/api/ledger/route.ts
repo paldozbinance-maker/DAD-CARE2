@@ -7,7 +7,6 @@ import pool from '@/lib/db';
 export async function POST(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
-    const supabase = await createClient();
 
     try {
         const body = await request.json();
