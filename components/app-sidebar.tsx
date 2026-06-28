@@ -26,7 +26,7 @@ import { subscribeToDailyDates } from '@/lib/hijri-date';
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/daily-book', label: 'Buuga Maalinlaha', icon: BookOpen },
+    { href: '/daily-book', label: 'Daily Book', icon: BookOpen },
     { href: '/ledger', label: 'Buuga Maqalka', icon: Library },
     { href: '/customers', label: 'Customers', icon: Users },
     { href: '/payments', label: 'Lacagaha', icon: CreditCard },

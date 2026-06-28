@@ -60,9 +60,13 @@ export default function CustomersPage() {
         } else if (filterType === 'least_paid') {
             return ((a as any).total_paid || 0) - ((b as any).total_paid || 0);
         } else if (filterType === 'most_kg') {
-            return ((b as any).total_kg || 0) - ((a as any).total_kg || 0);
+            const avgA = (a as any).total_books_count ? ((a as any).total_kg || 0) / (a as any).total_books_count : 0;
+            const avgB = (b as any).total_books_count ? ((b as any).total_kg || 0) / (b as any).total_books_count : 0;
+            return avgB - avgA;
         } else if (filterType === 'least_kg') {
-            return ((a as any).total_kg || 0) - ((b as any).total_kg || 0);
+            const avgA = (a as any).total_books_count ? ((a as any).total_kg || 0) / (a as any).total_books_count : 0;
+            const avgB = (b as any).total_books_count ? ((b as any).total_kg || 0) / (b as any).total_books_count : 0;
+            return avgA - avgB;
         } else if (filterType === 'best') {
             const scoreA = ((a as any).total_paid || 0) - ((a as any).current_balance || 0);
             const scoreB = ((b as any).total_paid || 0) - ((b as any).current_balance || 0);
@@ -233,7 +237,7 @@ export default function CustomersPage() {
                                             )}
                                             {(filterType === 'most_kg' || filterType === 'least_kg') && (
                                                 <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-1.5 rounded">
-                                                    Total KG: {(customer as any).total_kg || 0}
+                                                    KG Maalintii: {((customer as any).total_books_count ? ((customer as any).total_kg || 0) / (customer as any).total_books_count : 0).toFixed(1).replace(/\.0$/, '')}
                                                 </span>
                                             )}
                                         </div>

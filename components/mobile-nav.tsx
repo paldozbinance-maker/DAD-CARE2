@@ -25,13 +25,13 @@ import { logout } from '@/lib/session';
 
 const mainTabs = [
     { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
-    { href: '/daily-book', label: 'Daily', icon: BookOpen },
+    { href: '/daily-book', label: 'Maalinle', icon: BookOpen },
     { href: '/ledger', label: 'Maqalka', icon: Library },
-    { href: '/payments', label: 'Lacagaha', icon: CreditCard },
+    { href: '/customers', label: 'Customers', icon: Users },
 ];
 
 const moreItems = [
-    { href: '/customers', label: 'Customers', icon: Users, desc: 'Manage your customers' },
+    { href: '/payments', label: 'Lacagaha', icon: CreditCard, desc: 'Manage payments' },
     { href: '/reports', label: 'Reports', icon: BarChart3, desc: 'Analytics & insights' },
     { href: '/settings', label: 'Settings', icon: Settings, desc: 'App preferences' },
 ];
