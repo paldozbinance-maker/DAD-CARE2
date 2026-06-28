@@ -183,6 +183,10 @@ export default function LedgerPage() {
     const [showLastMaqal, setShowLastMaqal] = useState(false);
     const [updateLastMaqal, setUpdateLastMaqal] = useState(false);
     const [isVoiding, setIsVoiding] = useState(false);
+    
+    // Custom select state
+    const [customerSearch, setCustomerSearch] = useState('');
+    const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
 
     // Form state (continued)
     const [customerDailyDates, setCustomerDailyDates] = useState<DailyBookRecord[]>([]);
@@ -846,44 +850,93 @@ export default function LedgerPage() {
                                     )}
                                 </div>
                                 <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <User className={`w-5 h-5 ${selectedCustomerId ? 'text-primary' : 'text-muted-foreground'}`} />
-                                    </div>
-                                    <select
-                                        className="w-full h-14 pl-12 pr-10 rounded-xl border border-border/60 bg-background/50 text-foreground font-bold appearance-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                                        value={selectedCustomerId}
-                                        onChange={e => handleCustomerChange(e.target.value)}
-                                        required
-                                    >
-                                        <option value="" disabled>Select Customer...</option>
-                                        {currentUser?.assigned_customer_ids?.length > 0 ? (
-                                            <>
-                                                <optgroup label="⭐ PRIORITY CUSTOMERS">
-                                                    {sortedCustomers.filter(c => currentUser.assigned_customer_ids.includes(c.id)).map(c => (
-                                                        <option key={c.id} value={c.id}>
-                                                            ⭐ {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}{c.name.toUpperCase()} (ID: {c.customer_code})
-                                                        </option>
-                                                    ))}
-                                                </optgroup>
-                                                <optgroup label="OTHER CUSTOMERS">
-                                                    {sortedCustomers.filter(c => !currentUser.assigned_customer_ids.includes(c.id)).map(c => (
-                                                        <option key={c.id} value={c.id}>
-                                                            {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}{c.name.toUpperCase()} (ID: {c.customer_code})
-                                                        </option>
-                                                    ))}
-                                                </optgroup>
-                                            </>
-                                        ) : (
-                                            sortedCustomers.map(c => (
-                                                <option key={c.id} value={c.id}>
-                                                    {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}{c.name.toUpperCase()} (ID: {c.customer_code})
-                                                </option>
-                                            ))
-                                        )}
-                                    </select>
-                                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                                        {fetchingDetails ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <ArrowRight className="w-4 h-4 text-muted-foreground" />}
-                                    </div>
+                                    <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={customerPopoverOpen}
+                                                className="w-full h-14 pl-12 pr-10 rounded-xl border border-border/60 bg-background/50 text-foreground font-bold flex justify-between items-center hover:bg-background/80"
+                                            >
+                                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                                    <User className={`w-5 h-5 ${selectedCustomerId ? 'text-primary' : 'text-muted-foreground'}`} />
+                                                </div>
+                                                <span className="truncate">
+                                                    {selectedCustomerId
+                                                        ? (() => {
+                                                            const c = allCustomers.find(c => c.id === selectedCustomerId);
+                                                            return c ? `${c.name.toUpperCase()} (ID: ${c.customer_code})` : "Select Customer...";
+                                                        })()
+                                                        : "Select Customer..."}
+                                                </span>
+                                                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                                    {fetchingDetails ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <ChevronDown className="w-4 h-4 opacity-50" />}
+                                                </div>
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                            <div className="p-2 border-b">
+                                                <Input 
+                                                    placeholder="Search by name or ID..." 
+                                                    value={customerSearch}
+                                                    onChange={(e) => setCustomerSearch(e.target.value)}
+                                                    className="h-9 focus-visible:ring-1"
+                                                    autoFocus
+                                                />
+                                            </div>
+                                            <div className="max-h-60 overflow-y-auto p-1">
+                                                {(() => {
+                                                    const filtered = sortedCustomers.filter(c => 
+                                                        c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
+                                                        c.customer_code.toLowerCase().includes(customerSearch.toLowerCase())
+                                                    );
+                                                    
+                                                    if (filtered.length === 0) {
+                                                        return <div className="p-4 text-center text-sm text-muted-foreground">No customers found.</div>;
+                                                    }
+
+                                                    const priorities = currentUser?.assigned_customer_ids?.length > 0 ? filtered.filter(c => currentUser.assigned_customer_ids.includes(c.id)) : [];
+                                                    const others = currentUser?.assigned_customer_ids?.length > 0 ? filtered.filter(c => !currentUser.assigned_customer_ids.includes(c.id)) : filtered;
+
+                                                    const renderCustomer = (c: any, isPriority: boolean) => (
+                                                        <div 
+                                                            key={c.id}
+                                                            className={cn(
+                                                                "relative flex cursor-default select-none items-center rounded-sm px-2 py-2.5 text-sm font-bold outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                                                                selectedCustomerId === c.id ? "bg-primary/10 text-primary" : ""
+                                                            )}
+                                                            onClick={() => {
+                                                                handleCustomerChange(c.id);
+                                                                setCustomerPopoverOpen(false);
+                                                                setCustomerSearch('');
+                                                            }}
+                                                        >
+                                                            {isPriority && "⭐ "}
+                                                            {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}
+                                                            {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                        </div>
+                                                    );
+
+                                                    return (
+                                                        <>
+                                                            {priorities.length > 0 && (
+                                                                <>
+                                                                    <div className="px-2 py-1.5 text-xs font-black uppercase text-muted-foreground bg-muted/50 mt-1 mb-1 first:mt-0">⭐ Priority Customers</div>
+                                                                    {priorities.map(c => renderCustomer(c, true))}
+                                                                </>
+                                                            )}
+                                                            {others.length > 0 && (
+                                                                <>
+                                                                    {currentUser?.assigned_customer_ids?.length > 0 && <div className="px-2 py-1.5 text-xs font-black uppercase text-muted-foreground bg-muted/50 mt-2 mb-1">Other Customers</div>}
+                                                                    {others.map(c => renderCustomer(c, false))}
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 {selectedCustomerId && (
                                     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">

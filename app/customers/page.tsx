@@ -126,26 +126,26 @@ export default function CustomersPage() {
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
-                                <DropdownMenuItem onClick={() => setFilterType('default')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'default' ? 'bg-primary/10 text-primary' : ''}`}>
-                                    Default View {filterType === 'default' && <Check className="w-3 h-3 ml-auto" />}
+                                <DropdownMenuItem onClick={() => setFilterType('default')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'default' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    ⚙️ Caadi (Default) {filterType === 'default' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('most_paid')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'most_paid' ? 'bg-primary/10 text-primary' : ''}`}>
-                                    Most Paid {filterType === 'most_paid' && <Check className="w-3 h-3 ml-auto" />}
+                                <DropdownMenuItem onClick={() => setFilterType('best')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl text-emerald-500 focus:text-emerald-600 focus:bg-emerald-500/10 ${filterType === 'best' ? 'bg-emerald-500/10' : ''}`}>
+                                    ⭐ Macaamilka Ugu Fiican {filterType === 'best' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('least_paid')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'least_paid' ? 'bg-primary/10 text-primary' : ''}`}>
-                                    Least Paid {filterType === 'least_paid' && <Check className="w-3 h-3 ml-auto" />}
+                                <DropdownMenuItem onClick={() => setFilterType('worst')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl text-destructive focus:text-destructive focus:bg-destructive/10 ${filterType === 'worst' ? 'bg-destructive/10' : ''}`}>
+                                    ⚠️ Macaamilka Ugu Liita {filterType === 'worst' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('most_kg')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'most_kg' ? 'bg-primary/10 text-primary' : ''}`}>
-                                    Most KG {filterType === 'most_kg' && <Check className="w-3 h-3 ml-auto" />}
+                                <DropdownMenuItem onClick={() => setFilterType('most_paid')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'most_paid' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    💰 Lacagta Ugu Badan Bixiyay {filterType === 'most_paid' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('least_kg')} className={`text-xs font-bold cursor-pointer rounded-xl ${filterType === 'least_kg' ? 'bg-primary/10 text-primary' : ''}`}>
-                                    Least KG {filterType === 'least_kg' && <Check className="w-3 h-3 ml-auto" />}
+                                <DropdownMenuItem onClick={() => setFilterType('least_paid')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'least_paid' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    💸 Lacagta Ugu Yar Bixiyay {filterType === 'least_paid' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('best')} className={`text-xs font-bold cursor-pointer rounded-xl text-emerald-500 focus:text-emerald-600 focus:bg-emerald-500/10 ${filterType === 'best' ? 'bg-emerald-500/10' : ''}`}>
-                                    Best Customer {filterType === 'best' && <Check className="w-3 h-3 ml-auto" />}
+                                <DropdownMenuItem onClick={() => setFilterType('most_kg')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'most_kg' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    ⚖️ KG Ugu Badan {filterType === 'most_kg' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('worst')} className={`text-xs font-bold cursor-pointer rounded-xl text-destructive focus:text-destructive focus:bg-destructive/10 ${filterType === 'worst' ? 'bg-destructive/10' : ''}`}>
-                                    Worst Customer {filterType === 'worst' && <Check className="w-3 h-3 ml-auto" />}
+                                <DropdownMenuItem onClick={() => setFilterType('least_kg')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'least_kg' ? 'bg-primary/10 text-primary' : ''}`}>
+                                    🪶 KG Ugu Yar {filterType === 'least_kg' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
