@@ -12,7 +12,7 @@ export async function recalculateCustomerLedger(customerId: string, client: any 
     // Fetch all undeleted entries in chronological order
     const { rows: entries } = await client.query(
         `SELECT id, type, amount FROM "Ledger" 
-         WHERE customer_id = $1 AND deleted_at IS NULL
+         WHERE customer_id = $1::uuid AND deleted_at IS NULL
          ORDER BY created_at ASC, id ASC
          FOR UPDATE`, // Lock rows to prevent race conditions during recalculation
         [customerId]
