@@ -14,7 +14,7 @@ import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Se
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
-import { useDailyBookInit, useDailyBookDate, useLedgerStatusForDate } from '@/hooks/useDailyBook';
+import { useDailyBookInit, useDailyBookDate, useLedgerStatusForDate, useDailyBookHistory } from '@/hooks/useDailyBook';
 import { DailyBookErrorBoundary } from './error-boundary';
 import { useSession } from '@/hooks/useSession';
 interface Customer {
@@ -46,16 +46,40 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
+// Parse ALL VIP segments from a note.
+// Supports: "10 vip 38, 10 vip 37" → [{count:10, price:'38', text:'10 VIP @38'}, {count:10, price:'37', text:'10 VIP @37'}]
+// Also supports plain "5 vip" or "vip" with no number/price.
+function parseVipEntries(note?: string): { count: number; price?: string; text: string }[] {
+    if (!note) return [];
+    const n = note.trim();
+    // Match all patterns of: [number] vip [price_number]
+    const pattern = /(\d+(?:\.\d+)?)\s*vip(?:\s+(\d+(?:\.\d+)?))?/gi;
+    const results: { count: number; price?: string; text: string }[] = [];
+    let match;
+    while ((match = pattern.exec(n)) !== null) {
+        const count = parseFloat(match[1]);
+        const price = match[2] ? match[2] : undefined;
+        const text = price ? `${match[1]} VIP @${price}` : `${match[1]} VIP`;
+        results.push({ count, price, text });
+    }
+    // If no number but plain 'vip' exists
+    if (results.length === 0 && n.toLowerCase().includes('vip')) {
+        results.push({ count: 0, text: 'VIP' });
+    }
+    return results;
+}
+
+// Legacy helper — returns first VIP entry (used for backward compat display)
 function getVipInfo(note?: string) {
-    if (!note) return null;
-    const match = note.match(/(\d+(?:\.\d+)?)\s*vip/i);
-    if (match) {
-        return { count: parseFloat(match[1]), text: `${match[1]} VIP` };
-    }
-    if (note.toLowerCase().includes('vip')) {
-        return { count: 0, text: 'VIP' };
-    }
-    return null;
+    const entries = parseVipEntries(note);
+    if (entries.length === 0) return null;
+    // For the simple badge case, return the first entry
+    return entries[0];
+}
+
+// Total VIP count across all segments in a note
+function getTotalVipCount(note?: string): number {
+    return parseVipEntries(note).reduce((sum, e) => sum + e.count, 0);
 }
 
 function DailyBookPageInner() {
@@ -81,6 +105,21 @@ function DailyBookPageInner() {
     const [isInitialized, setIsInitialized] = useState(false);
     const [openNoteForCustomerId, setOpenNoteForCustomerId] = useState<string | null>(null);
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 50; // fixed page size for fastest UI response
+
+    // Debounce hook for search input (300 ms)
+    const useDebounce = <T,>(value: T, delay: number): T => {
+        const [debounced, setDebounced] = useState(value);
+        useEffect(() => {
+            const handler = setTimeout(() => setDebounced(value), delay);
+            return () => clearTimeout(handler);
+        }, [value, delay]);
+        return debounced;
+    };
+    const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
     const { session } = useSession();
     const isSuperAdmin = session?.role === 'SUPER_ADMIN';
 
@@ -90,12 +129,15 @@ function DailyBookPageInner() {
     const dateStr = format(date, 'yyyy-MM-dd');
     const { data: bookData } = useDailyBookDate(isInitialized && !editingDate ? dateStr : null);
     const { processedCustomerIds: swrLedgerIds, isLoading: swrLedgerLoading, mutate: mutateLedger } = useLedgerStatusForDate(dateStr);
+    const { data: historyData, mutate: mutateHistory } = useDailyBookHistory();
 
     // Sync SWR Init Data to Local State (Protects Optimistic UI)
     useEffect(() => {
         if (initData && typeof initData === 'object' && initData.customers) {
             setCustomers(initData.customers);
-            setSavedEntries(initData.history);
+            if (Array.isArray(initData.history)) {
+                setSavedEntries(initData.history);
+            }
             
             if (!isInitialized) {
                 if (initData.latestDate) {
@@ -126,6 +168,31 @@ function DailyBookPageInner() {
             setEntries({});
         }
     }, [bookData]);
+
+    // Sync SWR History Data to Local State
+    useEffect(() => {
+        if (Array.isArray(historyData)) {
+            setSavedEntries(historyData);
+        }
+    }, [historyData]);
+
+    // Force load history on mount to guarantee it loads
+    useEffect(() => {
+        async function fetchHistoryDirectly() {
+            try {
+                const res = await fetch('/api/daily-book-history');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data)) {
+                        setSavedEntries(data);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load history on mount:', err);
+            }
+        }
+        fetchHistoryDirectly();
+    }, []);
 
     // Sync SWR Ledger Status to Local State
     useEffect(() => {
@@ -202,10 +269,11 @@ function DailyBookPageInner() {
         setViewMode('details');
 
         try {
-            if (editingDate && editingDate !== dateStr) {
-                // Delete the old daily book entry to prevent duplicate keys or outdated records
+            const cleanEditingDate = editingDate ? editingDate.substring(0, 10) : null;
+            if (cleanEditingDate && cleanEditingDate !== dateStr) {
+                // Delete the old daily book entry to prevent duplicate keys or outdated records when changing dates
                 try {
-                    const delRes = await fetch(`/api/daily-book?date=${editingDate}`, { method: 'DELETE' });
+                    const delRes = await fetch(`/api/daily-book?date=${cleanEditingDate}`, { method: 'DELETE' });
                     if (!delRes.ok && delRes.status !== 404) {
                         const errText = await delRes.text();
                         console.error('Failed to delete old entry:', errText);
@@ -238,6 +306,8 @@ function DailyBookPageInner() {
             setSaving(false);
             fetchLatestDate(); // Refresh sequence after save
             mutateLedger(); // Refresh ledger indicators after save via SWR
+            mutateHistory(); // Refresh history list after save
+            loadInit(); // REFRESH customers/latestDate so it doesn't revert to old data!
         }
     };
 
@@ -262,6 +332,7 @@ function DailyBookPageInner() {
             setSavedEntries(prev => prev.filter(e => e.date !== deleteConfirmDate));
             toast.success('Moved to Recycle Bin');
             setDeleteConfirmDate(null);
+            mutateHistory(); // Sync SWR cache after delete
         } catch (err: any) {
             toast.error('Failed to move to trash: ' + (err.message || 'Server error'));
         } finally {
@@ -299,22 +370,37 @@ function DailyBookPageInner() {
 
     const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
     const totalVip = Object.values(entries).reduce((sum, entry) => {
-        const vip = getVipInfo(entry.note);
-        return sum + (vip ? vip.count : 0);
+        return sum + getTotalVipCount(entry.note);
     }, 0);
     const filteredEntries = searchDate
         ? savedEntries.filter(e => e.date && e.date.substring(0, 10) === format(searchDate, 'yyyy-MM-dd'))
         : savedEntries;
 
+    // sortedEntries: filteredEntries sorted newest-first (API already returns DESC, but ensure it here)
     const sortedEntries = [...filteredEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const sortedCustomers = customers
-        .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.customer_code.toLowerCase().includes(searchTerm.toLowerCase()))
-        .sort((a, b) => {
-            const codeA = parseInt(a.customer_code.replace(/\D/g, '')) || 0;
-            const codeB = parseInt(b.customer_code.replace(/\D/g, '')) || 0;
-            return codeA - codeB;
-        });
+    // Use debounced search term for filtering to reduce re‑renders
+    const filteredCustomers = customers.filter(c =>
+      c.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      c.customer_code.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    );
+
+    // Sort by numeric customer_code (fast numeric sort)
+    const sortedCustomers = filteredCustomers.sort((a, b) => {
+      const codeA = parseInt(a.customer_code.replace(/\D/g, ''), 10) || 0;
+      const codeB = parseInt(b.customer_code.replace(/\D/g, ''), 10) || 0;
+      return codeA - codeB;
+    });
+
+    // Pagination slice
+    const totalCustomers = sortedCustomers.length;
+    const totalPages = Math.max(1, Math.ceil(totalCustomers / pageSize));
+    const paginatedCustomers = sortedCustomers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    // UI handlers for pagination
+    const goToPrevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
+    const goToNextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
+
 
     const handleKeyPress = (e: React.KeyboardEvent, index: number) => {
         if (e.key === 'Enter') {
@@ -331,7 +417,15 @@ function DailyBookPageInner() {
         }
     };
 
-    return (
+    if (!initData) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[200px] animate-pulse">
+      <div className="h-8 w-32 bg-gray-200 rounded mb-2" />
+      <div className="h-4 w-48 bg-gray-200 rounded" />
+    </div>
+  );
+}
+return (
         <div className="space-y-6 max-w-4xl mx-auto px-1 md:px-0">
             {/* Header / Cover */}
             <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
@@ -465,8 +559,8 @@ function DailyBookPageInner() {
                                                     <PopoverContent className="w-60 p-3 bg-popover border-border shadow-xl rounded-xl z-[10000]">
                                                         <div className="space-y-2">
                                                             <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
-                                                            <p className="text-[10px] text-muted-foreground/60">Tip: type <span className="font-bold text-amber-600">5 vip</span> to mark 5KG as VIP</p>
-                                                            <Input placeholder="e.g. 5 vip, special note..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
+                                                            <p className="text-[10px] text-muted-foreground/60">Tip: <span className="font-bold text-amber-600">10 vip 38, 10 vip 37</span> for split VIP prices</p>
+                                                            <Input placeholder="e.g. 10 vip 38, 10 vip 37" value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
                                                             <Button size="sm" className="w-full h-7 text-xs" onClick={() => setOpenNoteForCustomerId(null)}>Done</Button>
                                                         </div>
                                                     </PopoverContent>
@@ -475,10 +569,12 @@ function DailyBookPageInner() {
                                             <div className="col-span-3 flex items-center justify-end gap-1">
                                                 <div className="flex items-center justify-end gap-1 relative w-full">
                                                     {(() => {
-                                                        const vipInfo = getVipInfo(entries[customer.id]?.note);
-                                                        return vipInfo ? (
-                                                            <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform">
-                                                                ✏️ {vipInfo.text}
+                                                        const vipEntries = parseVipEntries(entries[customer.id]?.note);
+                                                        return vipEntries.length > 0 ? (
+                                                            <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex flex-col items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform gap-0.5">
+                                                                {vipEntries.map((v, i) => (
+                                                                    <span key={i}>✏️ {v.text}</span>
+                                                                ))}
                                                             </button>
                                                         ) : null;
                                                     })()}
@@ -586,8 +682,8 @@ function DailyBookPageInner() {
                                                     <PopoverContent className="w-60 p-3 bg-popover border-border shadow-xl rounded-xl z-[10000]">
                                                         <div className="space-y-2">
                                                             <h4 className="font-medium text-xs text-muted-foreground leading-none">Note for {customer.name}</h4>
-                                                            <p className="text-[10px] text-muted-foreground/60">Tip: type <span className="font-bold text-amber-600">5 vip</span> to mark 5KG as VIP</p>
-                                                            <Input placeholder="e.g. 5 vip, special note..." value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
+                                                            <p className="text-[10px] text-muted-foreground/60">Tip: <span className="font-bold text-amber-600">10 vip 38, 10 vip 37</span> for split VIP prices</p>
+                                                            <Input placeholder="e.g. 10 vip 38, 10 vip 37" value={entries[customer.id]?.note || ''} onChange={(e) => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, present: entries[customer.id]?.present ?? true, note: e.target.value } })} className="h-8 text-xs bg-background border-input focus-visible:ring-1 focus-visible:ring-primary shadow-none" autoFocus />
                                                             <Button size="sm" className="w-full h-7 text-xs" onClick={() => setOpenNoteForCustomerId(null)}>Done</Button>
                                                         </div>
                                                     </PopoverContent>
@@ -596,10 +692,12 @@ function DailyBookPageInner() {
                                             <div className="col-span-3 flex items-center justify-end gap-1">
                                                 <div className="flex items-center justify-end gap-1 relative w-full">
                                                     {(() => {
-                                                        const vipInfo = getVipInfo(entries[customer.id]?.note);
-                                                        return vipInfo ? (
-                                                            <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform">
-                                                                ✏️ {vipInfo.text}
+                                                        const vipEntries = parseVipEntries(entries[customer.id]?.note);
+                                                        return vipEntries.length > 0 ? (
+                                                            <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex flex-col items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform gap-0.5">
+                                                                {vipEntries.map((v, i) => (
+                                                                    <span key={i}>✏️ {v.text}</span>
+                                                                ))}
                                                             </button>
                                                         ) : null;
                                                     })()}
@@ -727,7 +825,7 @@ function DailyBookPageInner() {
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase">Total KG</span>
                                 </div>
                                 {(() => {
-                                    const entryVipCount = entry.items.reduce((sum, i) => sum + (getVipInfo(i.note)?.count || 0), 0);
+                                    const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
                                     if (entryVipCount > 0) {
                                         return (
                                             <>
@@ -775,13 +873,17 @@ function DailyBookPageInner() {
                                                     {item.present === false ? (
                                                         <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase">Absent</span>
                                                     ) : (
-                                                        <div className="flex items-center justify-end gap-1.5">
+                                                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                                             {(() => {
-                                                                const vipInfo = getVipInfo(item.note);
-                                                                return vipInfo ? (
-                                                                    <span className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] md:text-xs uppercase tracking-widest inline-block whitespace-nowrap shadow-[0_0_8px_rgba(251,191,36,0.3)]">
-                                                                        {vipInfo.text}
-                                                                    </span>
+                                                                const vipEntries = parseVipEntries(item.note);
+                                                                return vipEntries.length > 0 ? (
+                                                                    <div className="flex flex-col items-end gap-0.5">
+                                                                        {vipEntries.map((v, i) => (
+                                                                            <span key={i} className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] md:text-xs uppercase tracking-widest inline-block whitespace-nowrap shadow-[0_0_8px_rgba(251,191,36,0.3)]">
+                                                                                {v.text}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
                                                                 ) : null;
                                                             })()}
                                                             <span className="font-black text-primary text-sm md:text-base">{Math.round(item.kg)} <span className="text-[9px] opacity-60">KG</span></span>
@@ -798,7 +900,7 @@ function DailyBookPageInner() {
                                     <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Quantity</span>
                                     <div className="flex items-center gap-4">
                                         {(() => {
-                                            const entryVipCount = entry.items.reduce((sum, i) => sum + (getVipInfo(i.note)?.count || 0), 0);
+                                            const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
                                             return entryVipCount > 0 ? (
                                                 <span className="font-black text-amber-600 text-xl">{entryVipCount} <span className="text-xs opacity-60">VIP</span></span>
                                             ) : null;
@@ -926,7 +1028,7 @@ function DailyBookPageInner() {
                                                                 {Math.round(entry.totalKg)} KG
                                                             </span>
                                                             {(() => {
-                                                                const entryVipCount = entry.items.reduce((sum, i) => sum + (getVipInfo(i.note)?.count || 0), 0);
+                                                                const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
                                                                 return entryVipCount > 0 ? (
                                                                     <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse ml-1 md:ml-0">
                                                                         {entryVipCount} VIP
@@ -1025,9 +1127,25 @@ function DailyBookPageInner() {
                                                                     ) : (
                                                                         <span className="font-black text-primary text-base md:text-lg">{Math.round(item.kg)} <span className="text-[10px] opacity-60">KG</span></span>
                                                                     )}
-                                                                    {item.note && (
-                                                                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[100px] md:max-w-[150px]">{item.note}</div>
-                                                                    )}
+                                                                    {(() => {
+                                                                        const vipEntries = parseVipEntries(item.note);
+                                                                        if (vipEntries.length > 0) {
+                                                                            return (
+                                                                                <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                                                                                    {vipEntries.map((v, i) => (
+                                                                                        <span key={i} className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] uppercase tracking-widest inline-block whitespace-nowrap">
+                                                                                            {v.text}
+                                                                                        </span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                        // Show non-VIP notes as plain text
+                                                                        if (item.note && !item.note.toLowerCase().includes('vip')) {
+                                                                            return <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[100px] md:max-w-[150px]">{item.note}</div>;
+                                                                        }
+                                                                        return null;
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                             );

@@ -213,7 +213,8 @@ function drawReceiptOnDoc(doc: jsPDF, customer: any, receipt: ReceiptGroup) {
         productEntries.forEach(entry => {
             const dateStr = format(new Date(entry.reference_date), 'MMM dd');
             const isAbsent = Math.round(entry.kg || 0) === 0;
-            const kgStr = isAbsent ? 'Baaqatay' : `${Math.round(entry.kg || 0)}KG @ $${entry.price_per_kg}`;
+            const noteLabel = entry.note ? ` (${entry.note})` : '';
+            const kgStr = isAbsent ? 'Baaqatay' : `${Math.round(entry.kg || 0)}KG @ $${entry.price_per_kg}${noteLabel}`;
             const amountStr = isAbsent ? '$0' : `$${Math.round(entry.amount).toLocaleString()}`;
 
             doc.text(`${dateStr} · ${kgStr}`, margin, y);

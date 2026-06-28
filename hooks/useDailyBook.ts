@@ -100,3 +100,26 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         mutate
     };
 }
+
+// Hook for fetching the full daily book history list
+export function useDailyBookHistory() {
+    const { data, error, mutate, isLoading } = useSWR<SavedEntry[] | null>(
+        '/api/daily-book-history',
+        fetcher,
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 60000, // 1 min
+            revalidateIfStale: true,
+            onError: (err) => {
+                console.error('[useDailyBookHistory] SWR error:', err);
+            },
+        }
+    );
+
+    return {
+        data,
+        isLoading,
+        isError: error,
+        mutate
+    };
+}

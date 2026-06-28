@@ -41,12 +41,13 @@ export async function GET(request: Request) {
 
         // Transform data to match the SavedEntry format expected by the frontend
         const history = (historyResult || []).map((book: any) => {
-            const totalKg = book.items.reduce((sum: number, item: any) => sum + (item.kg || 0), 0);
+            const itemsList = typeof book.items === 'string' ? JSON.parse(book.items) : (book.items || []);
+            const totalKg = itemsList.reduce((sum: number, item: any) => sum + (item.kg || 0), 0);
             return {
                 id: book.id,
                 date: book.date,
                 totalKg: totalKg,
-                items: book.items.map((item: any) => ({
+                items: itemsList.map((item: any) => ({
                     customer_id: item.customer?.id,
                     kg: item.kg,
                     present: item.present,

@@ -23,6 +23,7 @@ interface DateEntry {
     extraKg?: string;
     extraPricePerKg?: string;
     extraNote?: string;
+    mainNote?: string;
 }
 
 interface PaymentEntry {
@@ -59,22 +60,19 @@ interface DailyBookRecord {
     note?: string | null;
 }
 
-const parseVip = (note: string) => {
-    const fullMatch = note.match(/(\d+(?:\.\d+)?)\s*vip\s*(?:\*|x|@)?\s*(\d+(?:\.\d+)?)/i);
-    if (fullMatch) {
-        return {
-            kg: parseFloat(fullMatch[1]),
-            price: parseFloat(fullMatch[2])
-        };
+const parseVipEntries = (note: string) => {
+    if (!note) return [];
+    const n = note.trim();
+    const pattern = /(\d+(?:\.\d+)?)\s*vip(?:(?:\s*\*|\s*x|\s*@)?\s*(\d+(?:\.\d+)?))?/gi;
+    const results: { kg: number; price: number | null }[] = [];
+    let match;
+    while ((match = pattern.exec(n)) !== null) {
+        results.push({
+            kg: parseFloat(match[1]),
+            price: match[2] ? parseFloat(match[2]) : null
+        });
     }
-    const simpleMatch = note.match(/(\d+(?:\.\d+)?)\s*vip/i);
-    if (simpleMatch) {
-        return {
-            kg: parseFloat(simpleMatch[1]),
-            price: null
-        };
-    }
-    return null;
+    return results;
 };
 
 const parseHeshiish = (note: string) => {
@@ -105,23 +103,35 @@ const buildEntryFromDailyRecord = (
     let extraKg = '';
     let extraPricePerKg = defaultPrice;
     let extraNote = 'Notebook';
+    let mainNote = '';
     let shouldExpandExtra = false;
 
     if (record.note) {
         const noteText = record.note.trim();
-        const vipData = parseVip(noteText);
+        const vipEntries = parseVipEntries(noteText);
         const heshiishData = parseHeshiish(noteText);
 
-        if (vipData) {
-            extraKg = vipData.kg.toString();
-            if (vipData.price !== null) {
-                extraPricePerKg = vipData.price.toString();
+        if (vipEntries.length > 0) {
+            const firstVip = vipEntries[0];
+            extraKg = firstVip.kg.toString();
+            if (firstVip.price !== null) {
+                extraPricePerKg = firstVip.price.toString();
             }
             extraNote = 'VIP';
             shouldExpandExtra = true;
-            // Subtract VIP KG from main KG and cap at 0
-            const mainKgNum = Math.max(0, (record.kg || 0) - vipData.kg);
-            kg = mainKgNum.toString();
+
+            if (vipEntries.length > 1) {
+                const secondVip = vipEntries[1];
+                kg = secondVip.kg.toString();
+                if (secondVip.price !== null) {
+                    pricePerKg = secondVip.price.toString();
+                }
+                mainNote = 'VIP';
+            } else {
+                // Subtract VIP KG from main KG and cap at 0
+                const mainKgNum = Math.max(0, (record.kg || 0) - firstVip.kg);
+                kg = mainKgNum.toString();
+            }
         } else if (heshiishData) {
             extraKg = heshiishData.kg.toString();
             if (heshiishData.price !== null) {
@@ -143,7 +153,8 @@ const buildEntryFromDailyRecord = (
             pricePerKg,
             extraKg,
             extraPricePerKg,
-            extraNote
+            extraNote,
+            mainNote
         },
         shouldExpandExtra
     };
@@ -671,7 +682,8 @@ export default function LedgerPage() {
                         type: 'PRODUCT',
                         date: entry.date,
                         kg: entry.kg,
-                        price: entry.pricePerKg
+                        price: entry.pricePerKg,
+                        note: entry.mainNote
                     });
                 }
                 if (entry.extraKg && parseFloat(entry.extraKg) > 0 && entry.extraPricePerKg && parseFloat(entry.extraPricePerKg) > 0) {
@@ -1015,7 +1027,7 @@ export default function LedgerPage() {
                                                                                                 return `${dateStr} ❌ Baaqatay`;
                                                                                             }
                                                                                             const parts = [];
-                                                                                            if (mainKg > 0) parts.push(`📦 ${mainKg} KG`);
+                                                                                            if (mainKg > 0) parts.push(`📦 ${mainKg} KG${entry.mainNote === 'VIP' ? ' (VIP)' : ''}`);
                                                                                             if (extraKg > 0) parts.push(`📔 ${extraKg} KG (${entry.extraNote || 'Notebook'})`);
                                                                                             return `${dateStr} - ${parts.join(' + ')}`;
                                                                                         })()}
@@ -1469,7 +1481,7 @@ export default function LedgerPage() {
                                                                 <div key={`rec-${idx}`} className="space-y-1 py-1 border-b border-border/30 text-muted-foreground">
                                                                     {showMain && (
                                                                         <div className="flex justify-between">
-                                                                            <span>{format(new Date(entry.date), 'MMM dd')} · {mainKg === 0 ? '❌ Baaqatay' : `${entry.kg}KG × $${entry.pricePerKg}`}</span>
+                                                                            <span>{format(new Date(entry.date), 'MMM dd')} · {mainKg === 0 ? '❌ Baaqatay' : `${entry.kg}KG × $${entry.pricePerKg}${entry.mainNote === 'VIP' ? ' (VIP)' : ''}`}</span>
                                                                             <span className="font-bold text-foreground">${Math.round(mainKg * parseFloat(entry.pricePerKg)).toLocaleString()}</span>
                                                                         </div>
                                                                     )}

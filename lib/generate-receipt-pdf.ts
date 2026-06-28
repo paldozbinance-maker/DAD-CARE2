@@ -89,7 +89,8 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
         productEntries.forEach(entry => {
             const dateStr = format(new Date(entry.reference_date), 'MMM dd');
             const isAbsent = Math.round(entry.kg || 0) === 0;
-            const kgStr = isAbsent ? 'Baaqatay' : `${Math.round(entry.kg || 0)}KG x $${entry.price_per_kg}`;
+            const noteLabel = entry.note ? ` (${entry.note})` : '';
+            const kgStr = isAbsent ? 'Baaqatay' : `${Math.round(entry.kg || 0)}KG x $${entry.price_per_kg}${noteLabel}`;
             const amountStr = isAbsent ? '$0' : `$${Math.round(entry.amount).toLocaleString()}`;
 
             doc.text(`${dateStr} · ${kgStr}`, margin, y);
@@ -232,7 +233,8 @@ export function shareReceiptToWhatsApp(data: ReceiptData, phone?: string) {
             if (isAbsent) {
                 lines.push(`  ${dateStr} · \u274c Baaqatay = *$0*`);
             } else {
-                lines.push(`  ${dateStr} · ${Math.round(e.kg || 0)}KG \u00d7 $${e.price_per_kg} = *$${Math.round(e.amount).toLocaleString()}*`);
+                const noteLabel = e.note ? ` (${e.note})` : '';
+                lines.push(`  ${dateStr} · ${Math.round(e.kg || 0)}KG \u00d7 $${e.price_per_kg}${noteLabel} = *$${Math.round(e.amount).toLocaleString()}*`);
             }
         });
         lines.push(`  📊 *Maqalka Total: $${Math.round(data.totalMaqalka).toLocaleString()}*`);

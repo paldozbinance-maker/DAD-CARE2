@@ -42,9 +42,8 @@ export default function LoginPage() {
                     localStorage.setItem('dadwork_session_token', sessionToken);
                 }
                 toast.success(`Welcome back, ${data.name || data.username}!`);
-                setTimeout(() => {
-                    router.push('/dashboard');
-                }, 500);
+                setLoading(false);
+                router.push('/dashboard');
             } else {
                 toast.error(data.error || 'Invalid username or password');
                 setLoading(false);

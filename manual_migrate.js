@@ -83,6 +83,12 @@ EXCEPTION
     created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
 );
 `);
+        // ---- Performance indexes ----
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_dailybook_date ON "DailyBook" (date);`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_dailybookitem_bookid ON "DailyBookItem" (daily_book_id);`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_dailybookitem_customerid ON "DailyBookItem" (customer_id);`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_customer_code ON "Customer" (customer_code);`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_ledger_customerid ON "Ledger" (customer_id);`);
 
         console.log('Tables created successfully');
     } catch (e) {

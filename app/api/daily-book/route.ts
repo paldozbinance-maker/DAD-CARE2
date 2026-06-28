@@ -25,16 +25,31 @@ export async function GET(request: Request) {
         const book = books[0];
 
         // Get Items with Customer data
+        // Pagination parameters
+        const page = parseInt(searchParams.get('page') || '1', 10);
+        const pageSize = parseInt(searchParams.get('pageSize') || '50', 10);
+        const offset = (page - 1) * pageSize;
+
+        // Get total count for pagination UI
+        const { rows: countResult } = await pool.query(
+            `SELECT COUNT(*) FROM "DailyBookItem" WHERE daily_book_id = $1 AND deleted_at IS NULL`,
+            [book.id]
+        );
+        const totalCount = parseInt(countResult[0].count, 10);
+
+        // Fetch paginated items with customer data
         const { rows: items } = await pool.query(
             `SELECT dbi.*, 
                     json_build_object('id', c.id, 'name', c.name, 'customer_code', c.customer_code) as customer 
              FROM "DailyBookItem" dbi
              JOIN "Customer" c ON dbi.customer_id = c.id
-             WHERE dbi.daily_book_id = $1 AND dbi.deleted_at IS NULL`,
-            [book.id]
+             WHERE dbi.daily_book_id = $1 AND dbi.deleted_at IS NULL
+             ORDER BY c.customer_code ASC
+             LIMIT $2 OFFSET $3`,
+            [book.id, pageSize, offset]
         );
 
-        return NextResponse.json({ ...book, items });
+        return NextResponse.json({ ...book, items, totalCount, page, pageSize });
     } catch (error: any) {
         console.error('Fetch Book Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -116,7 +131,19 @@ export async function POST(request: Request) {
         const customersToRecalculate = new Set<string>();
 
         if (ledgerEntries.length > 0) {
+            // Count entries per customer to avoid corrupting split VIPs
+            const customerEntryCounts = new Map<string, number>();
             for (const ledger of ledgerEntries) {
+                customerEntryCounts.set(ledger.customer_id, (customerEntryCounts.get(ledger.customer_id) || 0) + 1);
+            }
+
+            for (const ledger of ledgerEntries) {
+                // SKIP if the customer has multiple ledger entries (e.g. Notebook vs Normal Box split)
+                // We cannot safely auto-sync a single KG total to multiple split boxes.
+                if (customerEntryCounts.get(ledger.customer_id)! > 1) {
+                    continue;
+                }
+
                 // Find the new KG from the daily book items payload
                 const dailyItem = items?.find((i: any) => i.customer_id === ledger.customer_id);
                 // If the customer was removed from the daily book, new KG is 0.
