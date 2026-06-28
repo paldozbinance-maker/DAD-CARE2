@@ -5,7 +5,7 @@ import pool from '@/lib/db';
  * We fetch all active ledgers for the customer, ordered by created_at ASC, and recalculate
  * previous_debt and new_debt.
  */
-export async function recalculateCustomerLedger(customerId: string, client = pool) {
+export async function recalculateCustomerLedger(customerId: string, client: any = pool) {
     // We lock the customer rows if this is inside a transaction, but let's assume
     // client could be a transaction client or the main pool.
     
