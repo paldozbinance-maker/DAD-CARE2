@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 import { useDailyBookInit, useDailyBookDate, useLedgerStatusForDate } from '@/hooks/useDailyBook';
 import { DailyBookErrorBoundary } from './error-boundary';
+import { useSession } from '@/hooks/useSession';
 interface Customer {
     id: string;
     name: string;
@@ -79,6 +80,9 @@ function DailyBookPageInner() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const [openNoteForCustomerId, setOpenNoteForCustomerId] = useState<string | null>(null);
+
+    const { session } = useSession();
+    const isSuperAdmin = session?.role === 'SUPER_ADMIN';
 
     // ⚡ SWR Hooks for Lightning Fast Caching
     const { data: initData, mutate: mutateInit } = useDailyBookInit();
@@ -348,14 +352,16 @@ function DailyBookPageInner() {
                 </div>
                 
                 <div className="relative z-10 flex gap-3 self-start md:self-center">
-                    <Button
-                        variant={viewMode === 'edit' ? 'default' : 'outline'}
-                        onClick={() => setViewMode('edit')}
-                        className={`h-11 rounded-xl px-5 font-black uppercase tracking-wider text-xs transition-all ${viewMode === 'edit' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5' : 'border-border/60 bg-background/50 backdrop-blur-sm text-foreground hover:bg-accent'}`}
-                    >
-                        <Plus className="w-4 h-4 mr-2 text-current opacity-80" />
-                        New Entry
-                    </Button>
+                    {isSuperAdmin && (
+                        <Button
+                            variant={viewMode === 'edit' ? 'default' : 'outline'}
+                            onClick={() => setViewMode('edit')}
+                            className={`h-11 rounded-xl px-5 font-black uppercase tracking-wider text-xs transition-all ${viewMode === 'edit' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5' : 'border-border/60 bg-background/50 backdrop-blur-sm text-foreground hover:bg-accent'}`}
+                        >
+                            <Plus className="w-4 h-4 mr-2 text-current opacity-80" />
+                            New Entry
+                        </Button>
+                    )}
                     <Button
                         variant={viewMode === 'details' ? 'default' : 'outline'}
                         onClick={() => setViewMode('details')}
@@ -693,14 +699,16 @@ function DailyBookPageInner() {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 px-3 text-[10px] font-bold uppercase border-border text-foreground"
-                                        onClick={(e) => { e.stopPropagation(); handleEditEntry(entry); setFocusedEntry(null); }}
-                                    >
-                                        <Edit className="w-3 h-3 mr-1" /> Edit
-                                    </Button>
+                                    {isSuperAdmin && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 px-3 text-[10px] font-bold uppercase border-border text-foreground"
+                                            onClick={(e) => { e.stopPropagation(); handleEditEntry(entry); setFocusedEntry(null); }}
+                                        >
+                                            <Edit className="w-3 h-3 mr-1" /> Edit
+                                        </Button>
+                                    )}
                                     <Button variant="ghost" size="icon" onClick={() => setFocusedEntry(null)} className="h-9 w-9 text-muted-foreground hover:text-foreground rounded-full">
                                         <span className="text-lg font-bold leading-none">✕</span>
                                     </Button>
@@ -944,28 +952,32 @@ function DailyBookPageInner() {
                                                     </div>
                                                 </div>
                                             <div className="flex items-center gap-2 mt-3 md:mt-0 border-t border-border/50 pt-3 md:border-0 md:pt-0" onClick={(e) => e.stopPropagation()}>
-                                                <Button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleEditEntry(entry);
-                                                    }}
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1 md:flex-none text-primary border-primary/20 hover:bg-primary/10 h-10 md:h-8"
-                                                >
-                                                    <Edit className="w-4 h-4 mr-2 md:mr-1" /> <span>Edit</span>
-                                                </Button>
-                                                <Button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setDeleteConfirmDate(entry.date);
-                                                    }}
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    className="flex-1 md:flex-none h-10 md:h-8"
-                                                >
-                                                    <Trash2 className="w-4 h-4 mr-2 md:mr-1" /> <span className="hidden md:inline">Move to Trash</span><span className="md:hidden">Trash</span>
-                                                </Button>
+                                                {isSuperAdmin && (
+                                                    <>
+                                                        <Button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleEditEntry(entry);
+                                                            }}
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="flex-1 md:flex-none text-primary border-primary/20 hover:bg-primary/10 h-10 md:h-8"
+                                                        >
+                                                            <Edit className="w-4 h-4 mr-2 md:mr-1" /> <span>Edit</span>
+                                                        </Button>
+                                                        <Button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setDeleteConfirmDate(entry.date);
+                                                            }}
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="flex-1 md:flex-none h-10 md:h-8"
+                                                        >
+                                                            <Trash2 className="w-4 h-4 mr-2 md:mr-1" /> <span className="hidden md:inline">Move to Trash</span><span className="md:hidden">Trash</span>
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 

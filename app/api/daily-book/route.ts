@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import pool from '@/lib/db';
+import { recalculateCustomerLedger } from '@/lib/ledger-utils';
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
@@ -47,30 +48,7 @@ export async function POST(request: Request) {
     const { date: dateStr, items } = body;
 
     try {
-        // 0. Pre-check: Ensure none of these customers have already been processed into the Ledger for this date
-        if (items && items.length > 0) {
-            const customerIds = items.map((i: any) => i.customer_id).filter(Boolean);
-            if (customerIds.length > 0) {
-                const { rows: processed } = await pool.query(
-                    `SELECT DISTINCT c.name 
-                     FROM "Ledger" l
-                     JOIN "Customer" c ON l.customer_id = c.id
-                     WHERE l.reference_date = $1::date 
-                     AND l.type = 'PRODUCT' 
-                     AND l.deleted_at IS NULL
-                     AND l.customer_id = ANY($2::uuid[])`,
-                    [dateStr, customerIds]
-                );
-
-                if (processed.length > 0) {
-                    const names = processed.map(p => p.name).join(', ');
-                    return NextResponse.json(
-                        { error: `Cannot edit ${dateStr} because ${names} have already been processed into the Master Ledger.` },
-                        { status: 400 }
-                    );
-                }
-            }
-        }
+        // 0. Pre-check removed: We now allow editing processed dates and will sync the changes to the Ledger automatically.
 
         // 1. Get or Create DailyBook (recycle if soft-deleted)
         let bookId;
@@ -127,8 +105,44 @@ export async function POST(request: Request) {
             }
         }
 
-        await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${items?.length || 0} items`);
-        return NextResponse.json({ success: true, bookId });
+        // 4. Sync updates to existing Ledger entries for this date
+        const { rows: ledgerEntries } = await pool.query(
+            `SELECT id, customer_id, kg, price_per_kg 
+             FROM "Ledger" 
+             WHERE reference_date = $1::date AND type = 'PRODUCT' AND deleted_at IS NULL`,
+            [dateStr]
+        );
+
+        const customersToRecalculate = new Set<string>();
+
+        if (ledgerEntries.length > 0) {
+            for (const ledger of ledgerEntries) {
+                // Find the new KG from the daily book items payload
+                const dailyItem = items?.find((i: any) => i.customer_id === ledger.customer_id);
+                // If the customer was removed from the daily book, new KG is 0.
+                const newKg = dailyItem ? (parseFloat(dailyItem.kg) || 0) : 0;
+                
+                // Compare rounded to 2 decimal places to avoid tiny float diffs
+                if (Math.abs((ledger.kg || 0) - newKg) > 0.001) {
+                    const newAmount = Math.round(newKg * parseFloat(ledger.price_per_kg));
+                    
+                    await pool.query(
+                        `UPDATE "Ledger" SET kg = $1, amount = $2 WHERE id = $3`,
+                        [newKg, newAmount, ledger.id]
+                    );
+                    
+                    customersToRecalculate.add(ledger.customer_id);
+                }
+            }
+            
+            // 5. Trigger the cascade recalculation for any affected customers
+            for (const customerId of customersToRecalculate) {
+                await recalculateCustomerLedger(customerId);
+            }
+        }
+
+        await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${items?.length || 0} items. Synced ${customersToRecalculate.size} ledger records.`);
+        return NextResponse.json({ success: true, bookId, syncedLedgers: customersToRecalculate.size });
     } catch (error: any) {
         console.error('Save DailyBook Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

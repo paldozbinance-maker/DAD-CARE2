@@ -245,7 +245,7 @@ export default function CustomersPage() {
                                             ${Math.abs(Math.round((customer as any).current_balance || 0)).toLocaleString('en-US')}
                                         </p>
                                         <p className="text-[8px] font-bold uppercase tracking-tighter text-muted-foreground mt-0.5">
-                                            {(customer as any).last_receipt_has_payment ? 'Reesto' : 'Lacagta Guud'}
+                                            {(customer as any).current_balance < 0 ? 'Heyn' : (customer as any).last_receipt_has_payment ? 'Reesto' : 'Lacagta Guud'}
                                         </p>
                                     </div>
 

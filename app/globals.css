@@ -54,41 +54,41 @@
   --radius: 1.5rem;
 
   /* LIGHT MODE */
-  --background: #F4F7FC; /* Extremely light blue-gray */
+  --background: #FFFFFF; /* Clear white */
   --foreground: #0B1120; /* Deep slate */
 
-  --card: rgba(255, 255, 255, 0.65); /* Translucent white */
+  --card: rgba(255, 255, 255, 0.4); /* Extra transparent for mirroring effect */
   --card-foreground: #0B1120;
 
-  --popover: rgba(255, 255, 255, 0.85);
+  --popover: rgba(255, 255, 255, 0.6); /* Very glassy */
   --popover-foreground: #0B1120;
 
-  --primary: #0A84FF; /* Sapphire Blue */
+  --primary: #10B981; /* Beautiful Emerald Green */
   --primary-foreground: #FFFFFF;
 
-  --secondary: rgba(10, 132, 255, 0.1);
-  --secondary-foreground: #0A84FF;
+  --secondary: rgba(16, 185, 129, 0.1);
+  --secondary-foreground: #10B981;
 
   --muted: rgba(0, 0, 0, 0.04);
   --muted-foreground: #64748B;
 
-  --accent: rgba(10, 132, 255, 0.1);
-  --accent-foreground: #0A84FF;
+  --accent: rgba(16, 185, 129, 0.1);
+  --accent-foreground: #10B981;
 
   --destructive: #EF4444;
 
-  --border: rgba(0, 0, 0, 0.06);
+  --border: rgba(16, 185, 129, 0.15); /* Slight green tint on borders */
   --input: rgba(255, 255, 255, 0.5);
-  --ring: rgba(10, 132, 255, 0.5);
+  --ring: rgba(16, 185, 129, 0.5);
 
-  --sidebar: rgba(255, 255, 255, 0.7);
+  --sidebar: rgba(255, 255, 255, 0.6);
   --sidebar-foreground: #0B1120;
-  --sidebar-primary: #0A84FF;
+  --sidebar-primary: #10B981;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: rgba(0, 0, 0, 0.04);
-  --sidebar-accent-foreground: #0B1120;
-  --sidebar-border: rgba(0, 0, 0, 0.06);
-  --sidebar-ring: #0A84FF;
+  --sidebar-accent: rgba(16, 185, 129, 0.1);
+  --sidebar-accent-foreground: #10B981;
+  --sidebar-border: rgba(16, 185, 129, 0.15);
+  --sidebar-ring: #10B981;
 }
 
 .dark {
@@ -140,8 +140,8 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     /* Subtle premium background mesh */
     background-image: 
-      radial-gradient(at 0% 0%, rgba(10, 132, 255, 0.08) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(10, 132, 255, 0.08) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.12) 0px, transparent 50%);
     background-attachment: fixed;
   }
 

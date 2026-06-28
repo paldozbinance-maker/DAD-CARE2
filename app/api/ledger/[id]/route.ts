@@ -1,0 +1,148 @@
+import pool from '@/lib/db';
+import { NextResponse } from 'next/server';
+import { requireSession } from '@/lib/require-session';
+import { logAudit } from '@/lib/audit';
+import { recalculateCustomerLedger } from '@/lib/ledger-utils';
+
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { errorResponse, user } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+
+    const { id: ledgerId } = await params;
+    if (!ledgerId) {
+        return NextResponse.json({ error: 'Ledger ID required' }, { status: 400 });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Fetch the ledger entry to verify it exists and get customer_id
+        const { rows } = await client.query(
+            `SELECT * FROM "Ledger" WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+            [ledgerId]
+        );
+
+        if (rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Ledger entry not found or already deleted' }, { status: 404 });
+        }
+
+        const ledger = rows[0];
+
+        // Soft delete the ledger entry
+        await client.query(
+            `UPDATE "Ledger" 
+             SET deleted_at = NOW(), deleted_by = $1
+             WHERE id = $2`,
+            [user?.username || 'unknown', ledgerId]
+        );
+
+        // If this was a product entry, we might want to also soft-delete the corresponding DailyBookItem 
+        // to keep them in sync, but for now we just handle the ledger side.
+        
+        // Recalculate debt for the customer
+        await recalculateCustomerLedger(ledger.customer_id, client);
+
+        await client.query('COMMIT');
+
+        await logAudit(request, 'UNDO_LEDGER', `Undid ledger entry ${ledgerId} (Amount: ${ledger.amount}) for customer: ${ledger.customer_id}`);
+
+        return NextResponse.json({ success: true, message: 'Entry successfully undone' });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        console.error('Error undoing ledger:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    } finally {
+        client.release();
+    }
+}
+
+export async function PATCH(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+
+    const { id: ledgerId } = await params;
+    const body = await request.json();
+    const { amount, kg, price_per_kg } = body;
+
+    if (!ledgerId) {
+        return NextResponse.json({ error: 'Ledger ID required' }, { status: 400 });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const { rows } = await client.query(
+            `SELECT * FROM "Ledger" WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+            [ledgerId]
+        );
+
+        if (rows.length === 0) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Ledger entry not found or already deleted' }, { status: 404 });
+        }
+
+        const ledger = rows[0];
+        
+        // Check edit count limit (2 times max)
+        const currentEditCount = ledger.edit_count || 0;
+        if (currentEditCount >= 2) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Edit limit reached. You can only edit an entry twice.' }, { status: 403 });
+        }
+
+        const newAmount = amount !== undefined ? Math.round(parseFloat(amount)) : ledger.amount;
+        const newKg = kg !== undefined ? parseFloat(kg) : ledger.kg;
+        const newPrice = price_per_kg !== undefined ? parseFloat(price_per_kg) : ledger.price_per_kg;
+
+        // Update the ledger entry
+        await client.query(
+            `UPDATE "Ledger"
+             SET amount = $1, kg = $2, price_per_kg = $3, edit_count = edit_count + 1
+             WHERE id = $4`,
+            [newAmount, newKg, newPrice, ledgerId]
+        );
+
+        // If it's a PRODUCT entry, attempt to update the DailyBookItem as well
+        if (ledger.type === 'PRODUCT' && newKg !== ledger.kg && ledger.reference_date) {
+            // Find corresponding DailyBookItem for this customer on this date
+            await client.query(
+                `UPDATE "DailyBookItem" dbi
+                 SET kg = $1
+                 FROM "DailyBook" db
+                 WHERE dbi.daily_book_id = db.id 
+                 AND dbi.customer_id = $2 
+                 AND db.date = $3
+                 AND dbi.deleted_at IS NULL`,
+                [newKg, ledger.customer_id, ledger.reference_date]
+            );
+        }
+
+        // Recalculate debt for the customer
+        await recalculateCustomerLedger(ledger.customer_id, client);
+
+        await client.query('COMMIT');
+
+        await logAudit(request, 'EDIT_LEDGER', `Edited ledger entry ${ledgerId} (New Amount: ${newAmount}) for customer: ${ledger.customer_id}`);
+
+        return NextResponse.json({ 
+            success: true, 
+            message: 'Entry successfully updated', 
+            remaining_edits: 1 - currentEditCount 
+        });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        console.error('Error editing ledger:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    } finally {
+        client.release();
+    }
+}

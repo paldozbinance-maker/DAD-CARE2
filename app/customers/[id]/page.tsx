@@ -4,9 +4,12 @@
 // Change these two strings here and EVERY label in the UI updates automatically.
 const LABEL_REESTO       = 'Reesto';       // Shown when a payment exists → remaining balance
 const LABEL_LACAGTA_GUUD = 'Lacagta Guud'; // Shown when no payment made → total amount owed
+const LABEL_HEYN         = 'Heyn';         // Shown when customer overpays (negative debt)
 /** Returns the correct balance label based purely on whether a payment was made */
-const getBalanceLabel = (totalPaid: number): string =>
-    totalPaid > 0 ? LABEL_REESTO : LABEL_LACAGTA_GUUD;
+const getBalanceLabel = (totalPaid: number, closingBalance: number): string => {
+    if (closingBalance < 0) return LABEL_HEYN;
+    return totalPaid > 0 ? LABEL_REESTO : LABEL_LACAGTA_GUUD;
+};
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useParams, useRouter } from 'next/navigation';
@@ -49,6 +52,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogTrigger,
     DialogFooter,
 } from '@/components/ui/dialog';
@@ -64,8 +68,9 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { downloadReceiptPDF, shareReceiptToWhatsApp } from '@/lib/generate-receipt-pdf';
-import { MessageCircle, FileDown } from 'lucide-react';
+import { MessageCircle, FileDown, Lock } from 'lucide-react';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
+import { useSession } from '@/hooks/useSession';
 
 interface Customer {
     id: string;
@@ -87,6 +92,7 @@ interface Transaction {
     created_at: string;
     note?: string;
     receipt_id?: string | null;
+    edit_count?: number;
 }
 
 interface Summary {
@@ -125,6 +131,10 @@ export default function CustomerDetailPage() {
     const [loading, setLoading] = useState(true);
     const [expandedReceipts, setExpandedReceipts] = useState<Set<string>>(new Set());
 
+    const { session } = useSession();
+    const isAtLeastAdmin = session?.role === 'SUPER_ADMIN' || session?.role === 'ADMIN';
+    const isSuperAdmin = session?.role === 'SUPER_ADMIN';
+
     // Pagination & Filter State
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -140,7 +150,86 @@ export default function CustomerDetailPage() {
     const [editCode, setEditCode] = useState('');
     const [editGender, setEditGender] = useState('');
     const [updating, setUpdating] = useState(false);
-    const [pendingSecurityAction, setPendingSecurityAction] = useState<'clear_history' | 'delete_customer' | null>(null);
+    const [pendingSecurityAction, setPendingSecurityAction] = useState<'clear_history' | 'delete_customer' | 'delete_receipt' | null>(null);
+    const [receiptToDelete, setReceiptToDelete] = useState<ReceiptGroup | null>(null);
+
+    const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+    const [editTxAmount, setEditTxAmount] = useState('');
+    const [editTxKg, setEditTxKg] = useState('');
+    const [editTxPrice, setEditTxPrice] = useState('');
+
+    const openEditModal = (tx: Transaction) => {
+        setTransactionToEdit(tx);
+        setEditTxAmount(tx.amount.toString());
+        setEditTxKg(tx.kg ? tx.kg.toString() : '');
+        setEditTxPrice(tx.price_per_kg ? tx.price_per_kg.toString() : '');
+    };
+
+    const handleEditTransaction = async () => {
+        if (!transactionToEdit) return;
+        setUpdating(true);
+        try {
+            const res = await fetch(`/api/ledger/${transactionToEdit.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'x-session-token': localStorage.getItem('dadwork_session_token') || '' },
+                body: JSON.stringify({
+                    amount: editTxAmount ? parseFloat(editTxAmount) : undefined,
+                    kg: editTxKg ? parseFloat(editTxKg) : undefined,
+                    price_per_kg: editTxPrice ? parseFloat(editTxPrice) : undefined
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to update');
+            toast.success(`Updated successfully! Remaining edits: ${data.remaining_edits}`);
+            setTransactionToEdit(null);
+            loadCustomerData(true);
+        } catch (err: any) {
+            toast.error(err.message);
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleUndoTransaction = async (txId: string) => {
+        if (!confirm('Are you sure you want to undo this entry? This will recalculate all subsequent balances.')) return;
+        try {
+            const res = await fetch(`/api/ledger/${txId}`, {
+                method: 'DELETE',
+                headers: { 'x-session-token': localStorage.getItem('dadwork_session_token') || '' }
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to undo');
+            toast.success('Entry successfully undone.');
+            loadCustomerData(true);
+        } catch (err: any) {
+            toast.error(err.message);
+        }
+    };
+
+    const handleDeleteReceiptGroup = async (receipt: ReceiptGroup) => {
+        setPendingSecurityAction(null);
+        setReceiptToDelete(null);
+        setUpdating(true);
+        try {
+            const transactionIds = receipt.entries.map(e => e.id);
+            const res = await fetch(`/api/ledger/batch`, {
+                method: 'DELETE',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-session-token': localStorage.getItem('dadwork_session_token') || '' 
+                },
+                body: JSON.stringify({ transactionIds, customerId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to delete receipt');
+            toast.success('Receipt successfully deleted and balance recalculated.');
+            loadCustomerData(true);
+        } catch (err: any) {
+            toast.error(err.message);
+        } finally {
+            setUpdating(false);
+        }
+    };
 
     const toggleReceipt = (id: string) => {
         setExpandedReceipts(prev => {
@@ -467,16 +556,97 @@ export default function CustomerDetailPage() {
             <SecurityVerificationDialog
                 isOpen={!!pendingSecurityAction}
                 onOpenChange={(open) => {
-                    if (!open) setPendingSecurityAction(null);
+                    if (!open) {
+                        setPendingSecurityAction(null);
+                        setReceiptToDelete(null);
+                    }
                 }}
                 onConfirm={() => {
                     if (pendingSecurityAction === 'clear_history') executeClearAllHistory();
                     if (pendingSecurityAction === 'delete_customer') executeDeleteCustomer();
+                    if (pendingSecurityAction === 'delete_receipt' && receiptToDelete) handleDeleteReceiptGroup(receiptToDelete);
                 }}
-                title={pendingSecurityAction === 'clear_history' ? 'Clear History' : 'Delete Customer'}
-                description={pendingSecurityAction === 'clear_history' ? 'Permanently clear all ledger history for this customer?' : 'Permanently delete this customer and all their data?'}
+                title={
+                    pendingSecurityAction === 'clear_history' ? 'Clear History' : 
+                    pendingSecurityAction === 'delete_receipt' ? 'Delete Receipt Block' : 
+                    'Delete Customer'
+                }
+                description={
+                    pendingSecurityAction === 'clear_history' ? 'Permanently clear all ledger history for this customer?' : 
+                    pendingSecurityAction === 'delete_receipt' ? `Permanently delete ${receiptToDelete?.entries.length} transactions from "${receiptToDelete?.titleString}"?` :
+                    'Permanently delete this customer and all their data?'
+                }
                 isProcessing={updating}
             />
+
+            {/* Transaction Edit Modal */}
+            <Dialog open={!!transactionToEdit} onOpenChange={(open) => !open && setTransactionToEdit(null)}>
+                <DialogContent className="sm:max-w-[425px] glass-card border-border shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-black uppercase tracking-tight">Edit Transaction</DialogTitle>
+                        <DialogDescription className="text-[10px] opacity-70">
+                            You have {(2 - (transactionToEdit?.edit_count || 0))} edits remaining.
+                        </DialogDescription>
+                        {transactionToEdit?.type === 'PRODUCT' && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-3 mt-2 rounded-md">
+                                <p className="text-xs text-blue-800 dark:text-blue-200 font-medium flex items-center gap-1.5">
+                                    <Lock className="w-3.5 h-3.5 shrink-0" />
+                                    KG amounts are locked to ensure perfect synchronization. To edit the KG, please edit the Buuga Maalinlaha (Daily Book).
+                                </p>
+                            </div>
+                        )}
+                    </DialogHeader>
+                    <div className="grid gap-6 py-4">
+                        {transactionToEdit?.type === 'PRODUCT' && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2 opacity-60">
+                                    <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">KG <Lock className="w-2.5 h-2.5" /></Label>
+                                    <Input
+                                        type="number"
+                                        value={editTxKg}
+                                        disabled
+                                        className="h-12 font-bold bg-muted"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Price/KG</Label>
+                                    <Input
+                                        type="number"
+                                        value={editTxPrice}
+                                        onChange={e => {
+                                            setEditTxPrice(e.target.value);
+                                            if (editTxKg && e.target.value) {
+                                                setEditTxAmount((parseFloat(editTxKg) * parseFloat(e.target.value)).toString());
+                                            }
+                                        }}
+                                        className="h-12 font-bold"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Amount ($)</Label>
+                            <Input
+                                type="number"
+                                value={editTxAmount}
+                                onChange={e => setEditTxAmount(e.target.value)}
+                                className="h-12 font-bold"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            className="w-full h-12 font-black uppercase tracking-widest"
+                            onClick={handleEditTransaction}
+                            disabled={updating || (transactionToEdit?.edit_count || 0) >= 2}
+                        >
+                            {updating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                            {(transactionToEdit?.edit_count || 0) >= 2 ? 'Edit Limit Reached' : 'Save Changes'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* 1. Header Navigation */}
             <div className="flex items-center justify-between">
                 <Button variant="ghost" size="sm" onClick={() => router.push('/customers')} className="rounded-full gap-1.5 text-muted-foreground hover:text-foreground text-xs h-8 px-2">
@@ -605,7 +775,7 @@ export default function CustomerDetailPage() {
                             </p>
                             <span className={`text-[8px] uppercase font-bold ${summary.currentBalance > 0 ? 'text-destructive/70' : 'text-emerald-500/70'}`}>
                                 {/* Driven by getBalanceLabel — single source of truth */}
-                                {getBalanceLabel(filteredReceipts[0]?.totalPaid ?? 0)}
+                                {getBalanceLabel(filteredReceipts[0]?.totalPaid ?? 0, summary.currentBalance)}
                             </span>
                         </div>
                     </div>
@@ -688,8 +858,22 @@ export default function CustomerDetailPage() {
                                         {receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}
                                     </p>
                                     <span className={`text-sm font-black shrink-0 ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
-                                        ${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
+                                        {receipt.closingBalance < 0 ? '-' : ''}${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
                                     </span>
+                                    {isSuperAdmin && (
+                                        <div 
+                                            role="button" 
+                                            tabIndex={0}
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setReceiptToDelete(receipt);
+                                                setPendingSecurityAction('delete_receipt');
+                                            }} 
+                                            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-500/10 text-red-500/70 hover:text-red-600 transition-colors shrink-0 ml-1"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </div>
+                                    )}
                                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                                 </button>
 
@@ -781,14 +965,17 @@ export default function CustomerDetailPage() {
                                                         const isAbsent = Math.round(e.kg || 0) === 0;
                                                         const hasMain = arr.some(other => other.reference_date === e.reference_date && !other.note && Math.round(other.kg || 0) > 0);
                                                         return (
-                                                        <div key={e.id} className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium ${isAbsent ? 'opacity-60 line-through-none' : ''}`}>
-                                                            <span>
-                                                                {(e.note && hasMain) ? '↳ ' : ''}
-                                                                {format(new Date(e.reference_date), 'MMM dd')} · {isAbsent ? '❌ Baaqatay' : `${Math.round(e.kg || 0)}KG @ $${e.price_per_kg}`}
-                                                                {e.note ? ` (${e.note})` : ''}
-                                                            </span>
-                                                            <span className="font-bold">{isAbsent ? '$0' : `$${Math.round(e.amount).toLocaleString()}`}</span>
-                                                        </div>
+                                                            <div key={e.id} className={`flex justify-between items-start py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium ${isAbsent ? 'opacity-60 line-through-none' : ''}`}>
+                                                                <div className="flex flex-col flex-1">
+                                                                    <span>
+                                                                        {(e.note && hasMain) ? '↳ ' : ''}
+                                                                        {format(new Date(e.reference_date), 'MMM dd')} · {isAbsent ? '❌ Baaqatay' : `${Math.round(e.kg || 0)}KG @ $${e.price_per_kg}`}
+                                                                        {e.note ? ` (${e.note})` : ''}
+                                                                    </span>
+                                                                    {/* Edit/Undo completely removed for PRODUCT entries as requested */}
+                                                                </div>
+                                                                <span className="font-bold shrink-0">{isAbsent ? '$0' : `$${Math.round(e.amount).toLocaleString()}`}</span>
+                                                            </div>
                                                         );
                                                     })}
 
@@ -802,51 +989,77 @@ export default function CustomerDetailPage() {
 
                                                     {/* 3. Reesto (Previous/Opening Balance) */}
                                                     {receipt.openingBalance !== 0 && (
-                                                        <div className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                            <span>Reesto</span>
-                                                            <span>{receipt.openingBalance > 0 ? '+' : ''}${Math.round(receipt.openingBalance).toLocaleString()}</span>
+                                                        <div className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-bold px-1 -ml-1 rounded-sm mt-1 ${
+                                                            receipt.openingBalance < 0
+                                                                ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/5'
+                                                                : 'text-amber-700 dark:text-amber-500 bg-amber-500/5'
+                                                        }`}>
+                                                            <span>{receipt.openingBalance < 0 ? LABEL_HEYN : LABEL_REESTO}</span>
+                                                            <span>
+                                                                {receipt.openingBalance < 0 ? '-' : '+'}
+                                                                ${Math.abs(Math.round(receipt.openingBalance)).toLocaleString()}
+                                                            </span>
                                                         </div>
                                                     )}
 
                                                     {/* 3b. Adjustment entries (also Reesto — carried-over debt) */}
                                                     {receipt.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
                                                         <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                            <span>{LABEL_REESTO}</span>
-                                                            <span>+${Math.round(e.amount).toLocaleString()}</span>
+                                                            <span>{e.amount < 0 ? LABEL_HEYN : LABEL_REESTO}</span>
+                                                            <span>{e.amount > 0 ? '+' : ''}${Math.abs(Math.round(e.amount)).toLocaleString()}</span>
                                                         </div>
                                                     ))}
 
-                                                    {/* 4. Lacagta Guud — total owed (Maqalka + Reesto), shown only when no payment made */}
-                                                    {(receipt.totalMaqalka > 0 || receipt.totalAdjustment > 0) && (
-                                                        <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
-                                                            {/* Uses LABEL_LACAGTA_GUUD — single source of truth */}
-                                                            <span>{LABEL_LACAGTA_GUUD}</span>
-                                                            <span>${Math.round(receipt.totalMaqalka + receipt.totalAdjustment + receipt.openingBalance).toLocaleString()}</span>
-                                                        </div>
-                                                    )}
+                                                    {/* 4. Lacagta Guud — total owed (Maqalka + Heyn) */}
+                                                    {(receipt.totalMaqalka > 0 || receipt.totalAdjustment > 0) && (() => {
+                                                        const totalOwed = Math.round(receipt.totalMaqalka + receipt.totalAdjustment + receipt.openingBalance);
+                                                        return (
+                                                            <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
+                                                                <span>{totalOwed < 0 ? LABEL_HEYN : LABEL_LACAGTA_GUUD}</span>
+                                                                <span>${Math.abs(totalOwed).toLocaleString()}</span>
+                                                            </div>
+                                                        );
+                                                    })()}
 
                                                     {/* 5. Lacagaha (Payments list) */}
                                                     {receipt.entries.some(e => e.type === 'PAYMENT') && (
                                                         <>
                                                             <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
                                                             {receipt.entries.filter(e => e.type === 'PAYMENT').map(e => (
-                                                                <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
-                                                                    <span>{format(new Date(e.reference_date), 'MMM dd')} Payment</span>
-                                                                    <span>-${Math.round(e.amount).toLocaleString()}</span>
+                                                                <div key={e.id} className="flex justify-between items-start py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
+                                                                    <div className="flex flex-col flex-1">
+                                                                        <span>{format(new Date(e.reference_date), 'MMM dd')} Payment</span>
+                                                                        {isAtLeastAdmin && (
+                                                                            <div className="flex gap-3 mt-1 opacity-60 hover:opacity-100 transition-opacity print:hidden">
+                                                                                <button onClick={(ev) => { ev.stopPropagation(); openEditModal(e); }} className="text-[10px] uppercase font-bold flex items-center gap-1 hover:underline"><Pencil className="w-3 h-3"/> Edit</button>
+                                                                                <button onClick={(ev) => { ev.stopPropagation(); handleUndoTransaction(e.id); }} className="text-[10px] uppercase font-bold text-red-600 dark:text-red-400 flex items-center gap-1 hover:underline"><Trash2 className="w-3 h-3"/> Undo</button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className="shrink-0">-${Math.round(e.amount).toLocaleString()}</span>
                                                                 </div>
                                                             ))}
                                                         </>
                                                     )}
 
-                                                    {/* 6. Final Balance — only shown when payment was made */}
+                                                    {/* 6. Final Balance — shown when payment was made */}
                                                     {receipt.totalPaid > 0 && (
                                                         <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
-                                                            <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">
-                                                                {/* Uses LABEL_REESTO — single source of truth */}
-                                                                {LABEL_REESTO}
+                                                            <span className={`font-black text-sm ${
+                                                                receipt.closingBalance < 0
+                                                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                                                    : 'text-[#C19A6B] dark:text-[#D4B087]'
+                                                            }`}>
+                                                                {receipt.closingBalance < 0 ? LABEL_HEYN : LABEL_REESTO}
                                                             </span>
-                                                            <span className={`text-lg font-black ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                                                ${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
+                                                            <span className={`text-lg font-black ${
+                                                                receipt.closingBalance > 0
+                                                                    ? 'text-destructive'
+                                                                    : receipt.closingBalance < 0
+                                                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                                                        : 'text-slate-500'
+                                                            }`}>
+                                                                {receipt.closingBalance < 0 ? '-' : ''}${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
                                                             </span>
                                                         </div>
                                                     )}

@@ -1315,29 +1315,34 @@ export default function LedgerPage() {
                                                         )}
 
                                                         {/* Reesto (Opening Balance) */}
-                                                        {lastReceiptGroup.openingBalance !== 0 && (
-                                                            <div className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                                <span>Reesto</span>
-                                                                <span>{lastReceiptGroup.openingBalance > 0 ? '+' : ''}${Math.round(lastReceiptGroup.openingBalance).toLocaleString()}</span>
+                                                            <div className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-bold px-1 -ml-1 rounded-sm mt-1 ${
+                                                                lastReceiptGroup.openingBalance < 0
+                                                                    ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/5'
+                                                                    : 'text-amber-700 dark:text-amber-500 bg-amber-500/5'
+                                                            }`}>
+                                                                <span>{lastReceiptGroup.openingBalance < 0 ? 'Heyn' : 'Reesto'}</span>
+                                                                <span>{lastReceiptGroup.openingBalance > 0 ? '+' : '-'}${Math.abs(Math.round(lastReceiptGroup.openingBalance)).toLocaleString()}</span>
                                                             </div>
-                                                        )}
 
 
                                                         {/* Adjustment entries */}
                                                         {lastReceiptGroup.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
                                                             <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
-                                                                <span>{e.note || 'Reesto'}</span>
+                                                                <span>{e.note || (e.amount < 0 ? 'Heyn' : 'Reesto')}</span>
                                                                 <span>{e.amount > 0 ? '+' : '-'}${Math.abs(Math.round(e.amount)).toLocaleString()}</span>
                                                             </div>
                                                         ))}
 
                                                         {/* Lacagta Guud */}
-                                                        {(lastReceiptGroup.totalMaqalka > 0 || lastReceiptGroup.totalAdjustment > 0) && (
-                                                            <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
-                                                                <span>Lacagta Guud</span>
-                                                                <span>${Math.round(lastReceiptGroup.totalMaqalka + lastReceiptGroup.totalAdjustment + lastReceiptGroup.openingBalance).toLocaleString()}</span>
-                                                            </div>
-                                                        )}
+                                                        {(lastReceiptGroup.totalMaqalka > 0 || lastReceiptGroup.totalAdjustment > 0) && (() => {
+                                                            const lastTotal = Math.round(lastReceiptGroup.totalMaqalka + lastReceiptGroup.totalAdjustment + lastReceiptGroup.openingBalance);
+                                                            return (
+                                                                <div className="flex justify-between py-1.5 border-b-2 border-red-300 dark:border-red-900/50 font-black text-slate-900 dark:text-slate-100">
+                                                                    <span className={lastTotal < 0 ? 'text-emerald-600 dark:text-emerald-500' : ''}>{lastTotal < 0 ? 'Heyn' : 'Lacagta Guud'}</span>
+                                                                    <span className={lastTotal < 0 ? 'text-emerald-600 dark:text-emerald-500' : ''}>${Math.abs(lastTotal).toLocaleString()}</span>
+                                                                </div>
+                                                            );
+                                                        })()}
 
                                                         {/* Saved payments from last receipt */}
                                                         {lastReceiptGroup.entries.some(e => e.type === 'PAYMENT') && (
@@ -1355,7 +1360,7 @@ export default function LedgerPage() {
                                                         {/* Closing balance from last receipt */}
                                                         {lastReceiptGroup.totalPaid > 0 && (
                                                             <div className="flex justify-between items-center pt-2 mt-2 border-t-2 border-double border-amber-400/50 dark:border-amber-600/50 px-1 py-1">
-                                                                <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                                <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">{lastReceiptGroup.closingBalance <= 0 ? 'Heyn' : 'Reesto'}</span>
                                                                 <span className={`text-lg font-black ${lastReceiptGroup.closingBalance > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                                     ${Math.abs(Math.round(lastReceiptGroup.closingBalance)).toLocaleString()}
                                                                 </span>
@@ -1377,13 +1382,13 @@ export default function LedgerPage() {
                                                                 ))}
                                                                 <div className="flex flex-col">
                                                                     <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
-                                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                                        <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">{(summary.currentBalance - activePaymentAmount) <= 0 ? 'Heyn' : 'Reesto'}</span>
                                                                         <span className={`text-lg font-black ${(summary.currentBalance - activePaymentAmount) > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                                             ${Math.abs(Math.round(summary.currentBalance - activePaymentAmount)).toLocaleString()}
                                                                         </span>
                                                                     </div>
                                                                     <p className={`text-[8px] text-right font-bold uppercase ${(summary.currentBalance - activePaymentAmount) > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
-                                                                        Reesto
+                                                                        {(summary.currentBalance - activePaymentAmount) <= 0 ? 'Heyn' : 'Reesto'}
                                                                     </p>
                                                                 </div>
                                                             </>
@@ -1434,7 +1439,7 @@ export default function LedgerPage() {
                                                         {/* Reesto (Carry-over Balance) */}
                                                         {(currentReesto !== 0 || summary.currentBalance === 0) && (
                                                             <div className="flex justify-between items-center py-1.5 border-b border-border/40">
-                                                                <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto > 0 ? 'Reesto' : 'Reesto'}</span>
+                                                                <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto < 0 ? 'Heyn' : 'Reesto'}</span>
                                                                 {summary.currentBalance === 0 ? (
                                                                     <Input
                                                                         type="number"
@@ -1466,8 +1471,8 @@ export default function LedgerPage() {
                                                         {/* Subtotal */}
                                                         {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0) || activeAdjustmentsAmount > 0) && (
                                                             <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
-                                                                <span>Lacagta Guud</span>
-                                                                <span>${Math.round(subtotal).toLocaleString()}</span>
+                                                                <span className={subtotal < 0 ? 'text-emerald-600 dark:text-emerald-500' : ''}>{subtotal < 0 ? 'Heyn' : 'Lacagta Guud'}</span>
+                                                                <span className={subtotal < 0 ? 'text-emerald-600 dark:text-emerald-500' : ''}>${Math.abs(Math.round(subtotal)).toLocaleString()}</span>
                                                             </div>
                                                         )}
 
@@ -1491,13 +1496,13 @@ export default function LedgerPage() {
                                                         {activePaymentAmount > 0 && (
                                                             <div className="flex flex-col">
                                                                 <div className="flex justify-between items-center pt-2 mt-1 border-t-2 border-double border-amber-400 dark:border-amber-600 px-1 py-1">
-                                                                    <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">Reesto</span>
+                                                                    <span className="font-black text-sm text-[#C19A6B] dark:text-[#D4B087]">{finalLacagtaGuud <= 0 ? 'Heyn' : 'Reesto'}</span>
                                                                     <span className={`text-lg font-black ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500'}`}>
                                                                         ${Math.abs(Math.round(finalLacagtaGuud)).toLocaleString()}
                                                                     </span>
                                                                 </div>
                                                                 <p className={`text-[8px] text-right font-bold uppercase ${finalLacagtaGuud > 0 ? 'text-destructive/60' : 'text-emerald-500/60'}`}>
-                                                                    Reesto
+                                                                    {finalLacagtaGuud <= 0 ? 'Heyn' : 'Reesto'}
                                                                 </p>
                                                             </div>
                                                         )}
@@ -1527,7 +1532,7 @@ export default function LedgerPage() {
                 <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border p-4 md:hidden z-50 animate-in slide-in-from-bottom duration-500 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
                     <div className="flex items-center gap-4 max-w-lg mx-auto">
                         <div className="flex-1">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">{activePaymentAmount > 0 ? 'Reesto' : 'Lacagta Guud'}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#C19A6B] dark:text-[#D4B087] leading-none mb-1">{activePaymentAmount > 0 ? (finalLacagtaGuud <= 0 ? 'Heyn' : 'Reesto') : 'Lacagta Guud'}</p>
                             <p className={`text-xl font-black leading-none ${finalLacagtaGuud > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                 ${Math.round(finalLacagtaGuud).toLocaleString()}
                             </p>
