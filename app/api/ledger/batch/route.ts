@@ -5,7 +5,7 @@ import { logAudit } from '@/lib/audit';
 import { recalculateCustomerLedger } from '@/lib/ledger-utils';
 
 export async function DELETE(request: Request) {
-    const { errorResponse, user } = await requireSession(request);
+    const { errorResponse, session } = await requireSession(request);
     if (errorResponse) return errorResponse;
 
     try {
@@ -35,7 +35,7 @@ export async function DELETE(request: Request) {
                 RETURNING id
             `;
             
-            const result = await client.query(query, [user?.username || 'unknown', transactionIds, customerId]);
+            const result = await client.query(query, [session?.username || 'unknown', transactionIds, customerId]);
 
             if (result.rows.length === 0) {
                 await client.query('ROLLBACK');

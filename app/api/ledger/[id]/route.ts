@@ -8,7 +8,7 @@ export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const { errorResponse, user } = await requireSession(request);
+    const { errorResponse, session } = await requireSession(request);
     if (errorResponse) return errorResponse;
 
     const { id: ledgerId } = await params;
@@ -38,7 +38,7 @@ export async function DELETE(
             `UPDATE "Ledger" 
              SET deleted_at = NOW(), deleted_by = $1
              WHERE id = $2`,
-            [user?.username || 'unknown', ledgerId]
+            [session?.username || 'unknown', ledgerId]
         );
 
         // If this was a product entry, we might want to also soft-delete the corresponding DailyBookItem 
