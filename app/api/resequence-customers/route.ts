@@ -60,11 +60,11 @@ export async function POST(request: Request) {
         await client.query('COMMIT');
 
         // 4. Log the operation
-        await logAudit({
-            userId: session!.id,
-            action: 'RESEQUENCE_CUSTOMERS',
-            details: `Re-sequenced ${updated} customer codes. ${changes.length} codes changed.`,
-        });
+        await logAudit(
+            request,
+            'RESEQUENCE_CUSTOMERS',
+            `Re-sequenced ${updated} customer codes. ${changes.length} codes changed.`
+        );
 
         return NextResponse.json({
             message: `Successfully re-sequenced ${updated} customers.`,
