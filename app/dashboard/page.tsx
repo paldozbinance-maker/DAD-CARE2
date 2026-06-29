@@ -22,7 +22,12 @@ import Link from 'next/link';
 import { GlobalSearch } from '@/components/global-search';
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = async (url: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {} });
+    if (!res.ok) throw new Error('Fetch error');
+    return res.json();
+};
 
 interface DashboardData {
     totalCustomers: number;
@@ -32,7 +37,7 @@ interface DashboardData {
     totalKg: number;
     todayKg: number;
     todayCustomerCount: number;
-    topDebtors: { id: string; name: string; code: string; debt: number; is_reesto: boolean }[];
+    topDebtors: { id: string; name: string; code: string; debt: number; is_reesto: boolean; total_payments: number; total_maqal: number; percentage_paid: number; }[];
     recentTransactions: any[];
 }
 
@@ -209,6 +214,7 @@ export default function DashboardPage() {
                     </div>
                 </CardContent>
             </Card>
+
 
         </div>
     );

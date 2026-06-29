@@ -15,9 +15,11 @@ async function run() {
     try {
         console.log("Creating database indexes...");
         
-        // Ledger indexes
         await pool.query('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ledger_customer_id ON "Ledger"(customer_id);');
         console.log("Created idx_ledger_customer_id");
+        
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_ledger_customer_created_id ON "Ledger"(customer_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;');
+        console.log("Created idx_ledger_customer_created_id");
         
         await pool.query('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ledger_type ON "Ledger"(type);');
         console.log("Created idx_ledger_type");

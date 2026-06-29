@@ -206,8 +206,7 @@ export async function GET(request: Request) {
                 lastTransactionType: s.last_transaction_type || null,
             }
         });
-        // Cache per-customer ledger for 20s — short enough to stay fresh
-        response.headers.set('Cache-Control', 'private, max-age=20, stale-while-revalidate=60');
+        response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         return response;
     } catch (error: any) {
         console.error('Fetch Ledger Error:', error);

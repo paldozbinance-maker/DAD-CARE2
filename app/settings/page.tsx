@@ -79,6 +79,7 @@ export default function SettingsPage() {
     // Price per KG
     const [pricePerKg, setPricePerKg] = useState('35');
     const [loading, setLoading] = useState(false);
+    const [resequenceLoading, setResequenceLoading] = useState(false);
 
     // Current User
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -237,7 +238,7 @@ export default function SettingsPage() {
 
     // Auto trigger DB migration on Settings page load — ONCE ONLY
     useEffect(() => {
-        const alreadyMigrated = localStorage.getItem('dadwork_db_migrated_v2');
+        const alreadyMigrated = localStorage.getItem('dadwork_db_migrated_v3');
         if (alreadyMigrated) return; // ⚡ Skip if already done
 
         const runMigration = async () => {
@@ -245,7 +246,7 @@ export default function SettingsPage() {
                 const res = await fetch('/api/fix-db');
                 const data = await res.json();
                 if (data.success) {
-                    localStorage.setItem('dadwork_db_migrated_v2', 'true'); // Never run again
+                    localStorage.setItem('dadwork_db_migrated_v3', 'true'); // Never run again
                     console.log('✅ One-time migration done');
                 } else {
                     console.error('❌ Migration failed:', data.error);
@@ -289,7 +290,7 @@ export default function SettingsPage() {
             loadCustomers();
 
             if (parsedUser.role === 'SUPER_ADMIN') {
-                loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, false, false);
+                loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true, false);
                 loadAuditStats();
                 loadOnlineSessions();
 
@@ -816,38 +817,75 @@ export default function SettingsPage() {
                     {/* ── Business Settings ── */}
                     {isSuperAdmin && (
                         <TabsContent value="business" className="mt-3">
-                            <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
-                                <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-emerald-500/5 to-transparent">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="p-1.5 rounded-lg bg-emerald-500/15">
-                                            <DollarSign className="w-4 h-4 text-emerald-500" />
+                            <>
+                                <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                    <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-emerald-500/5 to-transparent">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 rounded-lg bg-emerald-500/15">
+                                                <DollarSign className="w-4 h-4 text-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-bold text-foreground">Default Price</h3>
+                                                <p className="text-[10px] text-muted-foreground">Price per KG for ledger calculations</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="text-sm font-bold text-foreground">Default Price</h3>
-                                            <p className="text-[10px] text-muted-foreground">Price per KG for ledger calculations</p>
+                                    </div>
+                                    <div className="p-3 flex items-center gap-2.5">
+                                        <div className="relative flex-1">
+                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-sm">$</div>
+                                            <Input
+                                                type="number"
+                                                value={pricePerKg}
+                                                onChange={(e) => setPricePerKg(e.target.value)}
+                                                className="pl-7 h-11 text-xl font-black bg-background/50 border-border/60 rounded-xl text-center"
+                                                step="1"
+                                            />
                                         </div>
+                                        <Button
+                                            onClick={handleSavePrice}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 rounded-xl shadow-md shadow-emerald-600/15 active:scale-95 transition-all px-5 shrink-0"
+                                        >
+                                            <Save className="w-4 h-4 mr-1.5" />
+                                            Save
+                                        </Button>
                                     </div>
                                 </div>
-                                <div className="p-3 flex items-center gap-2.5">
-                                    <div className="relative flex-1">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-sm">$</div>
-                                        <Input
-                                            type="number"
-                                            value={pricePerKg}
-                                            onChange={(e) => setPricePerKg(e.target.value)}
-                                            className="pl-7 h-11 text-xl font-black bg-background/50 border-border/60 rounded-xl text-center"
-                                            step="1"
-                                        />
-                                    </div>
+
+                                {/* ── Re-sequence Customer IDs (Tiny Button) ── */}
+                                <div className="mt-3 flex justify-end">
                                     <Button
-                                        onClick={handleSavePrice}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 rounded-xl shadow-md shadow-emerald-600/15 active:scale-95 transition-all px-5 shrink-0"
+                                        onClick={async () => {
+                                            if (!window.confirm('Re-number all customers 1, 2, 3…? Ledger data is safe.')) return;
+                                            setResequenceLoading(true);
+                                            try {
+                                                const token = localStorage.getItem('dadwork_session_token') || '';
+                                                const res = await fetch('/api/resequence-customers', {
+                                                    method: 'POST',
+                                                    headers: { 'x-session-token': token }
+                                                });
+                                                const data = await res.json();
+                                                if (res.ok) {
+                                                    toast.success(`✅ ${data.message}`);
+                                                    loadCustomers();
+                                                } else {
+                                                    toast.error(data.error || 'Failed to re-sequence');
+                                                }
+                                            } catch (e) {
+                                                toast.error('Network error');
+                                            } finally {
+                                                setResequenceLoading(false);
+                                            }
+                                        }}
+                                        disabled={resequenceLoading}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-[10px] h-7 px-2 text-violet-500 hover:text-violet-600 hover:bg-violet-500/10 transition-all font-bold"
                                     >
-                                        <Save className="w-4 h-4 mr-1.5" />
-                                        Save
+                                        {resequenceLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Zap className="w-3 h-3 mr-1" />}
+                                        Fix IDs
                                     </Button>
                                 </div>
-                            </div>
+                            </>
                         </TabsContent>
                     )}
 
@@ -912,7 +950,7 @@ export default function SettingsPage() {
                                         <div className="divide-y divide-border/30">
                                             {filteredUsers.map((user) => {
                                                 const hasAvatar = !!user.avatar_url;
-                                                const assignedCount = user.assigned_customer_ids?.length || 0;
+                                                const assignedCount = user.assigned_customer_ids?.filter(id => allCustomers.some(c => c.id === id)).length || 0;
                                                 const isUserAdmin = user.role === 'ADMIN';
 
                                                 return (

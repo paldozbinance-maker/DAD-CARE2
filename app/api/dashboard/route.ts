@@ -70,14 +70,28 @@ const getDashboardData = async (today: string) => {
                 WHERE db.date = $1
             `, [today]),
 
-            // 6. Top Debtors and Creditors (all non-zero balances)
+            // 6. Top Debtors and Creditors (all non-zero balances, with payment/maqal history)
             pool.query(`
+                WITH CustomerHistory AS (
+                    SELECT 
+                        customer_id,
+                        SUM(CASE WHEN type = 'PAYMENT' THEN ABS(amount) ELSE 0 END)::float as total_payments,
+                        SUM(CASE WHEN type = 'PRODUCT' THEN ABS(amount) ELSE 0 END)::float as total_maqal
+                    FROM "Ledger"
+                    GROUP BY customer_id
+                )
                 SELECT 
                     l.customer_id as id, 
                     c.name, 
                     c.customer_code as code, 
                     l.new_debt::float as debt,
-                    l.is_reesto
+                    l.is_reesto,
+                    COALESCE(ch.total_payments, 0) as total_payments,
+                    COALESCE(ch.total_maqal, 0) as total_maqal,
+                    CASE 
+                        WHEN COALESCE(ch.total_maqal, 0) = 0 THEN 100
+                        ELSE LEAST(100, ROUND((COALESCE(ch.total_payments, 0) / ch.total_maqal) * 100))
+                    END as percentage_paid
                 FROM (
                     SELECT DISTINCT ON (customer_id) 
                         customer_id, 
@@ -87,8 +101,8 @@ const getDashboardData = async (today: string) => {
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) l
                 JOIN "Customer" c ON l.customer_id = c.id
-                WHERE l.new_debt != 0
-                ORDER BY ABS(l.new_debt) DESC
+                LEFT JOIN CustomerHistory ch ON l.customer_id = ch.customer_id
+                WHERE l.new_debt != 0 OR COALESCE(ch.total_maqal, 0) > 0
             `),
 
             // 7. Recent transactions (last 5)
@@ -166,8 +180,7 @@ export async function GET(request: Request) {
         const data = await getDashboardData(today);
 
         const response = NextResponse.json(data);
-        // Cache dashboard for 30s — user rarely needs real-time on every load
-        response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
+        response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         return response;
 
     } catch (error: any) {

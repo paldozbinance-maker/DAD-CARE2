@@ -116,13 +116,13 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=180');
+            res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
             return res;
         }
 
         const rows = await getCustomers();
         const res = NextResponse.json(rows);
-        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
+        res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

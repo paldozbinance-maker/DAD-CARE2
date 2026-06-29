@@ -117,7 +117,12 @@ interface ReceiptGroup {
     titleString?: string;
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = async (url: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {} });
+    if (!res.ok) throw new Error('Fetch error');
+    return res.json();
+};
 
 export default function CustomerDetailPage() {
     const params = useParams();
@@ -950,11 +955,22 @@ export default function CustomerDetailPage() {
                                                 <div className="absolute left-9 top-0 bottom-0 w-px bg-[#C19A6B]/60 dark:bg-[#C19A6B]/40 z-0"></div>
 
                                                 <div className="relative z-10 pl-12 pr-4 pt-3 space-y-0 text-slate-800 dark:text-slate-300">
-                                                    {receipt.titleString && (
-                                                        <p className="text-[9px] font-bold text-muted-foreground text-center mb-2">
-                                                            {receipt.titleString}
-                                                        </p>
-                                                    )}
+                                                    {receipt.titleString && (() => {
+                                                        const paymentsInReceipt = receipt.entries.filter(e => e.type === 'PAYMENT').reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                                                        const pct = receipt.totalMaqalka > 0 ? Math.min(100, Math.round((paymentsInReceipt / receipt.totalMaqalka) * 100)) : 100;
+                                                        return (
+                                                            <div className="flex flex-col items-center justify-center gap-1 mb-3">
+                                                                <p className="text-[9px] font-bold text-muted-foreground text-center">
+                                                                    {receipt.titleString}
+                                                                </p>
+                                                                {receipt.totalMaqalka > 0 && (
+                                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-bold tracking-wider ${pct >= 100 ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-500' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>
+                                                                        {pct}% Paid
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
 
                                                     {/* 1. Maqalka entries (products) */}
                                                     {receipt.entries.filter(e => e.type === 'PRODUCT').filter((e, idx, arr) => {
@@ -980,12 +996,21 @@ export default function CustomerDetailPage() {
                                                     })}
 
                                                     {/* 2. Maqalka Total (products subtotal only) */}
-                                                    {receipt.entries.some(e => e.type === 'PRODUCT') && (
-                                                        <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
-                                                            <span>Maqalka</span>
-                                                            <span>${Math.round(receipt.totalMaqalka).toLocaleString()}</span>
-                                                        </div>
-                                                    )}
+                                                    {receipt.entries.some(e => e.type === 'PRODUCT') && (() => {
+                                                        const paymentsInReceipt = receipt.entries.filter(e => e.type === 'PAYMENT').reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                                                        const pct = receipt.totalMaqalka > 0 ? Math.min(100, Math.round((paymentsInReceipt / receipt.totalMaqalka) * 100)) : 100;
+                                                        return (
+                                                            <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
+                                                                <span className="flex items-center gap-2">
+                                                                    Maqalka
+                                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-sm ${pct >= 100 ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-500' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>
+                                                                        {pct}% Paid
+                                                                    </span>
+                                                                </span>
+                                                                <span>${Math.round(receipt.totalMaqalka).toLocaleString()}</span>
+                                                            </div>
+                                                        );
+                                                    })()}
 
                                                     {/* 3. Reesto (Previous/Opening Balance) */}
                                                     {receipt.openingBalance !== 0 && (
@@ -1029,12 +1054,19 @@ export default function CustomerDetailPage() {
                                                                 <div key={e.id} className="flex justify-between items-start py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
                                                                     <div className="flex flex-col flex-1">
                                                                         <span>{format(new Date(e.reference_date), 'MMM dd')} Payment</span>
-                                                                        {isAtLeastAdmin && (
-                                                                            <div className="flex gap-3 mt-1 opacity-60 hover:opacity-100 transition-opacity print:hidden">
-                                                                                <button onClick={(ev) => { ev.stopPropagation(); openEditModal(e); }} className="text-[10px] uppercase font-bold flex items-center gap-1 hover:underline"><Pencil className="w-3 h-3"/> Edit</button>
-                                                                                <button onClick={(ev) => { ev.stopPropagation(); handleUndoTransaction(e.id); }} className="text-[10px] uppercase font-bold text-red-600 dark:text-red-400 flex items-center gap-1 hover:underline"><Trash2 className="w-3 h-3"/> Undo</button>
-                                                                            </div>
-                                                                        )}
+                                                                        {(() => {
+                                                                            const txTime = new Date(e.created_at || e.reference_date).getTime();
+                                                                            const isRecent = (Date.now() - txTime) < 24 * 60 * 60 * 1000;
+                                                                            if (isAtLeastAdmin && isRecent) {
+                                                                                return (
+                                                                                    <div className="flex gap-3 mt-1 opacity-60 hover:opacity-100 transition-opacity print:hidden">
+                                                                                        <button onClick={(ev) => { ev.stopPropagation(); openEditModal(e); }} className="text-[10px] uppercase font-bold flex items-center gap-1 hover:underline"><Pencil className="w-3 h-3"/> Edit</button>
+                                                                                        <button onClick={(ev) => { ev.stopPropagation(); handleUndoTransaction(e.id); }} className="text-[10px] uppercase font-bold text-red-600 dark:text-red-400 flex items-center gap-1 hover:underline"><Trash2 className="w-3 h-3"/> Undo</button>
+                                                                                    </div>
+                                                                                );
+                                                                            }
+                                                                            return null;
+                                                                        })()}
                                                                     </div>
                                                                     <span className="shrink-0">-${Math.round(e.amount).toLocaleString()}</span>
                                                                 </div>

@@ -13,7 +13,12 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = async (url: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {} });
+    if (!res.ok) throw new Error('Fetch error');
+    return res.json();
+};
 
 interface DateEntry {
     id: string;
@@ -198,6 +203,11 @@ export default function LedgerPage() {
     // Custom select state
     const [customerSearch, setCustomerSearch] = useState('');
     const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
+    const [showUnprocessedOnly, setShowUnprocessedOnly] = useState(false);
+
+    const unprocessedCustomersCount = useMemo(() => {
+        return allCustomers.filter(c => !c.is_target_days_done && (c.unprocessed_books_count || c.total_books_count)).length;
+    }, [allCustomers]);
 
     // Form state (continued)
     const [customerDailyDates, setCustomerDailyDates] = useState<DailyBookRecord[]>([]);
@@ -855,7 +865,7 @@ export default function LedgerPage() {
                                                         setUpdateLastMaqal(false);
                                                     }
                                                 }} className="h-6 text-[10px] px-2 rounded font-bold border-primary/20 text-primary hover:bg-primary/5">
-                                                    <BookOpen className="w-3 h-3 mr-1" /> {showLastMaqal ? 'Hide Last Maqal' : 'Read Last Maqal'}
+                                                    <BookOpen className="w-3 h-3 mr-1" /> {showLastMaqal ? 'Qari Maqalki Hore' : 'Lacag ka jar maqalki hore'}
                                                 </Button>
                                             )}
                                         </div>
@@ -887,21 +897,36 @@ export default function LedgerPage() {
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                                            <div className="p-2 border-b">
+                                            <div className="p-2 border-b flex items-center gap-2 bg-muted/20">
                                                 <Input 
                                                     placeholder="Search by name or ID..." 
                                                     value={customerSearch}
                                                     onChange={(e) => setCustomerSearch(e.target.value)}
-                                                    className="h-9 focus-visible:ring-1"
+                                                    className="h-9 focus-visible:ring-1 flex-1 bg-background"
                                                     autoFocus
                                                 />
+                                                <Button
+                                                    type="button"
+                                                    variant={showUnprocessedOnly ? "default" : "outline"}
+                                                    onClick={() => setShowUnprocessedOnly(!showUnprocessedOnly)}
+                                                    className={cn(
+                                                        "h-9 px-2 text-[10px] font-black uppercase tracking-tight gap-1 shrink-0 rounded-xl transition-all border-amber-500/30 text-amber-500 hover:bg-amber-500/10",
+                                                        showUnprocessedOnly && "bg-amber-500 text-yellow-950 hover:bg-amber-600 shadow-[0_0_10px_rgba(245,158,11,0.3)] animate-pulse"
+                                                    )}
+                                                >
+                                                    ⏳ Dhiman ({unprocessedCustomersCount})
+                                                </Button>
                                             </div>
                                             <div className="max-h-60 overflow-y-auto p-1">
                                                 {(() => {
-                                                    const filtered = sortedCustomers.filter(c => 
-                                                        c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
-                                                        c.customer_code.toLowerCase().includes(customerSearch.toLowerCase())
-                                                    );
+                                                    const filtered = sortedCustomers.filter(c => {
+                                                        const matchesSearch = c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
+                                                                             c.customer_code.toLowerCase().includes(customerSearch.toLowerCase());
+                                                        if (showUnprocessedOnly) {
+                                                            return matchesSearch && !c.is_target_days_done && (c.unprocessed_books_count || c.total_books_count);
+                                                        }
+                                                        return matchesSearch;
+                                                    });
                                                     
                                                     if (filtered.length === 0) {
                                                         return <div className="p-4 text-center text-sm text-muted-foreground">No customers found.</div>;
@@ -1349,9 +1374,22 @@ export default function LedgerPage() {
                                                 {/* === READ LAST MAQAL MODE: Show full last maqal + new payment preview === */}
                                                 {(showLastMaqal && !updateLastMaqal && lastReceiptGroup) ? (
                                                     <>
-                                                        <p className="text-[9px] font-bold text-muted-foreground text-center mb-2 uppercase tracking-wider">
-                                                            {lastReceiptGroup.titleString}
-                                                        </p>
+                                                        {(() => {
+                                                            const paymentsInReceipt = lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                                                            const pct = lastReceiptGroup.totalMaqalka > 0 ? Math.min(100, Math.round((paymentsInReceipt / lastReceiptGroup.totalMaqalka) * 100)) : 100;
+                                                            return (
+                                                                <div className="flex flex-col items-center justify-center gap-1 mb-3 mt-1">
+                                                                    <p className="text-[9px] font-bold text-muted-foreground text-center uppercase tracking-wider">
+                                                                        {lastReceiptGroup.titleString}
+                                                                    </p>
+                                                                    {lastReceiptGroup.totalMaqalka > 0 && (
+                                                                        <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-bold tracking-wider ${pct >= 100 ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-500' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>
+                                                                            {pct}% Paid
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
 
                                                         {/* Products */}
                                                         {lastReceiptGroup.entries.filter(e => e.type === 'PRODUCT').filter((e, idx, arr) => {
@@ -1372,12 +1410,21 @@ export default function LedgerPage() {
                                                         )})}
 
                                                         {/* Maqalka Total */}
-                                                        {lastReceiptGroup.entries.some(e => e.type === 'PRODUCT') && (
-                                                            <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
-                                                                <span>Maqalka</span>
-                                                                <span>${Math.round(lastReceiptGroup.totalMaqalka).toLocaleString()}</span>
-                                                            </div>
-                                                        )}
+                                                        {lastReceiptGroup.entries.some(e => e.type === 'PRODUCT') && (() => {
+                                                            const paymentsInReceipt = lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                                                            const pct = lastReceiptGroup.totalMaqalka > 0 ? Math.min(100, Math.round((paymentsInReceipt / lastReceiptGroup.totalMaqalka) * 100)) : 100;
+                                                            return (
+                                                                <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
+                                                                    <span className="flex items-center gap-2">
+                                                                        Maqalka
+                                                                        <span className={`text-[8px] px-1.5 py-0.5 rounded-sm ${pct >= 100 ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-500' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>
+                                                                            {pct}% Paid
+                                                                        </span>
+                                                                    </span>
+                                                                    <span>${Math.round(lastReceiptGroup.totalMaqalka).toLocaleString()}</span>
+                                                                </div>
+                                                            );
+                                                        })()}
 
                                                         {/* Reesto (Opening Balance) */}
                                                             <div className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-bold px-1 -ml-1 rounded-sm mt-1 ${

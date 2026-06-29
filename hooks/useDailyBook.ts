@@ -6,17 +6,22 @@ import { Customer, SavedEntry, DailyBookItem } from '@/types';
 // so the page doesn't crash with "Application error"
 export const fetcher = async (url: string) => {
     try {
-        const res = await fetch(url);
+        const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+        const headers: HeadersInit = {};
+        if (token) headers['x-session-token'] = token;
+
+        const res = await fetch(url, { headers });
         if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
-            // Log the error but return null so UI degrades gracefully
             console.error(`[SWR] Fetch error for ${url}:`, errorData.error || res.status);
-            return null;
+            // Optionally throw an error if you want SWR to retry or trigger onError, 
+            // but for graceful degradation we return null
+            throw new Error(errorData.error || 'Unauthorized – session expired or invalid');
         }
         return res.json();
     } catch (err) {
         console.error(`[SWR] Network error for ${url}:`, err);
-        return null;
+        throw err;
     }
 };
 

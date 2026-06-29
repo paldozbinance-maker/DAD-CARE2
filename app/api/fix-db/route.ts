@@ -39,6 +39,10 @@ export async function GET(request: Request) {
         await client.query(addAvatarQuery);
         await client.query(addAssignedQuery);
 
+        // Add high-performance Ledger index to speed up dashboard queries
+        const addLedgerIndexQuery = `CREATE INDEX IF NOT EXISTS idx_ledger_customer_created_id ON "Ledger"(customer_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;`;
+        await client.query(addLedgerIndexQuery);
+
         // 4. Update Role Enum for SUPER_ADMIN and USER
         const addRoleEnumQuery = `
             DO $$

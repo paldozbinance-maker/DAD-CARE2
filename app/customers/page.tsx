@@ -5,17 +5,27 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useEffect, useState } from 'react';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { toast } from 'sonner';
-import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2 } from 'lucide-react';
+import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2, TrendingUp, ArrowDownWideNarrow } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    DropdownMenuSub,
+    DropdownMenuSubTrigger,
+    DropdownMenuSubContent,
+    DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = async (url: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {} });
+    if (!res.ok) throw new Error('Fetch error');
+    return res.json();
+};
 
 interface Customer {
     id: string;
@@ -31,6 +41,9 @@ export default function CustomersPage() {
     const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
     const [visibleCount, setVisibleCount] = useState(20);
+    const [rankingMode, setRankingMode] = useState<'maqalka' | 'lacagta'>('maqalka');
+
+    const { data: dashboardData } = useSWR<any>('/api/dashboard', fetcher, { revalidateOnFocus: false, dedupingInterval: 30000 });
 
     // ⚡ SWR: Instant cache — no more spinner every time you visit this page
     const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
@@ -67,12 +80,23 @@ export default function CustomersPage() {
             const avgA = (a as any).total_books_count ? ((a as any).total_kg || 0) / (a as any).total_books_count : 0;
             const avgB = (b as any).total_books_count ? ((b as any).total_kg || 0) / (b as any).total_books_count : 0;
             return avgA - avgB;
-        } else if (filterType === 'best') {
-            const scoreA = ((a as any).total_paid || 0) - ((a as any).current_balance || 0);
-            const scoreB = ((b as any).total_paid || 0) - ((b as any).current_balance || 0);
-            return scoreB - scoreA;
-        } else if (filterType === 'worst') {
-            return ((b as any).current_balance || 0) - ((a as any).current_balance || 0);
+        } else if (filterType === 'best_maqal' || filterType === 'worst_maqal' || filterType === 'best_lacag' || filterType === 'worst_lacag') {
+            const debtorMap = new Map();
+            if (dashboardData?.topDebtors) {
+                dashboardData.topDebtors.forEach((d: any) => debtorMap.set(d.id, d));
+            }
+            const da = debtorMap.get(a.id);
+            const db = debtorMap.get(b.id);
+            
+            const pctA = da?.percentage_paid ?? -1;
+            const pctB = db?.percentage_paid ?? -1;
+            const debtA = da?.debt ?? 0;
+            const debtB = db?.debt ?? 0;
+
+            if (filterType === 'best_maqal') return pctB - pctA;
+            if (filterType === 'worst_maqal') return pctA - pctB;
+            if (filterType === 'best_lacag') return debtA - debtB;
+            if (filterType === 'worst_lacag') return debtB - debtA;
         }
 
         // default behavior
@@ -133,12 +157,39 @@ export default function CustomersPage() {
                                 <DropdownMenuItem onClick={() => setFilterType('default')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'default' ? 'bg-primary/10 text-primary' : ''}`}>
                                     ⚙️ Caadi (Default) {filterType === 'default' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('best')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl text-emerald-500 focus:text-emerald-600 focus:bg-emerald-500/10 ${filterType === 'best' ? 'bg-emerald-500/10' : ''}`}>
-                                    ⭐ Macaamilka Ugu Fiican {filterType === 'best' && <Check className="w-3 h-3 ml-auto" />}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType('worst')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl text-destructive focus:text-destructive focus:bg-destructive/10 ${filterType === 'worst' ? 'bg-destructive/10' : ''}`}>
-                                    ⚠️ Macaamilka Ugu Liita {filterType === 'worst' && <Check className="w-3 h-3 ml-auto" />}
-                                </DropdownMenuItem>
+
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl text-emerald-500 focus:text-emerald-600 focus:bg-emerald-500/10">
+                                        ⭐ Macaamilka Ugu Fiican
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuPortal>
+                                        <DropdownMenuSubContent className="w-36 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
+                                            <DropdownMenuItem onClick={() => setFilterType('best_maqal')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'best_maqal' ? 'bg-emerald-500/10 text-emerald-500' : ''}`}>
+                                                Maqalka {filterType === 'best_maqal' && <Check className="w-3 h-3 ml-auto" />}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setFilterType('best_lacag')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'best_lacag' ? 'bg-emerald-500/10 text-emerald-500' : ''}`}>
+                                                Lacagta {filterType === 'best_lacag' && <Check className="w-3 h-3 ml-auto" />}
+                                            </DropdownMenuItem>
+                                        </DropdownMenuSubContent>
+                                    </DropdownMenuPortal>
+                                </DropdownMenuSub>
+
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl text-destructive focus:text-destructive focus:bg-destructive/10">
+                                        ⚠️ Macaamilka Ugu Liita
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuPortal>
+                                        <DropdownMenuSubContent className="w-36 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
+                                            <DropdownMenuItem onClick={() => setFilterType('worst_maqal')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'worst_maqal' ? 'bg-destructive/10 text-destructive' : ''}`}>
+                                                Maqalka {filterType === 'worst_maqal' && <Check className="w-3 h-3 ml-auto" />}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setFilterType('worst_lacag')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'worst_lacag' ? 'bg-destructive/10 text-destructive' : ''}`}>
+                                                Lacagta {filterType === 'worst_lacag' && <Check className="w-3 h-3 ml-auto" />}
+                                            </DropdownMenuItem>
+                                        </DropdownMenuSubContent>
+                                    </DropdownMenuPortal>
+                                </DropdownMenuSub>
+
                                 <DropdownMenuItem onClick={() => setFilterType('most_paid')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'most_paid' ? 'bg-primary/10 text-primary' : ''}`}>
                                     💰 Lacagta Ugu Badan Bixiyay {filterType === 'most_paid' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
@@ -157,6 +208,7 @@ export default function CustomersPage() {
                     </div>
                 </div>
             </div>
+
 
             {/* List */}
             <div className="rounded-xl border border-border/40 overflow-hidden bg-card/30 backdrop-blur-sm">
@@ -235,6 +287,15 @@ export default function CustomersPage() {
                                                     Paid: ${(customer as any).total_paid || 0}
                                                 </span>
                                             )}
+                                            {(filterType === 'best_maqal' || filterType === 'worst_maqal') && dashboardData?.topDebtors && (() => {
+                                                const d = dashboardData.topDebtors.find((x: any) => x.id === customer.id);
+                                                if (!d) return null;
+                                                return (
+                                                    <span className={`text-[9px] font-bold px-1.5 rounded ${d.percentage_paid >= 100 ? 'bg-emerald-500/10 text-emerald-500' : d.percentage_paid >= 50 ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                        {d.percentage_paid}% Paid
+                                                    </span>
+                                                );
+                                            })()}
                                             {(filterType === 'most_kg' || filterType === 'least_kg') && (
                                                 <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-1.5 rounded">
                                                     KG Maalintii: {((customer as any).total_books_count ? ((customer as any).total_kg || 0) / (customer as any).total_books_count : 0).toFixed(1).replace(/\.0$/, '')}

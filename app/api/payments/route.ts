@@ -57,8 +57,7 @@ export async function GET(request: Request) {
             totalAllTime,
             count: payments.length,
         });
-        // Cache payments for 30s — fresh enough for this use-case
-        response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=90');
+        response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         return response;
     } catch (error: any) {
         console.error('Payments Fetch Error:', error);

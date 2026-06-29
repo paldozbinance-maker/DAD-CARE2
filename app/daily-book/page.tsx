@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare, Maximize2, Minimize2, Download, ShieldAlert, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -104,6 +105,8 @@ function DailyBookPageInner() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const [openNoteForCustomerId, setOpenNoteForCustomerId] = useState<string | null>(null);
+    const [absentPopupData, setAbsentPopupData] = useState<{ date: string; items: DailyBookItem[] } | null>(null);
+    const [vipPopupData, setVipPopupData] = useState<{ date: string; items: DailyBookItem[] } | null>(null);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -471,7 +474,7 @@ return (
                 <>
                 {/* TRUE FULLSCREEN OVERLAY — covers sidebar + everything */}
                 {isFullScreen && (
-                    <div className="fixed inset-0 z-[9999] bg-background flex flex-col animate-in fade-in duration-150">
+                    <div className="fixed inset-0 z-[9990] bg-background flex flex-col animate-in fade-in duration-150">
                         {/* Fullscreen Top Bar */}
                         <div className="shrink-0 flex items-center justify-between gap-3 px-3 py-2 border-b border-border bg-card/90 backdrop-blur-sm">
                             <div className="flex items-center gap-2 min-w-0">
@@ -595,6 +598,7 @@ return (
                 )}
 
                 {/* NORMAL CARD (shown when not fullscreen) */}
+                {!isFullScreen && (
                 <Card className="glass-card">
                     <CardHeader className="border-b border-border bg-muted/20">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -765,6 +769,7 @@ return (
                         )}
                     </CardContent>
                 </Card>
+                )}
                 </>
             ) : (
                 <>
@@ -1029,11 +1034,37 @@ return (
                                                             </span>
                                                             {(() => {
                                                                 const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
+                                                                const vipItems = entry.items.filter(i => getTotalVipCount(i.note) > 0);
                                                                 return entryVipCount > 0 ? (
-                                                                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse ml-1 md:ml-0">
-                                                                        {entryVipCount} VIP
-                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setVipPopupData({ date: entry.date, items: vipItems });
+                                                                        }}
+                                                                        className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap hover:brightness-110 active:scale-95 transition-all ml-1 md:ml-0 cursor-pointer animate-pulse"
+                                                                    >
+                                                                        👑 {entryVipCount} VIP
+                                                                    </button>
                                                                 ) : null;
+                                                            })()}
+                                                            {(() => {
+                                                                const absentItems = entry.items.filter(i => i.present === false);
+                                                                if (absentItems.length > 0) {
+                                                                    return (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setAbsentPopupData({ date: entry.date, items: absentItems });
+                                                                            }}
+                                                                            className="inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400 to-yellow-500 text-yellow-950 border border-yellow-300 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(245,158,11,0.4)] ml-1 md:ml-0 cursor-pointer animate-pulse font-black"
+                                                                        >
+                                                                            ⚠️ Inta Maqan: {absentItems.length}
+                                                                        </button>
+                                                                    );
+                                                                }
+                                                                return null;
                                                             })()}
                                                             {/* Ledger status summary badge */}
                                                             {historyLedgerStatus[entry.date] ? (() => {
@@ -1180,6 +1211,295 @@ return (
                 </Card>
                 </>
             )}
+
+            {/* ══════════════════════════════════════════════════════════ */}
+            {/*  SHARED MINI-POPUP — used for both Inta Maqan and VIP     */}
+            {/* ══════════════════════════════════════════════════════════ */}
+
+            {/* INTA MAQAN popup */}
+            {absentPopupData && (
+                <div
+                    className="daily-popup-backdrop"
+                    onClick={() => setAbsentPopupData(null)}
+                >
+                    <div className="daily-popup-card" onClick={(e) => e.stopPropagation()}>
+                        {/* accent strip top */}
+                        <div className="daily-popup-strip daily-popup-strip--red" />
+                        {/* header */}
+                        <div className="daily-popup-header">
+                            <div>
+                                <p className="daily-popup-title">⚠️ Inta Maqan</p>
+                                <p className="daily-popup-sub">
+                                    {format(new Date(absentPopupData.date), 'MMM dd, yyyy')}
+                                    <span className="daily-popup-count">{absentPopupData.items.length}</span>
+                                </p>
+                            </div>
+                            <button className="daily-popup-close" onClick={() => setAbsentPopupData(null)}>
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                        {/* list */}
+                        <div className="daily-popup-list">
+                            {absentPopupData.items.map((item, idx) => (
+                                <div key={idx} className="daily-popup-item" style={{ animationDelay: `${idx * 35}ms` }}>
+                                    <div className="daily-popup-avatar daily-popup-avatar--red">
+                                        {item.customer?.name?.charAt(0)?.toUpperCase() || '?'}
+                                    </div>
+                                    <div className="daily-popup-info">
+                                        <p className="daily-popup-name">{item.customer?.name || 'Unknown'}</p>
+                                        <p className="daily-popup-code">#{item.customer?.customer_code || '—'}</p>
+                                    </div>
+                                    <span className="daily-popup-badge daily-popup-badge--red">Maqan</span>
+                                </div>
+                            ))}
+                        </div>
+                        {/* shimmer footer */}
+                        <div className="daily-popup-shimmer" />
+                    </div>
+                </div>
+            )}
+
+            {/* VIP popup */}
+            {vipPopupData && (
+                <div
+                    className="daily-popup-backdrop"
+                    onClick={() => setVipPopupData(null)}
+                >
+                    <div className="daily-popup-card" onClick={(e) => e.stopPropagation()}>
+                        {/* accent strip top */}
+                        <div className="daily-popup-strip daily-popup-strip--gold" />
+                        {/* header */}
+                        <div className="daily-popup-header">
+                            <div>
+                                <p className="daily-popup-title">👑 VIP Macaamiisha</p>
+                                <p className="daily-popup-sub">
+                                    {format(new Date(vipPopupData.date), 'MMM dd, yyyy')}
+                                    <span className="daily-popup-count">{vipPopupData.items.length}</span>
+                                </p>
+                            </div>
+                            <button className="daily-popup-close" onClick={() => setVipPopupData(null)}>
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                        {/* list */}
+                        <div className="daily-popup-list">
+                            {vipPopupData.items.map((item, idx) => {
+                                const segs = parseVipEntries(item.note);
+                                return (
+                                    <div key={idx} className="daily-popup-item daily-popup-item--vip" style={{ animationDelay: `${idx * 35}ms` }}>
+                                        <div className="daily-popup-avatar daily-popup-avatar--gold">
+                                            {item.customer?.name?.charAt(0)?.toUpperCase() || '?'}
+                                        </div>
+                                        <div className="daily-popup-info">
+                                            <p className="daily-popup-name">{item.customer?.name || 'Unknown'}</p>
+                                            <div className="daily-popup-segs">
+                                                {segs.map((s, si) => (
+                                                    <span key={si} className="daily-popup-seg">{s.text}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {/* shimmer footer */}
+                        <div className="daily-popup-shimmer" />
+                    </div>
+                </div>
+            )}
+
+            {/* Popup styles — light+dark adaptive */}
+            <style>{`
+                /* ── Backdrop ── */
+                .daily-popup-backdrop {
+                    position: fixed; inset: 0; z-index: 9999;
+                    display: flex; align-items: center; justify-content: center;
+                    background: rgba(0,0,0,0.18);
+                    backdrop-filter: blur(4px);
+                    -webkit-backdrop-filter: blur(4px);
+                }
+                @media (prefers-color-scheme: dark) {
+                    .daily-popup-backdrop { background: rgba(0,0,0,0.42); }
+                }
+
+                /* ── Card ── */
+                .daily-popup-card {
+                    position: relative;
+                    width: 296px; max-height: 440px;
+                    border-radius: 18px;
+                    overflow: hidden;
+                    display: flex; flex-direction: column;
+                    /* light mode */
+                    background: rgba(255,255,255,0.72);
+                    border: 1.5px solid rgba(251,191,36,0.35);
+                    box-shadow: 0 0 0 1px rgba(251,191,36,0.12),
+                                0 8px 32px rgba(0,0,0,0.14),
+                                0 2px 8px rgba(0,0,0,0.08),
+                                inset 0 0 20px rgba(251,191,36,0.04);
+                    backdrop-filter: blur(24px) saturate(1.6);
+                    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+                    animation: goldPopIn 0.22s cubic-bezier(.34,1.56,.64,1) both;
+                }
+                :root.dark .daily-popup-card,
+                [data-theme="dark"] .daily-popup-card,
+                .dark .daily-popup-card {
+                    background: rgba(18,15,8,0.78);
+                    border-color: rgba(251,191,36,0.42);
+                    box-shadow: 0 0 28px rgba(251,191,36,0.18),
+                                0 8px 40px rgba(0,0,0,0.6),
+                                inset 0 0 24px rgba(251,191,36,0.05);
+                }
+
+                /* ── Accent strip ── */
+                .daily-popup-strip {
+                    height: 3px; width: 100%;
+                }
+                .daily-popup-strip--gold {
+                    background: linear-gradient(90deg, transparent 0%, #f59e0b 40%, #fbbf24 60%, transparent 100%);
+                    box-shadow: 0 0 8px rgba(251,191,36,0.6);
+                }
+                .daily-popup-strip--red {
+                    background: linear-gradient(90deg, transparent 0%, #f59e0b 20%, #ef4444 50%, #f59e0b 80%, transparent 100%);
+                    box-shadow: 0 0 8px rgba(239,68,68,0.4);
+                }
+
+                /* ── Header ── */
+                .daily-popup-header {
+                    display: flex; align-items: center; justify-content: space-between;
+                    padding: 10px 14px 8px;
+                    border-bottom: 1px solid rgba(251,191,36,0.15);
+                    background: linear-gradient(90deg, rgba(251,191,36,0.08) 0%, transparent 100%);
+                }
+                .daily-popup-title {
+                    font-size: 11px; font-weight: 900;
+                    text-transform: uppercase; letter-spacing: 0.1em;
+                    color: #b45309;
+                }
+                .dark .daily-popup-title, [data-theme="dark"] .daily-popup-title {
+                    color: #fbbf24;
+                }
+                .daily-popup-sub {
+                    font-size: 9px; font-family: monospace;
+                    color: #92400e; opacity: 0.75;
+                    margin-top: 2px; display: flex; align-items: center; gap: 6px;
+                }
+                .dark .daily-popup-sub, [data-theme="dark"] .daily-popup-sub {
+                    color: #d97706;
+                }
+                .daily-popup-count {
+                    display: inline-flex; align-items: center; justify-content: center;
+                    background: rgba(251,191,36,0.2); border: 1px solid rgba(251,191,36,0.3);
+                    color: #92400e; border-radius: 999px;
+                    padding: 0 5px; font-size: 8px; font-weight: 900; min-width: 18px;
+                }
+                .dark .daily-popup-count, [data-theme="dark"] .daily-popup-count { color: #fbbf24; }
+                .daily-popup-close {
+                    width: 24px; height: 24px; border-radius: 8px;
+                    display: flex; align-items: center; justify-content: center;
+                    color: #b45309; opacity: 0.6;
+                    border: none; background: transparent; cursor: pointer;
+                    transition: all 0.15s;
+                }
+                .daily-popup-close:hover { opacity: 1; background: rgba(251,191,36,0.15); }
+                .daily-popup-close:active { transform: scale(0.88); }
+                .dark .daily-popup-close, [data-theme="dark"] .daily-popup-close { color: #fbbf24; }
+
+                /* ── List ── */
+                .daily-popup-list {
+                    overflow-y: auto; flex: 1;
+                    padding: 8px;
+                    display: flex; flex-direction: column; gap: 5px;
+                }
+                .daily-popup-item {
+                    display: flex; align-items: center; gap: 10px;
+                    padding: 8px 10px; border-radius: 12px;
+                    border: 1px solid rgba(0,0,0,0.06);
+                    background: rgba(255,255,255,0.55);
+                    transition: background 0.12s;
+                    animation: fadeSlideUp 0.2s ease both;
+                }
+                .daily-popup-item:hover { background: rgba(255,255,255,0.8); }
+                .dark .daily-popup-item, [data-theme="dark"] .daily-popup-item {
+                    border-color: rgba(255,255,255,0.06);
+                    background: rgba(255,255,255,0.04);
+                }
+                .dark .daily-popup-item:hover, [data-theme="dark"] .daily-popup-item:hover {
+                    background: rgba(255,255,255,0.09);
+                }
+                .daily-popup-item--vip { align-items: flex-start; }
+
+                /* ── Avatar ── */
+                .daily-popup-avatar {
+                    width: 28px; height: 28px; border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 10px; font-weight: 900; flex-shrink: 0;
+                }
+                .daily-popup-avatar--red {
+                    background: rgba(239,68,68,0.12); border: 1.5px solid rgba(239,68,68,0.3);
+                    color: #dc2626;
+                }
+                .dark .daily-popup-avatar--red, [data-theme="dark"] .daily-popup-avatar--red { color: #f87171; }
+                .daily-popup-avatar--gold {
+                    background: rgba(251,191,36,0.12); border: 1.5px solid rgba(251,191,36,0.35);
+                    color: #b45309;
+                }
+                .dark .daily-popup-avatar--gold, [data-theme="dark"] .daily-popup-avatar--gold { color: #fbbf24; }
+
+                /* ── Info ── */
+                .daily-popup-info { flex: 1; min-width: 0; }
+                .daily-popup-name {
+                    font-size: 11px; font-weight: 900; text-transform: uppercase;
+                    color: #1e1b10; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                }
+                .dark .daily-popup-name, [data-theme="dark"] .daily-popup-name { color: rgba(255,255,255,0.9); }
+                .daily-popup-code {
+                    font-size: 9px; font-family: monospace; color: #78716c; margin-top: 1px;
+                }
+                .dark .daily-popup-code, [data-theme="dark"] .daily-popup-code { color: rgba(255,255,255,0.35); }
+
+                /* ── Badge ── */
+                .daily-popup-badge { flex-shrink: 0; font-size: 8px; font-weight: 900; text-transform: uppercase; border-radius: 999px; padding: 2px 7px; }
+                .daily-popup-badge--red {
+                    color: #dc2626; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
+                    animation: pulseBadge 2s ease-in-out infinite;
+                }
+                .dark .daily-popup-badge--red, [data-theme="dark"] .daily-popup-badge--red { color: #f87171; }
+
+                /* ── VIP segments ── */
+                .daily-popup-segs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+                .daily-popup-seg {
+                    font-size: 8px; font-weight: 900; text-transform: uppercase;
+                    color: #b45309; background: rgba(251,191,36,0.12);
+                    border: 1px solid rgba(251,191,36,0.25); border-radius: 4px;
+                    padding: 1px 5px;
+                }
+                .dark .daily-popup-seg, [data-theme="dark"] .daily-popup-seg { color: #fbbf24; }
+
+                /* ── Shimmer footer ── */
+                .daily-popup-shimmer {
+                    height: 2px;
+                    background: linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.7) 50%, transparent 100%);
+                    background-size: 200% 100%;
+                    animation: shimmerSlide 2s linear infinite;
+                }
+
+                /* ── Keyframes ── */
+                @keyframes goldPopIn {
+                    from { opacity: 0; transform: scale(0.87) translateY(10px); }
+                    to   { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                @keyframes fadeSlideUp {
+                    from { opacity: 0; transform: translateY(5px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes shimmerSlide {
+                    0%   { background-position: -200% center; }
+                    100% { background-position: 200% center; }
+                }
+                @keyframes pulseBadge {
+                    0%, 100% { opacity: 1; } 50% { opacity: 0.55; }
+                }
+            `}</style>
         </div>
     );
 }
