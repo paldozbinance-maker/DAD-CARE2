@@ -264,3 +264,9 @@ main {
 .reminder-pulse {
   animation: pulse-reminder 3s ease-in-out infinite;
 }
+
+/* Shimmer animation for overpaid (Ka dhiman) badge */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

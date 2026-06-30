@@ -865,14 +865,58 @@ export default function CustomerDetailPage() {
                         const isExpanded = expandedReceipts.has(receipt.id);
                         return (
                             <div key={receipt.id} className="rounded-lg border border-border/60 overflow-hidden bg-card">
-                                <button
+                            <button
                                     onClick={() => toggleReceipt(receipt.id)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/30 transition-colors"
                                 >
                                     <div className={`w-1 h-8 rounded-full shrink-0 ${receipt.kind === 'ADJUSTMENT' ? 'bg-amber-500' : 'bg-primary'}`} />
-                                    <p className="text-[11px] font-bold text-foreground flex-1 text-left leading-tight truncate">
-                                        {receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}
-                                    </p>
+                                    <div className="flex-1 text-left min-w-0">
+                                        <p className="text-[11px] font-bold text-foreground leading-tight truncate">
+                                            {receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}
+                                        </p>
+                                        {/* Inline badges: % paid + diff amount */}
+                                        {receipt.totalMaqalka > 0 && (() => {
+                                            const paymentsInReceipt = receipt.entries.filter(e => e.type === 'PAYMENT').reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                                            const pct = Math.min(100, Math.round((paymentsInReceipt / receipt.totalMaqalka) * 100));
+                                            const diff = paymentsInReceipt - receipt.totalMaqalka;
+                                            // diff > 0 = overpaid (Kaso hartay = has credit) → GREEN
+                                            // diff < 0 = still owes (Ka dhiman) → ORANGE ≥50%, RED <50%
+                                            const isOverpaid = diff > 0;   // paid MORE than maqal
+                                            const isExact = diff === 0;
+                                            const owesColor = pct >= 50
+                                                ? 'bg-orange-500/15 text-orange-700 dark:text-orange-400'
+                                                : 'bg-red-500/15 text-red-700 dark:text-red-400';
+                                            return (
+                                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                                    {/* % Paid badge */}
+                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-bold tracking-wider ${pct >= 100 ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-500' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>
+                                                        {pct}% Paid
+                                                    </span>
+                                                    {/* Diff badge */}
+                                                    {!isExact && (
+                                                        <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-black tracking-wider relative overflow-hidden ${
+                                                            isOverpaid
+                                                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                                                : owesColor
+                                                        }`}>
+                                                            {isOverpaid
+                                                                ? `Kaso hartay -$${Math.abs(Math.round(diff))}`
+                                                                : `Ka dhiman +$${Math.abs(Math.round(diff))}`}
+                                                            {/* Subtle shimmer for Kaso hartay (overpaid = credit) */}
+                                                            {isOverpaid && (
+                                                                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-300/20 to-transparent animate-[shimmer_2s_infinite]" style={{backgroundSize:'200% 100%'}} />
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    {isExact && pct >= 100 && (
+                                                        <span className="text-[8px] px-1.5 py-0.5 rounded-sm font-black bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                                                            ✓ Exact
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
                                     <span className={`text-sm font-black shrink-0 ${receipt.closingBalance > 0 ? 'text-destructive' : 'text-emerald-500'}`}>
                                         {receipt.closingBalance < 0 ? '-' : ''}${Math.abs(Math.round(receipt.closingBalance)).toLocaleString()}
                                     </span>
