@@ -70,15 +70,38 @@ const getDashboardData = async (today: string) => {
                 WHERE db.date = $1
             `, [today]),
 
-            // 6. Top Debtors and Creditors (all non-zero balances, with payment/maqal history)
+            // 6. Top Debtors — percentage_paid based on LATEST receipt only (not all-time)
             pool.query(`
-                WITH CustomerHistory AS (
-                    SELECT 
+                WITH LatestProductReceipt AS (
+                    SELECT DISTINCT ON (customer_id)
                         customer_id,
-                        SUM(CASE WHEN type = 'PAYMENT' THEN ABS(amount) ELSE 0 END)::float as total_payments,
-                        SUM(CASE WHEN type = 'PRODUCT' THEN ABS(amount) ELSE 0 END)::float as total_maqal
+                        receipt_id,
+                        created_at as receipt_created_at
                     FROM "Ledger"
-                    GROUP BY customer_id
+                    WHERE type = 'PRODUCT' AND deleted_at IS NULL AND receipt_id IS NOT NULL
+                    ORDER BY customer_id, created_at DESC
+                ),
+                LatestMaqal AS (
+                    SELECT 
+                        lpr.customer_id,
+                        SUM(l.amount)::float as latest_maqal
+                    FROM LatestProductReceipt lpr
+                    JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
+                        AND l.receipt_id = lpr.receipt_id 
+                        AND l.type = 'PRODUCT' 
+                        AND l.deleted_at IS NULL
+                    GROUP BY lpr.customer_id
+                ),
+                LatestPayments AS (
+                    SELECT 
+                        lpr.customer_id,
+                        SUM(l.amount)::float as latest_payments
+                    FROM LatestProductReceipt lpr
+                    JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
+                        AND l.type = 'PAYMENT' 
+                        AND l.deleted_at IS NULL
+                        AND l.created_at >= lpr.receipt_created_at
+                    GROUP BY lpr.customer_id
                 )
                 SELECT 
                     l.customer_id as id, 
@@ -86,11 +109,11 @@ const getDashboardData = async (today: string) => {
                     c.customer_code as code, 
                     l.new_debt::float as debt,
                     l.is_reesto,
-                    COALESCE(ch.total_payments, 0) as total_payments,
-                    COALESCE(ch.total_maqal, 0) as total_maqal,
+                    COALESCE(lp.latest_payments, 0) as total_payments,
+                    COALESCE(lm.latest_maqal, 0) as total_maqal,
                     CASE 
-                        WHEN COALESCE(ch.total_maqal, 0) = 0 THEN 100
-                        ELSE LEAST(100, ROUND((COALESCE(ch.total_payments, 0) / ch.total_maqal) * 100))
+                        WHEN COALESCE(lm.latest_maqal, 0) = 0 THEN 0
+                        ELSE LEAST(100, ROUND((COALESCE(lp.latest_payments, 0) / lm.latest_maqal) * 100))
                     END as percentage_paid
                 FROM (
                     SELECT DISTINCT ON (customer_id) 
@@ -98,11 +121,13 @@ const getDashboardData = async (today: string) => {
                         new_debt,
                         (type = 'PAYMENT') as is_reesto
                     FROM "Ledger"
+                    WHERE deleted_at IS NULL
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) l
                 JOIN "Customer" c ON l.customer_id = c.id
-                LEFT JOIN CustomerHistory ch ON l.customer_id = ch.customer_id
-                WHERE l.new_debt != 0 OR COALESCE(ch.total_maqal, 0) > 0
+                LEFT JOIN LatestMaqal lm ON l.customer_id = lm.customer_id
+                LEFT JOIN LatestPayments lp ON l.customer_id = lp.customer_id
+                WHERE l.new_debt != 0 OR COALESCE(lm.latest_maqal, 0) > 0
             `),
 
             // 7. Recent transactions (last 5)

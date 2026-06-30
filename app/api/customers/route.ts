@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 
-async function getCustomers() {
+async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
     const query = `
         WITH past_dates AS (
             SELECT date::date as db_date
@@ -27,6 +27,86 @@ async function getCustomers() {
             WHERE n1.rn % 2 = 1
             ORDER BY n1.db_date DESC
             LIMIT 1
+        ),
+        latest_product_receipt AS (
+            SELECT DISTINCT ON (customer_id)
+                customer_id,
+                receipt_id,
+                created_at as receipt_created_at
+            FROM "Ledger"
+            WHERE type = 'PRODUCT' AND deleted_at IS NULL AND receipt_id IS NOT NULL
+            ORDER BY customer_id, created_at DESC
+        ),
+        latest_maqal_stats AS (
+            SELECT 
+                lpr.customer_id,
+                SUM(l.amount)::float as maqal_total
+            FROM latest_product_receipt lpr
+            JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
+                AND l.receipt_id = lpr.receipt_id 
+                AND l.type = 'PRODUCT' 
+                AND l.deleted_at IS NULL
+            GROUP BY lpr.customer_id
+        ),
+        latest_payment_stats AS (
+            SELECT 
+                lpr.customer_id,
+                SUM(l.amount)::float as payments_total
+            FROM latest_product_receipt lpr
+            JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
+                AND l.type = 'PAYMENT' 
+                AND l.deleted_at IS NULL
+                AND l.created_at >= lpr.receipt_created_at
+            GROUP BY lpr.customer_id
+        ),
+        selected_product_receipt_raw AS (
+            SELECT DISTINCT ON (customer_id)
+                customer_id,
+                receipt_id,
+                created_at as receipt_created_at
+            FROM "Ledger"
+            WHERE type = 'PRODUCT' AND deleted_at IS NULL AND receipt_id IS NOT NULL
+            ${maqalD1 && maqalD2 ? `AND COALESCE(reference_date::date, created_at::date) IN ('${maqalD1}', '${maqalD2}')` : `AND 1=0`}
+            ORDER BY customer_id, created_at DESC
+        ),
+        selected_product_receipt AS (
+            SELECT 
+                spr.customer_id,
+                spr.receipt_id,
+                spr.receipt_created_at,
+                COALESCE(
+                    (SELECT MIN(created_at) FROM "Ledger" l_next 
+                     WHERE l_next.customer_id = spr.customer_id 
+                       AND l_next.type = 'PRODUCT' 
+                       AND l_next.deleted_at IS NULL
+                       AND l_next.created_at > spr.receipt_created_at
+                    ), 
+                    'infinity'::timestamp
+                ) as next_receipt_created_at
+            FROM selected_product_receipt_raw spr
+        ),
+        selected_maqal_stats AS (
+            SELECT 
+                spr.customer_id,
+                SUM(l.amount)::float as maqal_total
+            FROM selected_product_receipt spr
+            JOIN "Ledger" l ON l.customer_id = spr.customer_id 
+                AND l.receipt_id = spr.receipt_id 
+                AND l.type = 'PRODUCT' 
+                AND l.deleted_at IS NULL
+            GROUP BY spr.customer_id
+        ),
+        selected_payment_stats AS (
+            SELECT 
+                spr.customer_id,
+                SUM(l.amount)::float as payments_total
+            FROM selected_product_receipt spr
+            JOIN "Ledger" l ON l.customer_id = spr.customer_id 
+                AND l.type = 'PAYMENT' 
+                AND l.deleted_at IS NULL
+                AND l.created_at >= spr.receipt_created_at
+                AND l.created_at < spr.next_receipt_created_at
+            GROUP BY spr.customer_id
         )
         SELECT 
             c.*,
@@ -37,7 +117,30 @@ async function getCustomers() {
             COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
             COALESCE(dbk.total_books_count, 0) as total_books_count,
             CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
-            CASE WHEN COALESCE(td.target_days_count, 0) >= 2 THEN true ELSE false END as is_target_days_done
+            CASE WHEN COALESCE(td.target_days_count, 0) >= 2 THEN true ELSE false END as is_target_days_done,
+            tp.date1 as pair_date1,
+            tp.date2 as pair_date2,
+            
+            -- Latest Maqal
+            COALESCE(lms.maqal_total, 0)::float as latest_maqal_total,
+            CASE 
+                WHEN COALESCE(lms.maqal_total, 0) = 0 THEN 0
+                ELSE LEAST(100, ROUND((COALESCE(lps.payments_total, 0) / lms.maqal_total) * 100))::int
+            END as latest_maqal_pct,
+            
+            -- All Time Maqal
+            COALESCE(lk.total_ledger_maqal, 0)::float as all_time_maqal_total,
+            CASE 
+                WHEN COALESCE(lk.total_ledger_maqal, 0) = 0 THEN 0
+                ELSE LEAST(100, ROUND((COALESCE(p.total_paid, 0) / lk.total_ledger_maqal) * 100))::int
+            END as all_time_maqal_pct,
+            
+            -- Selected Maqal (if pair provided)
+            COALESCE(sms.maqal_total, 0)::float as selected_maqal_total,
+            CASE 
+                WHEN COALESCE(sms.maqal_total, 0) = 0 THEN 0
+                ELSE LEAST(100, ROUND((COALESCE(sps.payments_total, 0) / sms.maqal_total) * 100))::int
+            END as selected_maqal_pct
         FROM "Customer" c
         LEFT JOIN (
             SELECT DISTINCT ON (customer_id) 
@@ -76,7 +179,8 @@ async function getCustomers() {
         LEFT JOIN (
             SELECT 
                 customer_id,
-                SUM(kg) as total_ledger_kg
+                SUM(kg) as total_ledger_kg,
+                SUM(amount) as total_ledger_maqal
             FROM "Ledger"
             WHERE type = 'PRODUCT' AND deleted_at IS NULL
             GROUP BY customer_id
@@ -90,6 +194,11 @@ async function getCustomers() {
             AND reference_date::date IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
             GROUP BY customer_id
         ) td ON c.id = td.customer_id
+        LEFT JOIN target_pair tp ON true
+        LEFT JOIN latest_maqal_stats lms ON c.id = lms.customer_id
+        LEFT JOIN latest_payment_stats lps ON c.id = lps.customer_id
+        LEFT JOIN selected_maqal_stats sms ON c.id = sms.customer_id
+        LEFT JOIN selected_payment_stats sps ON c.id = sps.customer_id
         ORDER BY c.name ASC;
     `;
 
@@ -102,6 +211,8 @@ export async function GET(request: Request) {
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const isLite = searchParams.get('lite') === 'true';
+    const maqalD1 = searchParams.get('maqal_d1');
+    const maqalD2 = searchParams.get('maqal_d2');
 
     try {
         if (isLite) {
@@ -120,7 +231,7 @@ export async function GET(request: Request) {
             return res;
         }
 
-        const rows = await getCustomers();
+        const rows = await getCustomers(maqalD1, maqalD2);
         const res = NextResponse.json(rows);
         res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         return res;

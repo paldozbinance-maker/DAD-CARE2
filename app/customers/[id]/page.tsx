@@ -782,6 +782,17 @@ export default function CustomerDetailPage() {
                                 {/* Driven by getBalanceLabel — single source of truth */}
                                 {getBalanceLabel(filteredReceipts[0]?.totalPaid ?? 0, summary.currentBalance)}
                             </span>
+                            {/* Latest maqal % — matches customer list */}
+                            {(() => {
+                                const latestWithProducts = filteredReceipts.find(r => r.totalMaqalka > 0);
+                                if (!latestWithProducts || latestWithProducts.totalMaqalka === 0) return null;
+                                const pct = Math.min(100, Math.round((latestWithProducts.totalPaid / latestWithProducts.totalMaqalka) * 100));
+                                return (
+                                    <span className={`block mt-1 text-[8px] font-bold px-1.5 py-0.5 rounded inline-block ${pct >= 100 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-red-500/15 text-red-600 dark:text-red-400'}`}>
+                                        {pct}% Paid
+                                    </span>
+                                );
+                            })()}
                         </div>
                     </div>
                 </CardContent>

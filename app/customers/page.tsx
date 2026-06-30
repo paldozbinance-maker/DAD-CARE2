@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useEffect, useState } from 'react';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { toast } from 'sonner';
-import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2, TrendingUp, ArrowDownWideNarrow } from 'lucide-react';
+import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2, TrendingUp, ArrowDownWideNarrow, Clock, Globe, CalendarDays } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -42,12 +42,57 @@ export default function CustomersPage() {
     const [filterType, setFilterType] = useState<string>('default');
     const [visibleCount, setVisibleCount] = useState(20);
     const [rankingMode, setRankingMode] = useState<'maqalka' | 'lacagta'>('maqalka');
+    const [selectedMaqalPair, setSelectedMaqalPair] = useState<string>('latest');
+    const [showAllTimePct, setShowAllTimePct] = useState<Record<string, boolean>>({});
+    const [maqalSearch, setMaqalSearch] = useState('');
 
-    const { data: dashboardData } = useSWR<any>('/api/dashboard', fetcher, { revalidateOnFocus: false, dedupingInterval: 30000 });
+    const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: true, dedupingInterval: 5000 });
+
+    // Helper to format pair date strings like "2026-06-28" or ISO → "28 Jun"
+    const formatPairDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        try {
+            // Handle both "2026-06-28" and "2026-06-28T00:00:00.000Z"
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return `${d.getUTCDate()} ${months[d.getUTCMonth()]}`;
+            }
+        } catch {}
+        // Fallback: split by '-'
+        const [, m, dd] = dateStr.split('-');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${parseInt(dd)} ${months[parseInt(m) - 1]}`;
+    };
+
+    // Extract day number from a date string for search matching
+    const getDayFromDate = (dateStr: string): string => {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) return String(d.getUTCDate());
+        } catch {}
+        const parts = dateStr.split('-');
+        return parts.length >= 3 ? String(parseInt(parts[2])) : '';
+    };
+
+    const filteredPairs = maqalPairs?.filter(pair => {
+        if (!maqalSearch) return true;
+        const q = maqalSearch.toLowerCase().trim();
+        const formatted = `${formatPairDate(pair.date1)} & ${formatPairDate(pair.date2)}`.toLowerCase();
+        const day1 = getDayFromDate(pair.date1);
+        const day2 = getDayFromDate(pair.date2);
+        // Match against formatted text, or raw day numbers
+        return formatted.includes(q) || day1 === q || day2 === q || day1.startsWith(q) || day2.startsWith(q);
+    });
 
     // ⚡ SWR: Instant cache — no more spinner every time you visit this page
+    const customersUrl = selectedMaqalPair && selectedMaqalPair !== 'latest' && selectedMaqalPair !== 'all_time' 
+        ? `/api/customers?maqal_d1=${selectedMaqalPair.split('|')[0]}&maqal_d2=${selectedMaqalPair.split('|')[1]}`
+        : '/api/customers';
+
     const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
-        '/api/customers',
+        customersUrl,
         fetcher,
         { revalidateOnFocus: false, dedupingInterval: 30000 }
     );
@@ -81,17 +126,15 @@ export default function CustomersPage() {
             const avgB = (b as any).total_books_count ? ((b as any).total_kg || 0) / (b as any).total_books_count : 0;
             return avgA - avgB;
         } else if (filterType === 'best_maqal' || filterType === 'worst_maqal' || filterType === 'best_lacag' || filterType === 'worst_lacag') {
-            const debtorMap = new Map();
-            if (dashboardData?.topDebtors) {
-                dashboardData.topDebtors.forEach((d: any) => debtorMap.set(d.id, d));
-            }
-            const da = debtorMap.get(a.id);
-            const db = debtorMap.get(b.id);
-            
-            const pctA = da?.percentage_paid ?? -1;
-            const pctB = db?.percentage_paid ?? -1;
-            const debtA = da?.debt ?? 0;
-            const debtB = db?.debt ?? 0;
+            const getPct = (c: any) => {
+                if (showAllTimePct[c.id]) return c.all_time_maqal_pct ?? -1;
+                if (selectedMaqalPair !== 'latest' && selectedMaqalPair !== 'all_time') return c.selected_maqal_pct ?? -1;
+                return c.latest_maqal_pct ?? -1;
+            };
+            const pctA = getPct(a);
+            const pctB = getPct(b);
+            const debtA = (a as any).current_balance ?? 0;
+            const debtB = (b as any).current_balance ?? 0;
 
             if (filterType === 'best_maqal') return pctB - pctA;
             if (filterType === 'worst_maqal') return pctA - pctB;
@@ -163,13 +206,50 @@ export default function CustomersPage() {
                                         ⭐ Macaamilka Ugu Fiican
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuPortal>
-                                        <DropdownMenuSubContent className="w-36 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
-                                            <DropdownMenuItem onClick={() => setFilterType('best_maqal')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'best_maqal' ? 'bg-emerald-500/10 text-emerald-500' : ''}`}>
-                                                Maqalka {filterType === 'best_maqal' && <Check className="w-3 h-3 ml-auto" />}
-                                            </DropdownMenuItem>
+                                        <DropdownMenuSubContent className="w-48 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
                                             <DropdownMenuItem onClick={() => setFilterType('best_lacag')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'best_lacag' ? 'bg-emerald-500/10 text-emerald-500' : ''}`}>
                                                 Lacagta {filterType === 'best_lacag' && <Check className="w-3 h-3 ml-auto" />}
                                             </DropdownMenuItem>
+                                            
+                                            <div className="px-2 pt-2 pb-1">
+                                                <div className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">Maqalka</div>
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Search dates (e.g. 24)..." 
+                                                    value={maqalSearch}
+                                                    onChange={(e) => setMaqalSearch(e.target.value)}
+                                                    className="w-full text-xs bg-muted/50 border border-border/50 rounded-md p-1.5 focus:ring-1 focus:ring-primary/50 text-foreground"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onKeyDown={(e) => e.stopPropagation()}
+                                                />
+                                            </div>
+                                            <div className="max-h-40 overflow-y-auto overflow-x-hidden p-1 space-y-0.5">
+                                                {(!maqalSearch || "latest maqal".includes(maqalSearch.toLowerCase())) && (
+                                                    <DropdownMenuItem onClick={() => { setFilterType('best_maqal'); setSelectedMaqalPair('latest'); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'best_maqal' && selectedMaqalPair === 'latest') ? 'bg-primary/10 text-primary' : ''}`}>
+                                                        Latest Maqal {(filterType === 'best_maqal' && selectedMaqalPair === 'latest') && <Check className="w-3 h-3 ml-auto" />}
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {(!maqalSearch || "all time".includes(maqalSearch.toLowerCase())) && (
+                                                    <DropdownMenuItem onClick={() => { setFilterType('best_maqal'); setSelectedMaqalPair('all_time'); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'best_maqal' && selectedMaqalPair === 'all_time') ? 'bg-primary/10 text-primary' : ''}`}>
+                                                        All Time {(filterType === 'best_maqal' && selectedMaqalPair === 'all_time') && <Check className="w-3 h-3 ml-auto" />}
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {filteredPairs?.map(pair => {
+                                                    const val = `${pair.date1}|${pair.date2}`;
+                                                    return (
+                                                        <DropdownMenuItem key={val} onClick={() => { setFilterType('best_maqal'); setSelectedMaqalPair(val); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'best_maqal' && selectedMaqalPair === val) ? 'bg-primary/10 text-primary' : ''}`}>
+                                                            {formatPairDate(pair.date1)} & {formatPairDate(pair.date2)} 
+                                                            {pair.has_payments && <span className="ml-1 text-[10px]">✅</span>}
+                                                            {(filterType === 'best_maqal' && selectedMaqalPair === val) && <Check className="w-3 h-3 ml-auto" />}
+                                                        </DropdownMenuItem>
+                                                    );
+                                                })}
+                                                {maqalSearch && filteredPairs?.length === 0 && (
+                                                    <div className="text-center py-3 text-[10px] font-medium text-muted-foreground">
+                                                        No pairs available
+                                                    </div>
+                                                )}
+                                            </div>
                                         </DropdownMenuSubContent>
                                     </DropdownMenuPortal>
                                 </DropdownMenuSub>
@@ -179,13 +259,50 @@ export default function CustomersPage() {
                                         ⚠️ Macaamilka Ugu Liita
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuPortal>
-                                        <DropdownMenuSubContent className="w-36 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
-                                            <DropdownMenuItem onClick={() => setFilterType('worst_maqal')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'worst_maqal' ? 'bg-destructive/10 text-destructive' : ''}`}>
-                                                Maqalka {filterType === 'worst_maqal' && <Check className="w-3 h-3 ml-auto" />}
-                                            </DropdownMenuItem>
+                                        <DropdownMenuSubContent className="w-48 bg-card/95 backdrop-blur-xl border-border/50 rounded-2xl shadow-xl">
                                             <DropdownMenuItem onClick={() => setFilterType('worst_lacag')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'worst_lacag' ? 'bg-destructive/10 text-destructive' : ''}`}>
                                                 Lacagta {filterType === 'worst_lacag' && <Check className="w-3 h-3 ml-auto" />}
                                             </DropdownMenuItem>
+                                            
+                                            <div className="px-2 pt-2 pb-1">
+                                                <div className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">Maqalka</div>
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Search dates (e.g. 24)..." 
+                                                    value={maqalSearch}
+                                                    onChange={(e) => setMaqalSearch(e.target.value)}
+                                                    className="w-full text-xs bg-muted/50 border border-border/50 rounded-md p-1.5 focus:ring-1 focus:ring-primary/50 text-foreground"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onKeyDown={(e) => e.stopPropagation()}
+                                                />
+                                            </div>
+                                            <div className="max-h-40 overflow-y-auto overflow-x-hidden p-1 space-y-0.5">
+                                                {(!maqalSearch || "latest maqal".includes(maqalSearch.toLowerCase())) && (
+                                                    <DropdownMenuItem onClick={() => { setFilterType('worst_maqal'); setSelectedMaqalPair('latest'); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'worst_maqal' && selectedMaqalPair === 'latest') ? 'bg-primary/10 text-primary' : ''}`}>
+                                                        Latest Maqal ${(filterType === 'worst_maqal' && selectedMaqalPair === 'latest') && <Check className="w-3 h-3 ml-auto" />}
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {(!maqalSearch || "all time".includes(maqalSearch.toLowerCase())) && (
+                                                    <DropdownMenuItem onClick={() => { setFilterType('worst_maqal'); setSelectedMaqalPair('all_time'); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'worst_maqal' && selectedMaqalPair === 'all_time') ? 'bg-primary/10 text-primary' : ''}`}>
+                                                        All Time {(filterType === 'worst_maqal' && selectedMaqalPair === 'all_time') && <Check className="w-3 h-3 ml-auto" />}
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {filteredPairs?.map(pair => {
+                                                    const val = `${pair.date1}|${pair.date2}`;
+                                                    return (
+                                                        <DropdownMenuItem key={val} onClick={() => { setFilterType('worst_maqal'); setSelectedMaqalPair(val); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'worst_maqal' && selectedMaqalPair === val) ? 'bg-primary/10 text-primary' : ''}`}>
+                                                            {formatPairDate(pair.date1)} & {formatPairDate(pair.date2)} 
+                                                            {pair.has_payments && <span className="ml-1 text-[10px]">✅</span>}
+                                                            {(filterType === 'worst_maqal' && selectedMaqalPair === val) && <Check className="w-3 h-3 ml-auto" />}
+                                                        </DropdownMenuItem>
+                                                    );
+                                                })}
+                                                {maqalSearch && filteredPairs?.length === 0 && (
+                                                    <div className="text-center py-3 text-[10px] font-medium text-muted-foreground">
+                                                        No pairs available
+                                                    </div>
+                                                )}
+                                            </div>
                                         </DropdownMenuSubContent>
                                     </DropdownMenuPortal>
                                 </DropdownMenuSub>
@@ -282,20 +399,45 @@ export default function CustomersPage() {
                                                     {customer.phone}
                                                 </span>
                                             )}
+                                            {/* Dynamic Maqal % — clickable to toggle between modes */}
+                                            {((customer as any).latest_maqal_total > 0 || (customer as any).all_time_maqal_total > 0) && (() => {
+                                                const isAllTime = showAllTimePct[customer.id] || selectedMaqalPair === 'all_time';
+                                                let pct = 0;
+                                                
+                                                if (isAllTime) {
+                                                    pct = (customer as any).all_time_maqal_pct ?? 0;
+                                                } else if (selectedMaqalPair !== 'latest') {
+                                                    pct = (customer as any).selected_maqal_pct ?? 0;
+                                                } else {
+                                                    pct = (customer as any).latest_maqal_pct ?? 0;
+                                                }
+                                                
+                                                return (
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setShowAllTimePct(prev => ({...prev, [customer.id]: !prev[customer.id]}));
+                                                        }}
+                                                        className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors active:scale-95 ${pct >= 100 ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : pct >= 50 ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'}`}
+                                                        title="Click to toggle All-Time / Specific Maqal"
+                                                    >
+                                                        {isAllTime ? <Globe className="w-2.5 h-2.5" /> : <CalendarDays className="w-2.5 h-2.5" />}
+                                                        <span>{pct}%</span>
+                                                    </button>
+                                                );
+                                            })()}
+                                            {/* Unsolved pair reminder — pulsing amber — hide when specific maqal selected */}
+                                            {selectedMaqalPair === 'latest' && !(customer as any).is_target_days_done && (customer as any).pair_date1 && (customer as any).pair_date2 && (
+                                                <span className="reminder-pulse text-[8px] font-bold text-amber-500/90 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                                    <Clock className="w-2.5 h-2.5" />
+                                                    {formatPairDate((customer as any).pair_date1)} & {formatPairDate((customer as any).pair_date2)}
+                                                </span>
+                                            )}
                                             {(filterType === 'most_paid' || filterType === 'least_paid' || filterType === 'best') && (
                                                 <span className="text-[9px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 rounded">
                                                     Paid: ${(customer as any).total_paid || 0}
                                                 </span>
                                             )}
-                                            {(filterType === 'best_maqal' || filterType === 'worst_maqal') && dashboardData?.topDebtors && (() => {
-                                                const d = dashboardData.topDebtors.find((x: any) => x.id === customer.id);
-                                                if (!d) return null;
-                                                return (
-                                                    <span className={`text-[9px] font-bold px-1.5 rounded ${d.percentage_paid >= 100 ? 'bg-emerald-500/10 text-emerald-500' : d.percentage_paid >= 50 ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                        {d.percentage_paid}% Paid
-                                                    </span>
-                                                );
-                                            })()}
                                             {(filterType === 'most_kg' || filterType === 'least_kg') && (
                                                 <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-1.5 rounded">
                                                     KG Maalintii: {((customer as any).total_books_count ? ((customer as any).total_kg || 0) / (customer as any).total_books_count : 0).toFixed(1).replace(/\.0$/, '')}

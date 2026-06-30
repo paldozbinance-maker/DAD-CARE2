@@ -254,3 +254,13 @@ main {
   from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
   to { opacity: 1; transform: translateY(0); filter: blur(0px); }
 }
+
+/* Unsolved date-pair reminder — gentle breathing pulse */
+@keyframes pulse-reminder {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+.reminder-pulse {
+  animation: pulse-reminder 3s ease-in-out infinite;
+}
