@@ -401,12 +401,19 @@ export default function CustomersPage() {
                                             )}
                                             {/* Dynamic Maqal % — clickable to toggle between modes */}
                                             {((customer as any).latest_maqal_total > 0 || (customer as any).all_time_maqal_total > 0) && (() => {
-                                                const isAllTime = showAllTimePct[customer.id] || selectedMaqalPair === 'all_time';
-                                                let pct = 0;
+                                                const canShowAllTime = (customer as any).latest_maqal_pct >= 100 || (customer as any).latest_maqal_total === 0;
+                                                // Force specific maqal if we selected one, OR if we selected all_time but it's not allowed, fallback to latest
+                                                let isAllTime = false;
+                                                if (selectedMaqalPair === 'all_time') {
+                                                    isAllTime = canShowAllTime;
+                                                } else if (selectedMaqalPair === 'latest') {
+                                                    isAllTime = canShowAllTime && showAllTimePct[customer.id];
+                                                }
                                                 
+                                                let pct = 0;
                                                 if (isAllTime) {
                                                     pct = (customer as any).all_time_maqal_pct ?? 0;
-                                                } else if (selectedMaqalPair !== 'latest') {
+                                                } else if (selectedMaqalPair !== 'latest' && selectedMaqalPair !== 'all_time') {
                                                     pct = (customer as any).selected_maqal_pct ?? 0;
                                                 } else {
                                                     pct = (customer as any).latest_maqal_pct ?? 0;
@@ -416,10 +423,12 @@ export default function CustomersPage() {
                                                     <button 
                                                         onClick={(e) => {
                                                             e.preventDefault();
-                                                            setShowAllTimePct(prev => ({...prev, [customer.id]: !prev[customer.id]}));
+                                                            if (canShowAllTime) {
+                                                                setShowAllTimePct(prev => ({...prev, [customer.id]: !prev[customer.id]}));
+                                                            }
                                                         }}
-                                                        className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors active:scale-95 ${pct >= 100 ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : pct >= 50 ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'}`}
-                                                        title="Click to toggle All-Time / Specific Maqal"
+                                                        className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors ${canShowAllTime ? 'cursor-pointer active:scale-95 hover:opacity-80' : 'cursor-default'} ${pct >= 100 ? 'bg-emerald-500/10 text-emerald-500' : pct >= 50 ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}
+                                                        title={canShowAllTime ? "Click to toggle All-Time / Specific Maqal" : "All-Time hidden until latest maqal is fully paid"}
                                                     >
                                                         {isAllTime ? <Globe className="w-2.5 h-2.5" /> : <CalendarDays className="w-2.5 h-2.5" />}
                                                         <span>{pct}%</span>

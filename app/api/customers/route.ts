@@ -28,14 +28,31 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
             ORDER BY n1.db_date DESC
             LIMIT 1
         ),
-        latest_product_receipt AS (
-            SELECT DISTINCT ON (customer_id)
+        latest_product_receipt_raw AS (
+            SELECT 
                 customer_id,
-                receipt_id,
-                created_at as receipt_created_at
+                MIN(created_at) as first_receipt_created_at,
+                MAX(created_at) as last_receipt_created_at
             FROM "Ledger"
-            WHERE type = 'PRODUCT' AND deleted_at IS NULL AND receipt_id IS NOT NULL
-            ORDER BY customer_id, created_at DESC
+            WHERE type = 'PRODUCT' AND deleted_at IS NULL 
+            AND COALESCE(reference_date::date, created_at::date) IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
+            GROUP BY customer_id
+        ),
+        latest_product_receipt AS (
+            SELECT 
+                lpr.customer_id,
+                lpr.first_receipt_created_at,
+                lpr.last_receipt_created_at,
+                COALESCE(
+                    (SELECT MIN(created_at) FROM "Ledger" l_next 
+                     WHERE l_next.customer_id = lpr.customer_id 
+                       AND l_next.type = 'PRODUCT' 
+                       AND l_next.deleted_at IS NULL
+                       AND l_next.created_at > lpr.last_receipt_created_at
+                    ), 
+                    'infinity'::timestamp
+                ) as next_receipt_created_at
+            FROM latest_product_receipt_raw lpr
         ),
         latest_maqal_stats AS (
             SELECT 
@@ -43,9 +60,9 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
                 SUM(l.amount)::float as maqal_total
             FROM latest_product_receipt lpr
             JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
-                AND l.receipt_id = lpr.receipt_id 
                 AND l.type = 'PRODUCT' 
                 AND l.deleted_at IS NULL
+                AND COALESCE(l.reference_date::date, l.created_at::date) IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
             GROUP BY lpr.customer_id
         ),
         latest_payment_stats AS (
@@ -56,30 +73,31 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
             JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
                 AND l.type = 'PAYMENT' 
                 AND l.deleted_at IS NULL
-                AND l.created_at >= lpr.receipt_created_at
+                AND l.created_at >= lpr.first_receipt_created_at
+                AND l.created_at < lpr.next_receipt_created_at
             GROUP BY lpr.customer_id
         ),
         selected_product_receipt_raw AS (
-            SELECT DISTINCT ON (customer_id)
+            SELECT 
                 customer_id,
-                receipt_id,
-                created_at as receipt_created_at
+                MIN(created_at) as first_receipt_created_at,
+                MAX(created_at) as last_receipt_created_at
             FROM "Ledger"
-            WHERE type = 'PRODUCT' AND deleted_at IS NULL AND receipt_id IS NOT NULL
+            WHERE type = 'PRODUCT' AND deleted_at IS NULL
             ${maqalD1 && maqalD2 ? `AND COALESCE(reference_date::date, created_at::date) IN ('${maqalD1}', '${maqalD2}')` : `AND 1=0`}
-            ORDER BY customer_id, created_at DESC
+            GROUP BY customer_id
         ),
         selected_product_receipt AS (
             SELECT 
                 spr.customer_id,
-                spr.receipt_id,
-                spr.receipt_created_at,
+                spr.first_receipt_created_at,
+                spr.last_receipt_created_at,
                 COALESCE(
                     (SELECT MIN(created_at) FROM "Ledger" l_next 
                      WHERE l_next.customer_id = spr.customer_id 
                        AND l_next.type = 'PRODUCT' 
                        AND l_next.deleted_at IS NULL
-                       AND l_next.created_at > spr.receipt_created_at
+                       AND l_next.created_at > spr.last_receipt_created_at
                     ), 
                     'infinity'::timestamp
                 ) as next_receipt_created_at
@@ -91,9 +109,9 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
                 SUM(l.amount)::float as maqal_total
             FROM selected_product_receipt spr
             JOIN "Ledger" l ON l.customer_id = spr.customer_id 
-                AND l.receipt_id = spr.receipt_id 
                 AND l.type = 'PRODUCT' 
                 AND l.deleted_at IS NULL
+                ${maqalD1 && maqalD2 ? `AND COALESCE(l.reference_date::date, l.created_at::date) IN ('${maqalD1}', '${maqalD2}')` : `AND 1=0`}
             GROUP BY spr.customer_id
         ),
         selected_payment_stats AS (
@@ -104,7 +122,7 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
             JOIN "Ledger" l ON l.customer_id = spr.customer_id 
                 AND l.type = 'PAYMENT' 
                 AND l.deleted_at IS NULL
-                AND l.created_at >= spr.receipt_created_at
+                AND l.created_at >= spr.first_receipt_created_at
                 AND l.created_at < spr.next_receipt_created_at
             GROUP BY spr.customer_id
         )
