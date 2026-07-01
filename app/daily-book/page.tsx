@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
-import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare, Maximize2, Minimize2, Download, ShieldAlert, X } from 'lucide-react';
+import { CalendarIcon, Save, Plus, FileText, Edit, ChevronDown, ChevronRight, Search, BookOpen, Trash2, User, Loader2, Package, MessageSquare, Maximize2, Minimize2, Download, ShieldAlert, X, Scale, ArrowRightLeft } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
@@ -107,7 +107,9 @@ function DailyBookPageInner() {
     const [openNoteForCustomerId, setOpenNoteForCustomerId] = useState<string | null>(null);
     const [absentPopupData, setAbsentPopupData] = useState<{ date: string; items: DailyBookItem[] } | null>(null);
     const [vipPopupData, setVipPopupData] = useState<{ date: string; items: DailyBookItem[] } | null>(null);
-
+    const [compareModalOpen, setCompareModalOpen] = useState(false);
+    const [compareDate1, setCompareDate1] = useState<string | null>(null);
+    const [compareDate2, setCompareDate2] = useState<string | null>(null);
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 50; // fixed page size for fastest UI response
@@ -937,6 +939,14 @@ return (
                                 Saved Entries
                             </CardTitle>
                             <div className="flex items-center gap-2">
+                                {/* Tiny Compare (Isbarbardhig) Button */}
+                                <button
+                                    onClick={() => setCompareModalOpen(true)}
+                                    className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground opacity-30 hover:opacity-100 hover:bg-primary/10 hover:text-primary transition-all duration-300"
+                                    title="Isbarbardhig (Compare Dates)"
+                                >
+                                    <Scale className="w-3.5 h-3.5" />
+                                </button>
                                 {savedEntries.length > 0 && (
                                     <Button
                                         variant="outline"
@@ -1311,11 +1321,239 @@ return (
                 </div>
             )}
 
+            {/* Isbarbardhig (Compare) Modal */}
+            {compareModalOpen && (() => {
+                // Auto-select dates if none selected
+                let d1 = compareDate1;
+                if (!d1 && savedEntries.length > 0) d1 = savedEntries[0].date;
+
+                // Find valid adjacent dates for Date 2
+                const d1Index = savedEntries.findIndex(e => e.date === d1);
+                const validD2Entries = [];
+                // Only allow comparing with the older date (Behind)
+                if (d1Index >= 0 && d1Index < savedEntries.length - 1) validD2Entries.push(savedEntries[d1Index + 1]);
+
+                let d2 = compareDate2;
+                if (!d2 || !validD2Entries.find(e => e.date === d2)) {
+                    d2 = validD2Entries.length > 0 ? validD2Entries[0].date : null;
+                }
+
+                const entry1 = savedEntries.find(e => e.date === d1);
+                const entry2 = savedEntries.find(e => e.date === d2);
+
+                let kgDiff = 0, custDiff = 0, vipDiff = 0, absentDiff = 0;
+                let abs1 = 0, abs2 = 0, act1 = 0, act2 = 0;
+                let totalGains = 0, totalLosses = 0;
+                let newCusts: DailyBookItem[] = [], droppedCusts: DailyBookItem[] = [], changedKg: any[] = [];
+                
+                if (entry1 && entry2) {
+                    kgDiff = entry1.totalKg - entry2.totalKg;
+                    
+                    act1 = entry1.items.filter(i => i.present !== false).length;
+                    act2 = entry2.items.filter(i => i.present !== false).length;
+                    custDiff = act1 - act2;
+                    
+                    const vip1 = entry1.items.reduce((s, i) => s + getTotalVipCount(i.note), 0);
+                    const vip2 = entry2.items.reduce((s, i) => s + getTotalVipCount(i.note), 0);
+                    vipDiff = vip1 - vip2;
+
+                    abs1 = entry1.items.filter(i => i.present === false).length;
+                    abs2 = entry2.items.filter(i => i.present === false).length;
+                    absentDiff = abs1 - abs2;
+
+                    const map2 = new Map(entry2.items.map(i => [i.customer_id, i]));
+                    entry1.items.forEach(i1 => {
+                        const i2 = map2.get(i1.customer_id);
+                        if (!i2) {
+                            newCusts.push(i1);
+                            totalGains += i1.kg;
+                        }
+                        else if (i1.kg !== i2.kg) {
+                            const diff = i1.kg - i2.kg;
+                            changedKg.push({ cust: i1.customer, old: i2.kg, new: i1.kg, diff });
+                            if (diff > 0) totalGains += diff;
+                            else totalLosses += Math.abs(diff);
+                        }
+                    });
+                    const map1 = new Map(entry1.items.map(i => [i.customer_id, i]));
+                    entry2.items.forEach(i2 => {
+                        if (!map1.has(i2.customer_id)) {
+                            droppedCusts.push(i2);
+                            totalLosses += i2.kg;
+                        }
+                    });
+                }
+
+                return (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 dark:bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setCompareModalOpen(false)}>
+                        <div className="bg-card/95 dark:bg-card/80 backdrop-blur-2xl border border-border/50 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-border/50" onClick={e => e.stopPropagation()}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-4 border-b border-border/30 bg-primary/5">
+                                <div className="flex items-center gap-2 text-primary">
+                                    <div className="p-1.5 rounded-lg bg-primary/10">
+                                        <ArrowRightLeft className="w-4 h-4" />
+                                    </div>
+                                    <h3 className="font-black uppercase tracking-widest text-xs md:text-sm">Isbarbardhig</h3>
+                                </div>
+                                <button onClick={() => setCompareModalOpen(false)} className="p-1.5 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            {/* Selectors */}
+                            <div className="flex items-center gap-2 md:gap-4 p-4 bg-muted/30 dark:bg-muted/10 border-b border-border/50">
+                                <div className="flex-1 relative">
+                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-primary mb-1.5 block">Compare (Ahead)</label>
+                                    <select 
+                                        className="w-full bg-card border-2 border-primary/20 rounded-xl text-xs font-bold p-2.5 md:p-3 focus:ring-0 focus:border-primary/50 outline-none transition-colors cursor-pointer appearance-none shadow-sm"
+                                        value={d1 || ''} 
+                                        onChange={e => setCompareDate1(e.target.value)}
+                                    >
+                                        {savedEntries.map(e => <option key={e.date} value={e.date}>{format(new Date(e.date), 'MMM dd, yyyy')}</option>)}
+                                    </select>
+                                    <ChevronDown className="absolute right-3 bottom-3 w-4 h-4 text-primary pointer-events-none opacity-50" />
+                                </div>
+                                <div className="shrink-0 flex items-center justify-center pt-5">
+                                    <div className="w-8 h-8 rounded-full bg-background border-2 border-border flex items-center justify-center text-muted-foreground shadow-sm">
+                                        <Scale className="w-4 h-4" />
+                                    </div>
+                                </div>
+                                <div className="flex-1 relative">
+                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">Target (Behind)</label>
+                                    <select 
+                                        className="w-full bg-card border-2 border-border rounded-xl text-xs font-bold p-2.5 md:p-3 focus:ring-0 focus:border-primary/50 outline-none transition-colors cursor-pointer appearance-none shadow-sm"
+                                        value={d2 || ''} 
+                                        onChange={e => setCompareDate2(e.target.value)}
+                                        disabled={validD2Entries.length === 0}
+                                    >
+                                        {validD2Entries.map(e => <option key={e.date} value={e.date}>{format(new Date(e.date), 'MMM dd, yyyy')}</option>)}
+                                    </select>
+                                    <ChevronDown className="absolute right-3 bottom-3 w-4 h-4 text-muted-foreground pointer-events-none opacity-50" />
+                                </div>
+                            </div>
+                            
+                            {/* Content */}
+                            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 bg-gradient-to-b from-transparent to-muted/10">
+                                {!entry1 || !entry2 ? (
+                                    <div className="text-center py-10 text-muted-foreground text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-2">
+                                        <Scale className="w-8 h-8 opacity-20" />
+                                        Fadlan dooro labo taariikh
+                                    </div>
+                                ) : d1 === d2 ? (
+                                    <div className="text-center py-10 text-muted-foreground text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-2">
+                                        <ShieldAlert className="w-8 h-8 text-amber-500 opacity-50" />
+                                        Dooro taariikho kala duwan
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Global Stats */}
+                                        {/* Global Stats */}
+                                        <div className="flex justify-center mb-2">
+                                            <div className="glass-card bg-background/90 dark:bg-card/60 border border-border/60 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden min-w-[200px] w-full max-w-xs">
+                                                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Total KG</p>
+                                                <div className="flex items-center justify-center gap-2 text-[10px] md:text-xs text-muted-foreground bg-muted/30 px-3 py-1 rounded-full mb-1.5">
+                                                    <span className="text-[8px] uppercase tracking-widest opacity-60">{format(new Date(d2), 'dd MMM')}</span>
+                                                    <span className="font-bold text-foreground">{Math.round(entry2.totalKg)}</span>
+                                                    <span className="opacity-40">→</span>
+                                                    <span className="font-bold text-foreground">{Math.round(entry1.totalKg)}</span>
+                                                    <span className="text-[8px] uppercase tracking-widest opacity-60">{format(new Date(d1), 'dd MMM')}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                                                    <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Total Gains">+{Math.round(totalGains)}</span>
+                                                    <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded" title="Total Losses">-{Math.round(totalLosses)}</span>
+                                                </div>
+                                                <p className={`text-3xl font-black tabular-nums ${kgDiff > 0 ? 'text-emerald-600 dark:text-emerald-500' : kgDiff < 0 ? 'text-red-600 dark:text-red-500' : 'text-foreground'}`}>
+                                                    {kgDiff > 0 ? '+' : ''}{Math.round(kgDiff)}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* Added */}
+                                            {newCusts.length > 0 && (
+                                                <div className="border border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-2xl overflow-hidden shadow-sm flex flex-col">
+                                                    <div className="bg-emerald-500/10 p-2.5 border-b border-emerald-500/10 shrink-0">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400 text-center">🆕 Soo Kordhay ({newCusts.length})</p>
+                                                    </div>
+                                                    <div className="p-2 space-y-1 flex-1 overflow-y-auto max-h-[160px] custom-scrollbar">
+                                                        {newCusts.map(i => (
+                                                            <div key={i.customer_id} className="flex justify-between items-center text-[10px] md:text-xs font-bold p-1.5 hover:bg-emerald-500/10 rounded-lg transition-colors">
+                                                                <span className="text-foreground truncate mr-2">{i.customer?.name}</span>
+                                                                <span className="text-muted-foreground text-[10px] bg-background dark:bg-muted/50 px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1.5">
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d2), 'dd MMM')}</span>
+                                                                    <span className="font-black text-foreground">0</span>
+                                                                    <span className="opacity-40">→</span>
+                                                                    <span className="font-black text-emerald-700 dark:text-emerald-400">{Math.round(i.kg)}</span>
+                                                                    <span className="text-[7.5px] opacity-80 font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">{format(new Date(d1), 'dd MMM')}</span>
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Dropped */}
+                                            {droppedCusts.length > 0 && (
+                                                <div className="border border-red-500/30 dark:border-red-500/20 bg-red-500/10 dark:bg-red-500/5 rounded-2xl overflow-hidden shadow-sm flex flex-col">
+                                                    <div className="bg-red-500/10 p-2.5 border-b border-red-500/10 shrink-0">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-400 text-center">📉 Dhacay / Maqan ({droppedCusts.length})</p>
+                                                    </div>
+                                                    <div className="p-2 space-y-1 flex-1 overflow-y-auto max-h-[160px] custom-scrollbar">
+                                                        {droppedCusts.map(i => (
+                                                            <div key={i.customer_id} className="flex justify-between items-center text-[10px] md:text-xs font-bold p-1.5 hover:bg-red-500/10 rounded-lg transition-colors">
+                                                                <span className="text-foreground truncate mr-2">{i.customer?.name}</span>
+                                                                <span className="text-muted-foreground text-[10px] bg-background dark:bg-muted/50 px-1.5 py-0.5 rounded border border-red-500/20 flex items-center gap-1.5">
+                                                                    <span className="text-[7.5px] opacity-80 font-bold uppercase tracking-widest text-red-700 dark:text-red-400">{format(new Date(d2), 'dd MMM')}</span>
+                                                                    <span className="font-black text-red-700 dark:text-red-400">{Math.round(i.kg)}</span>
+                                                                    <span className="opacity-40">→</span>
+                                                                    <span className="font-black text-foreground">0</span>
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d1), 'dd MMM')}</span>
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Changed KG */}
+                                            <div className="border border-blue-500/30 dark:border-blue-500/20 bg-blue-500/10 dark:bg-blue-500/5 rounded-2xl overflow-hidden shadow-sm md:col-span-2 flex flex-col">
+                                                <div className="bg-blue-500/10 p-2.5 border-b border-blue-500/10 shrink-0">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-400 text-center">⚖️ Isbedelka KG ({changedKg.length})</p>
+                                                </div>
+                                                <div className="p-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 max-h-[160px] overflow-y-auto custom-scrollbar">
+                                                    {changedKg.map((i, idx) => (
+                                                        <div key={idx} className="flex justify-between items-center text-[10px] md:text-xs font-bold p-1.5 hover:bg-blue-500/10 rounded-lg transition-colors">
+                                                            <span className="text-foreground truncate mr-3">{i.cust?.name}</span>
+                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                <span className="text-muted-foreground text-[10px] bg-background dark:bg-muted/50 px-1.5 py-0.5 rounded border border-border/50 flex items-center gap-1.5">
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d2), 'dd MMM')}</span>
+                                                                    <span className="font-black text-foreground">{Math.round(i.old)}</span>
+                                                                    <span className="opacity-40">→</span>
+                                                                    <span className="font-black text-foreground">{Math.round(i.new)}</span>
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d1), 'dd MMM')}</span>
+                                                                </span>
+                                                                <span className={`w-[50px] shrink-0 text-center px-1.5 py-0.5 rounded ${i.diff > 0 ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/20 dark:bg-emerald-500/10' : 'text-red-700 dark:text-red-400 bg-red-500/20 dark:bg-red-500/10'}`}>
+                                                                    {i.diff > 0 ? '+' : ''}{Math.round(i.diff)} KG
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {changedKg.length === 0 && <p className="text-[10px] font-bold text-center text-blue-700/50 dark:text-blue-400/50 py-4 uppercase tracking-widest col-span-1 md:col-span-2">No Changes</p>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Popup styles — light+dark adaptive */}
             <style>{`
                 /* ── Backdrop ── */
                 .daily-popup-backdrop {
-                    position: fixed; inset: 0; z-index: 9999;
+                    position: fixed; inset: 0; z-index: 10000;
                     display: flex; align-items: center; justify-content: center;
                     background: rgba(0,0,0,0.18);
                     backdrop-filter: blur(4px);

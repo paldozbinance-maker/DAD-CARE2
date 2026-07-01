@@ -60,8 +60,8 @@ export default function LoginPage() {
             <div className="w-full max-w-md relative z-10">
                 {/* Logo Area */}
                 <div className="flex flex-col items-center mb-10">
-                    <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform cursor-pointer">
-                        <span className="text-3xl font-black text-primary-foreground italic">D</span>
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform cursor-pointer overflow-hidden">
+                        <img src="/icons/icon-192.png" alt="DADWORK" className="w-full h-full object-cover" />
                     </div>
                     <h1 className="text-4xl font-black text-foreground tracking-tighter">
                         DAD<span className="text-primary italic">WORK</span>

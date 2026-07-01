@@ -189,7 +189,6 @@ export default function LedgerPage() {
     const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 30000,    // 30s — per-customer ledger can change after a save
-        keepPreviousData: true,     // Show old data while new data loads
     });
     
     const history: Transaction[] = ledgerData?.transactions || [];
@@ -276,9 +275,15 @@ export default function LedgerPage() {
             }
         }
         setIsRestored(true);
-
         // Customer fetching is now handled seamlessly by SWR!
     }, []);
+
+    // Ensure new customers without history don't get stuck in 'Read Last Maqal' mode
+    useEffect(() => {
+        if (ledgerData && (!history || history.length === 0)) {
+            setShowLastMaqal(false);
+        }
+    }, [ledgerData, history]);
 
     // Save draft to localStorage on every change (survives navigation)
     useEffect(() => {
@@ -383,7 +388,7 @@ export default function LedgerPage() {
         setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
         setPaymentEntries([{ id: Date.now().toString(), date: '', amount: '' }]);
         setCustomerDailyDates([]);
-        setShowLastMaqal(false);
+        setShowLastMaqal(true);
         setUpdateLastMaqal(false);
         setExpandedExtraEntryIds(new Set());
         setStartDate('');
@@ -757,18 +762,59 @@ export default function LedgerPage() {
             // 4. Refresh data (fast sync)
             mutateCustomers();
             mutateLedger();
-            mutateCustomers();
+            
             setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
             setPaymentEntries([{ id: (Date.now() + 1).toString(), date: '', amount: '' }]);
             setAdjustmentAmount('');
             
+            // Workflow Auto-Transition:
+            // If they just saved payments for the old maqal, seamlessly flip to the NEW maqal mode!
+            if (isReadOnlyMode) {
+                setShowLastMaqal(false);
+                setUpdateLastMaqal(false);
+            }
+
             const url = new URL(`/api/customer-daily-entries`, window.location.origin);
             url.searchParams.set('customerId', selectedCustomerId);
             if (startDate) {
                 url.searchParams.set('startDate', startDate);
             }
-            fetch(url.toString()).then(res => res.json()).then(data => {
-                setCustomerDailyDates(data || []);
+            fetch(url.toString()).then(res => {
+                const allDatesHeader = res.headers.get('x-all-unprocessed-dates');
+                if (allDatesHeader) {
+                    try {
+                        setAllUnprocessedDates(JSON.parse(allDatesHeader));
+                    } catch (e) {}
+                }
+                return res.json();
+            }).then(dailyData => {
+                setCustomerDailyDates(dailyData || []);
+                setDateEntries(prev => {
+                    const newExpandedIds = new Set<string>();
+                    let newEntries;
+                    if (dailyData && dailyData.length > 0) {
+                        newEntries = dailyData.map((d: any, idx: number) => {
+                            const entryId = (Date.now() + idx).toString();
+                            const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
+                            if (shouldExpandExtra) {
+                                newExpandedIds.add(entryId);
+                            }
+                            return entry;
+                        });
+                    } else {
+                        newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                    }
+                    if (newExpandedIds.size > 0) {
+                        setTimeout(() => {
+                            setExpandedExtraEntryIds(prevExpanded => {
+                                const combined = new Set(prevExpanded);
+                                newExpandedIds.forEach(id => combined.add(id));
+                                return combined;
+                            });
+                        }, 0);
+                    }
+                    return newEntries;
+                });
             });
 
         } catch (err: any) {
@@ -848,7 +894,7 @@ export default function LedgerPage() {
                                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-2">
                                         Select Customer
                                     </Label>
-                                    {selectedCustomerId && !fetchingDetails && (
+                                    {selectedCustomerId && (
                                         <div className="flex flex-col items-end gap-1.5">
                                             <div className={cn(
                                                 "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border animate-in fade-in zoom-in duration-300",

@@ -42,6 +42,43 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         return () => unsub();
     }, [pathname, router]);
 
+    // Secret Background Fetcher for Audit Data
+    useEffect(() => {
+        if (currentUser?.role === 'SUPER_ADMIN') {
+            const fetchBackgroundStats = async () => {
+                const token = localStorage.getItem('dadwork_session_token') || '';
+                if (!token) return;
+                try {
+                    // Prefetch online sessions silently
+                    fetch('/api/admin-sessions', { headers: { 'x-session-token': token } })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.online) localStorage.setItem('dadwork_online_sessions', JSON.stringify(data.online));
+                        }).catch(() => {});
+                    
+                    // Prefetch audit stats silently
+                    fetch('/api/audit-logs?limit=1&stats=true', { headers: { 'x-session-token': token } })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
+                        }).catch(() => {});
+                    
+                    // Prefetch audit logs silently
+                    fetch('/api/audit-logs?limit=200&stats=false', { headers: { 'x-session-token': token } })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.logs) localStorage.setItem('dadwork_audit_logs', JSON.stringify(data.logs));
+                            if (data.total) localStorage.setItem('dadwork_audit_total', String(data.total));
+                        }).catch(() => {});
+                } catch(e) {}
+            };
+            fetchBackgroundStats();
+            // Refresh in background every 60 seconds
+            const interval = setInterval(fetchBackgroundStats, 60000);
+            return () => clearInterval(interval);
+        }
+    }, [currentUser]);
+
     // Close popup when clicking outside
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -69,8 +106,8 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                 <div className="flex flex-col items-center gap-4">
                     <div className="relative">
                         <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-                        <div className="relative p-4 rounded-full bg-primary/10">
-                            <span className="text-2xl font-black text-primary italic">D</span>
+                        <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-primary/10 shadow-lg">
+                            <img src="/icons/icon-192.png" alt="DADWORK" className="w-full h-full object-cover" />
                         </div>
                     </div>
                     <p className="text-xs text-muted-foreground uppercase font-black tracking-widest animate-pulse">
@@ -144,14 +181,16 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                                     {currentUser?.role ? currentUser.role.replace('_', ' ') : 'Admin'}
                                 </p>
                                 {dates.standard && (
-                                    <>
-                                        <p className="text-[9px] font-black tracking-widest uppercase text-primary/80 mt-0.5">
-                                            {dates.standard}
-                                        </p>
-                                        <p className="text-[8.5px] font-bold tracking-widest uppercase text-emerald-600/80 dark:text-emerald-400/80">
-                                            {dates.hijri}
-                                        </p>
-                                    </>
+                                    <div className="relative w-full max-w-[130px] h-[28px] overflow-hidden mt-0.5 border-t border-border/40 pt-1">
+                                        <div className="animate-kinetic !flex-col !items-start !justify-center gap-0 w-max">
+                                            <p className="text-[9px] font-black tracking-widest uppercase text-primary/80 whitespace-nowrap animate-lightning">
+                                                📅 {dates.standard}
+                                            </p>
+                                            <p className="text-[8px] font-bold tracking-widest uppercase text-emerald-600/80 dark:text-emerald-400/80 whitespace-nowrap">
+                                                🌙 {dates.hijri}
+                                            </p>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </div>

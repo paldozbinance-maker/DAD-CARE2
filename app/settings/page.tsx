@@ -94,14 +94,38 @@ export default function SettingsPage() {
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
 
     // Audit Logs state
-    const [auditLogs, setAuditLogs] = useState<any[]>([]);
+    const [auditLogs, setAuditLogs] = useState<any[]>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('dadwork_audit_logs');
+            if (cached) return JSON.parse(cached);
+        }
+        return [];
+    });
     const [auditLoading, setAuditLoading] = useState(false);
-    const [auditTotal, setAuditTotal] = useState(0);
-    const [auditUserStats, setAuditUserStats] = useState<any[]>([]);
+    const [auditTotal, setAuditTotal] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('dadwork_audit_total');
+            if (cached) return parseInt(cached, 10);
+        }
+        return 0;
+    });
+    const [auditUserStats, setAuditUserStats] = useState<any[]>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('dadwork_audit_stats');
+            if (cached) return JSON.parse(cached);
+        }
+        return [];
+    });
     const [auditActions, setAuditActions] = useState<string[]>([]);
     const [auditFilterUser, setAuditFilterUser] = useState('');
     const [auditFilterAction, setAuditFilterAction] = useState('');
-    const [onlineSessions, setOnlineSessions] = useState<any[]>([]);
+    const [onlineSessions, setOnlineSessions] = useState<any[]>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('dadwork_online_sessions');
+            if (cached) return JSON.parse(cached);
+        }
+        return [];
+    });
     const [allSessions, setAllSessions] = useState<any[]>([]);
 
     const auditFiltersRef = useRef({ user: auditFilterUser, action: auditFilterAction });
@@ -342,9 +366,12 @@ export default function SettingsPage() {
                 const data = await res.json();
                 setAuditLogs(data.logs || []);
                 setAuditTotal(data.total || 0);
+                localStorage.setItem('dadwork_audit_logs', JSON.stringify(data.logs || []));
+                localStorage.setItem('dadwork_audit_total', String(data.total || 0));
                 if (includeStats) {
                     setAuditUserStats(data.userStats || []);
                     setAuditActions(data.actions || []);
+                    if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
                 }
             }
         } catch (e) {
@@ -365,6 +392,7 @@ export default function SettingsPage() {
                 const data = await res.json();
                 setAuditUserStats(data.userStats || []);
                 setAuditActions(data.actions || []);
+                if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
             }
         } catch (e) {
             console.error('Failed to load audit stats:', e);
@@ -381,6 +409,7 @@ export default function SettingsPage() {
                 const data = await res.json();
                 setOnlineSessions(data.online || []);
                 setAllSessions(data.all || []);
+                if (data.online) localStorage.setItem('dadwork_online_sessions', JSON.stringify(data.online));
             }
         } catch (e) {
             console.error('Failed to load online sessions:', e);
@@ -1179,6 +1208,27 @@ export default function SettingsPage() {
                     {isSuperAdmin && (
                         <TabsContent value="audit" className="mt-3">
                             <div className="space-y-3">
+
+                                {/* Master Refresh */}
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={async () => {
+                                            setAuditLoading(true);
+                                            await Promise.all([
+                                                loadOnlineSessions(),
+                                                loadAuditStats(),
+                                                loadAuditLogs(auditFilterUser, auditFilterAction, true, false),
+                                                loadUsers(),
+                                            ]);
+                                            setAuditLoading(false);
+                                        }}
+                                        disabled={auditLoading}
+                                        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        <RefreshCw className={`w-3 h-3 ${auditLoading ? 'animate-spin' : ''}`} />
+                                        Refresh All
+                                    </button>
+                                </div>
 
                                 {/* ── Live Online Status Bar ── */}
                                 <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
 
@@ -26,51 +26,38 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Customer ID required' }, { status: 400 });
     }
 
-    const supabase = await createClient();
-
     try {
-        // 1. Fetch all DailyBookItems for this customer
-        const { data: items, error } = await supabase
-            .from('DailyBookItem')
-            .select(`
-                kg,
-                note,
-                daily_book:DailyBook (date)
-            `)
-            .eq('customer_id', customerId)
-            .order('daily_book(date)', { ascending: true });
-
-        if (error) throw error;
-
-        // 2. Fetch already-processed dates from the Ledger
-        const { data: ledgerEntries } = await supabase
-            .from('Ledger')
-            .select('reference_date')
-            .eq('customer_id', customerId)
-            .eq('type', 'PRODUCT');
-
-        const processedDates = new Set(
-            ledgerEntries?.map((le: any) => le.reference_date) || []
-        );
-
-        // 3. Today's date string (YYYY-MM-DD) — used to exclude today and future
         const todayStr = new Date().toISOString().split('T')[0];
 
-        // 4. Build the list of unprocessed past entries, sorted oldest-first
-        let pastUnprocessed = (items || [])
-            .map((item: any) => ({
-                date: item.daily_book?.date as string,
-                kg: item.kg as number,
-                note: (item.note as string | null) ?? null,
-                processed: false,
-            }))
-            .filter((item) => item.date && item.date < todayStr && !processedDates.has(item.date))
-            .sort((a, b) => a.date.localeCompare(b.date));
+        // Fetch unprocessed items in a single blazing fast query!
+        // We get items from DailyBookItem + DailyBook that are before today
+        // AND not already in Ledger (type = PRODUCT, deleted_at is null).
+        const query = `
+            SELECT TO_CHAR(db.date, 'YYYY-MM-DD') as date, dbi.kg, dbi.note
+            FROM "DailyBookItem" dbi
+            JOIN "DailyBook" db ON dbi.daily_book_id = db.id
+            WHERE dbi.customer_id = $1 
+              AND db.date < $2
+              ${startDate ? 'AND db.date >= $3' : ''}
+              AND NOT EXISTS (
+                  SELECT 1 FROM "Ledger" l 
+                  WHERE l.customer_id = dbi.customer_id 
+                    AND l.reference_date = db.date 
+                    AND l.type = 'PRODUCT' 
+                    AND l.deleted_at IS NULL
+              )
+            ORDER BY db.date ASC
+        `;
+        
+        const params = startDate ? [customerId, todayStr, startDate] : [customerId, todayStr];
+        const { rows: items } = await pool.query(query, params);
 
-        // 5. If startDate is specified, filter to only dates >= startDate
-        if (startDate) {
-            pastUnprocessed = pastUnprocessed.filter((item) => item.date >= startDate);
-        }
+        let pastUnprocessed = items.map(item => ({
+            date: item.date as string,
+            kg: Number(item.kg),
+            note: (item.note as string | null) ?? null,
+            processed: false,
+        }));
 
         // 6. Apply the PAIR RULE: only release complete pairs.
         //    We strictly return a maximum of 2 dates (1 pair) to force sequential processing.
