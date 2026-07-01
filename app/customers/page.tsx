@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { toast } from 'sonner';
-import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2, TrendingUp, ArrowDownWideNarrow, Clock, Globe, CalendarDays } from 'lucide-react';
+import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2, Clock, Globe, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -38,6 +38,8 @@ interface Customer {
 
 export default function CustomersPage() {
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
     const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
     const [visibleCount, setVisibleCount] = useState(20);
@@ -47,6 +49,20 @@ export default function CustomersPage() {
     const [maqalSearch, setMaqalSearch] = useState('');
 
     const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: true, dedupingInterval: 5000 });
+
+    // Latest pair = latest pair with ≥20 customers who paid (the "qualified" latest)
+    const latestPair = maqalPairs?.find(pair => parseInt(pair.payment_count) >= 20) || null;
+
+    // Debounce search input
+    useEffect(() => {
+        if (searchTerm === debouncedSearch) return;
+        setIsSearching(true);
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setIsSearching(false);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchTerm, debouncedSearch]);
 
     // Helper to format pair date strings like "2026-06-28" or ISO → "28 Jun"
     const formatPairDate = (dateStr: string) => {
@@ -87,9 +103,23 @@ export default function CustomersPage() {
     });
 
     // ⚡ SWR: Instant cache — no more spinner every time you visit this page
-    const customersUrl = selectedMaqalPair && selectedMaqalPair !== 'latest' && selectedMaqalPair !== 'all_time' 
-        ? `/api/customers?maqal_d1=${selectedMaqalPair.split('|')[0]}&maqal_d2=${selectedMaqalPair.split('|')[1]}`
-        : '/api/customers';
+    // When 'latest' is selected, use the qualified latest pair (≥20 payments)
+    const customersUrl = (() => {
+        let baseUrl = '/api/customers';
+        if (selectedMaqalPair === 'latest' && latestPair) {
+            baseUrl += `?maqal_d1=${latestPair.date1}&maqal_d2=${latestPair.date2}`;
+        } else if (selectedMaqalPair && selectedMaqalPair.includes('|')) {
+            baseUrl += `?maqal_d1=${selectedMaqalPair.split('|')[0]}&maqal_d2=${selectedMaqalPair.split('|')[1]}`;
+        }
+        
+        // Pass the max date to exclude "waiting" maqals from All-Time calculations
+        if (latestPair) {
+            const separator = baseUrl.includes('?') ? '&' : '?';
+            baseUrl += `${separator}max_all_time_date=${latestPair.date1}`;
+        }
+        
+        return baseUrl;
+    })();
 
     const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
         customersUrl,
@@ -110,8 +140,8 @@ export default function CustomersPage() {
     }, []);
 
     const filteredCustomers = customers.filter(c =>
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.customer_code.toLowerCase().includes(searchTerm.toLowerCase())
+        c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        c.customer_code.toLowerCase().includes(debouncedSearch.toLowerCase())
     ).sort((a, b) => {
         if (filterType === 'most_paid') {
             return ((b as any).total_paid || 0) - ((a as any).total_paid || 0);
@@ -127,9 +157,8 @@ export default function CustomersPage() {
             return avgA - avgB;
         } else if (filterType === 'best_maqal' || filterType === 'worst_maqal' || filterType === 'best_lacag' || filterType === 'worst_lacag') {
             const getPct = (c: any) => {
-                if (showAllTimePct[c.id]) return c.all_time_maqal_pct ?? -1;
-                if (selectedMaqalPair !== 'latest' && selectedMaqalPair !== 'all_time') return c.selected_maqal_pct ?? -1;
-                return c.latest_maqal_pct ?? -1;
+                if (selectedMaqalPair === 'all_time' || showAllTimePct[c.id]) return c.all_time_maqal_pct ?? -1;
+                return c.selected_maqal_pct ?? c.latest_maqal_pct ?? -1;
             };
             const pctA = getPct(a);
             const pctB = getPct(b);
@@ -180,7 +209,10 @@ export default function CustomersPage() {
 
                 <div className="relative z-10 flex flex-col sm:flex-row gap-3 self-stretch md:self-center">
                     <div className="relative flex-1 sm:w-[220px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        {isSearching
+                            ? <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-spin" />
+                            : <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        }
                         <Input
                             placeholder="Search by name or ID..."
                             value={searchTerm}
@@ -225,8 +257,12 @@ export default function CustomersPage() {
                                             </div>
                                             <div className="max-h-40 overflow-y-auto overflow-x-hidden p-1 space-y-0.5">
                                                 {(!maqalSearch || "latest maqal".includes(maqalSearch.toLowerCase())) && (
-                                                    <DropdownMenuItem onClick={() => { setFilterType('best_maqal'); setSelectedMaqalPair('latest'); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'best_maqal' && selectedMaqalPair === 'latest') ? 'bg-primary/10 text-primary' : ''}`}>
-                                                        Latest Maqal {(filterType === 'best_maqal' && selectedMaqalPair === 'latest') && <Check className="w-3 h-3 ml-auto" />}
+                                                    <DropdownMenuItem onClick={() => { 
+                                                        setFilterType('best_maqal'); 
+                                                        setSelectedMaqalPair('latest');
+                                                    }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'best_maqal' && selectedMaqalPair === 'latest') ? 'bg-primary/10 text-primary' : ''}`}>
+                                                        ✅ Latest Maqal {latestPair && <span className="ml-1 text-[9px] opacity-70">({formatPairDate(latestPair.date1)} & {formatPairDate(latestPair.date2)})</span>}
+                                                        {(filterType === 'best_maqal' && selectedMaqalPair === 'latest') && <Check className="w-3 h-3 ml-auto" />}
                                                     </DropdownMenuItem>
                                                 )}
                                                 {(!maqalSearch || "all time".includes(maqalSearch.toLowerCase())) && (
@@ -236,11 +272,24 @@ export default function CustomersPage() {
                                                 )}
                                                 {filteredPairs?.map(pair => {
                                                     const val = `${pair.date1}|${pair.date2}`;
+                                                    const paidCount = parseInt(pair.payment_count) || 0;
+                                                    const totalCount = parseInt(pair.total_customers) || 0;
+                                                    const isQualified = paidCount >= 20;
                                                     return (
                                                         <DropdownMenuItem key={val} onClick={() => { setFilterType('best_maqal'); setSelectedMaqalPair(val); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'best_maqal' && selectedMaqalPair === val) ? 'bg-primary/10 text-primary' : ''}`}>
-                                                            {formatPairDate(pair.date1)} & {formatPairDate(pair.date2)} 
-                                                            {pair.has_payments && <span className="ml-1 text-[10px]">✅</span>}
-                                                            {(filterType === 'best_maqal' && selectedMaqalPair === val) && <Check className="w-3 h-3 ml-auto" />}
+                                                            <span className="flex items-center gap-1 flex-1 min-w-0">
+                                                                {formatPairDate(pair.date1)} & {formatPairDate(pair.date2)}
+                                                                {isQualified ? (
+                                                                    <span className="ml-1 text-[8px] font-black px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
+                                                                        ✅ {paidCount}/{totalCount}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="ml-1 text-[8px] font-black px-1 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                                                                        ⏳ {paidCount}/{totalCount}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                            {(filterType === 'best_maqal' && selectedMaqalPair === val) && <Check className="w-3 h-3 ml-auto shrink-0" />}
                                                         </DropdownMenuItem>
                                                     );
                                                 })}
@@ -278,8 +327,12 @@ export default function CustomersPage() {
                                             </div>
                                             <div className="max-h-40 overflow-y-auto overflow-x-hidden p-1 space-y-0.5">
                                                 {(!maqalSearch || "latest maqal".includes(maqalSearch.toLowerCase())) && (
-                                                    <DropdownMenuItem onClick={() => { setFilterType('worst_maqal'); setSelectedMaqalPair('latest'); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'worst_maqal' && selectedMaqalPair === 'latest') ? 'bg-primary/10 text-primary' : ''}`}>
-                                                        Latest Maqal ${(filterType === 'worst_maqal' && selectedMaqalPair === 'latest') && <Check className="w-3 h-3 ml-auto" />}
+                                                    <DropdownMenuItem onClick={() => { 
+                                                        setFilterType('worst_maqal'); 
+                                                        setSelectedMaqalPair('latest');
+                                                    }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'worst_maqal' && selectedMaqalPair === 'latest') ? 'bg-primary/10 text-primary' : ''}`}>
+                                                        ✅ Latest Maqal {latestPair && <span className="ml-1 text-[9px] opacity-70">({formatPairDate(latestPair.date1)} & {formatPairDate(latestPair.date2)})</span>}
+                                                        {(filterType === 'worst_maqal' && selectedMaqalPair === 'latest') && <Check className="w-3 h-3 ml-auto" />}
                                                     </DropdownMenuItem>
                                                 )}
                                                 {(!maqalSearch || "all time".includes(maqalSearch.toLowerCase())) && (
@@ -289,11 +342,24 @@ export default function CustomersPage() {
                                                 )}
                                                 {filteredPairs?.map(pair => {
                                                     const val = `${pair.date1}|${pair.date2}`;
+                                                    const paidCount = parseInt(pair.payment_count) || 0;
+                                                    const totalCount = parseInt(pair.total_customers) || 0;
+                                                    const isQualified = paidCount >= 20;
                                                     return (
                                                         <DropdownMenuItem key={val} onClick={() => { setFilterType('worst_maqal'); setSelectedMaqalPair(val); }} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${(filterType === 'worst_maqal' && selectedMaqalPair === val) ? 'bg-primary/10 text-primary' : ''}`}>
-                                                            {formatPairDate(pair.date1)} & {formatPairDate(pair.date2)} 
-                                                            {pair.has_payments && <span className="ml-1 text-[10px]">✅</span>}
-                                                            {(filterType === 'worst_maqal' && selectedMaqalPair === val) && <Check className="w-3 h-3 ml-auto" />}
+                                                            <span className="flex items-center gap-1 flex-1 min-w-0">
+                                                                {formatPairDate(pair.date1)} & {formatPairDate(pair.date2)}
+                                                                {isQualified ? (
+                                                                    <span className="ml-1 text-[8px] font-black px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
+                                                                        ✅ {paidCount}/{totalCount}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="ml-1 text-[8px] font-black px-1 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                                                                        ⏳ {paidCount}/{totalCount}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                            {(filterType === 'worst_maqal' && selectedMaqalPair === val) && <Check className="w-3 h-3 ml-auto shrink-0" />}
                                                         </DropdownMenuItem>
                                                     );
                                                 })}
@@ -399,38 +465,38 @@ export default function CustomersPage() {
                                                     {customer.phone}
                                                 </span>
                                             )}
-                                            {/* Dynamic Maqal % — clickable to toggle between modes */}
-                                            {((customer as any).latest_maqal_total > 0 || (customer as any).all_time_maqal_total > 0) && (() => {
-                                                const canShowAllTime = (customer as any).latest_maqal_pct >= 100 || (customer as any).latest_maqal_total === 0;
-                                                // Force specific maqal if we selected one, OR if we selected all_time but it's not allowed, fallback to latest
-                                                let isAllTime = false;
-                                                if (selectedMaqalPair === 'all_time') {
-                                                    isAllTime = canShowAllTime;
-                                                } else if (selectedMaqalPair === 'latest') {
-                                                    isAllTime = canShowAllTime && showAllTimePct[customer.id];
-                                                }
+                                            {/* Dynamic Maqal % — SINGLE badge, toggles between maqal/all-time */}
+                                            {(() => {
+                                                const allTimePct = (customer as any).all_time_maqal_pct ?? 0;
+                                                const allTimeTotal = (customer as any).all_time_maqal_total ?? 0;
+                                                const maqalPct = (customer as any).selected_maqal_pct ?? (customer as any).latest_maqal_pct ?? 0;
+                                                const maqalTotal = (customer as any).selected_maqal_total ?? (customer as any).latest_maqal_total ?? 0;
+
+                                                // Show all-time if user selected 'all_time' or toggled this customer, OR if they have no maqal data for the current pair
+                                                const showAllTime = selectedMaqalPair === 'all_time' || showAllTimePct[customer.id] || (maqalTotal <= 0 && allTimeTotal > 0);
                                                 
-                                                let pct = 0;
-                                                if (isAllTime) {
-                                                    pct = (customer as any).all_time_maqal_pct ?? 0;
-                                                } else if (selectedMaqalPair !== 'latest' && selectedMaqalPair !== 'all_time') {
-                                                    pct = (customer as any).selected_maqal_pct ?? 0;
-                                                } else {
-                                                    pct = (customer as any).latest_maqal_pct ?? 0;
-                                                }
-                                                
+                                                const pct = showAllTime ? allTimePct : maqalPct;
+                                                const total = showAllTime ? allTimeTotal : maqalTotal;
+                                                const icon = showAllTime ? <Globe className="w-2.5 h-2.5" /> : <CalendarDays className="w-2.5 h-2.5" />;
+                                                const label = showAllTime ? 'All Time' : '';
+
+                                                if (total <= 0 && allTimeTotal <= 0) return null;
+
                                                 return (
                                                     <button 
                                                         onClick={(e) => {
                                                             e.preventDefault();
-                                                            if (canShowAllTime) {
-                                                                setShowAllTimePct(prev => ({...prev, [customer.id]: !prev[customer.id]}));
-                                                            }
+                                                            setShowAllTimePct(prev => ({...prev, [customer.id]: !prev[customer.id]}));
                                                         }}
-                                                        className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors ${canShowAllTime ? 'cursor-pointer active:scale-95 hover:opacity-80' : 'cursor-default'} ${pct >= 100 ? 'bg-emerald-500/10 text-emerald-500' : pct >= 50 ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}
-                                                        title={canShowAllTime ? "Click to toggle All-Time / Specific Maqal" : "All-Time hidden until latest maqal is fully paid"}
+                                                        className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded transition-all cursor-pointer hover:opacity-80 active:scale-95 border ${
+                                                            pct >= 80 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                                                            : pct >= 50 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
+                                                            : pct >= 25 ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                                                            : 'bg-red-500/15 text-red-400 border-red-500/30'
+                                                        }`}
+                                                        title={showAllTime ? `All-Time: ${pct}% — Click for maqal view` : `Maqal: ${pct}% — Click for all-time`}
                                                     >
-                                                        {isAllTime ? <Globe className="w-2.5 h-2.5" /> : <CalendarDays className="w-2.5 h-2.5" />}
+                                                        {icon}
                                                         <span>{pct}%</span>
                                                     </button>
                                                 );

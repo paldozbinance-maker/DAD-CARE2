@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 
-async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
+async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) {
     const query = `
         WITH past_dates AS (
             SELECT date::date as db_date
@@ -183,6 +183,7 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
             SELECT customer_id, SUM(amount) as total_paid
             FROM "Ledger"
             WHERE type = 'PAYMENT' AND deleted_at IS NULL
+            ${maxAllTimeDate ? `AND COALESCE(reference_date::date, created_at::date) <= '${maxAllTimeDate}'` : ''}
             GROUP BY customer_id
         ) p ON c.id = p.customer_id
         LEFT JOIN (
@@ -201,6 +202,7 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null) {
                 SUM(amount) as total_ledger_maqal
             FROM "Ledger"
             WHERE type = 'PRODUCT' AND deleted_at IS NULL
+            ${maxAllTimeDate ? `AND COALESCE(reference_date::date, created_at::date) <= '${maxAllTimeDate}'` : ''}
             GROUP BY customer_id
         ) lk ON c.id = lk.customer_id
         LEFT JOIN (
@@ -231,6 +233,7 @@ export async function GET(request: Request) {
     const isLite = searchParams.get('lite') === 'true';
     const maqalD1 = searchParams.get('maqal_d1');
     const maqalD2 = searchParams.get('maqal_d2');
+    const maxAllTimeDate = searchParams.get('max_all_time_date');
 
     try {
         if (isLite) {
@@ -249,8 +252,9 @@ export async function GET(request: Request) {
             return res;
         }
 
-        const rows = await getCustomers(maqalD1, maqalD2);
-        const res = NextResponse.json(rows);
+        const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
+        
+        const res = NextResponse.json(customers);
         res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         return res;
     } catch (error: any) {
