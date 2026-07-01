@@ -1451,11 +1451,11 @@ return (
                                             <div className="glass-card bg-background/90 dark:bg-card/60 border border-border/60 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden min-w-[200px] w-full max-w-xs">
                                                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Total KG</p>
                                                 <div className="flex items-center justify-center gap-2 text-[10px] md:text-xs text-muted-foreground bg-muted/30 px-3 py-1 rounded-full mb-1.5">
-                                                    <span className="text-[8px] uppercase tracking-widest opacity-60">{format(new Date(d2), 'dd MMM')}</span>
+                                                    <span className="text-[8px] uppercase tracking-widest opacity-60">{format(new Date(d2!), 'dd MMM')}</span>
                                                     <span className="font-bold text-foreground">{Math.round(entry2.totalKg)}</span>
                                                     <span className="opacity-40">→</span>
                                                     <span className="font-bold text-foreground">{Math.round(entry1.totalKg)}</span>
-                                                    <span className="text-[8px] uppercase tracking-widest opacity-60">{format(new Date(d1), 'dd MMM')}</span>
+                                                    <span className="text-[8px] uppercase tracking-widest opacity-60">{format(new Date(d1!), 'dd MMM')}</span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5 mb-1 opacity-80">
                                                     <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Total Gains">+{Math.round(totalGains)}</span>
