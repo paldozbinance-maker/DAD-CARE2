@@ -10,6 +10,7 @@ const PUBLIC_PAGE_ROUTES = ['/login'];
 const PUBLIC_API_ROUTES = [
     '/api/auth/login',
     '/api/auth/verify',
+    '/api/ping',          // keep-alive health check — no auth needed
     '/api/temp-cleanup',
     '/api/recover-check',
     '/api/restore-june24',
