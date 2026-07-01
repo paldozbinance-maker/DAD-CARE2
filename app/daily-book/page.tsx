@@ -1479,11 +1479,11 @@ return (
                                                             <div key={i.customer_id} className="flex justify-between items-center text-[10px] md:text-xs font-bold p-1.5 hover:bg-emerald-500/10 rounded-lg transition-colors">
                                                                 <span className="text-foreground truncate mr-2">{i.customer?.name}</span>
                                                                 <span className="text-muted-foreground text-[10px] bg-background dark:bg-muted/50 px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1.5">
-                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d2), 'dd MMM')}</span>
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d2!), 'dd MMM')}</span>
                                                                     <span className="font-black text-foreground">0</span>
                                                                     <span className="opacity-40">→</span>
                                                                     <span className="font-black text-emerald-700 dark:text-emerald-400">{Math.round(i.kg)}</span>
-                                                                    <span className="text-[7.5px] opacity-80 font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">{format(new Date(d1), 'dd MMM')}</span>
+                                                                    <span className="text-[7.5px] opacity-80 font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">{format(new Date(d1!), 'dd MMM')}</span>
                                                                 </span>
                                                             </div>
                                                         ))}
@@ -1502,11 +1502,11 @@ return (
                                                             <div key={i.customer_id} className="flex justify-between items-center text-[10px] md:text-xs font-bold p-1.5 hover:bg-red-500/10 rounded-lg transition-colors">
                                                                 <span className="text-foreground truncate mr-2">{i.customer?.name}</span>
                                                                 <span className="text-muted-foreground text-[10px] bg-background dark:bg-muted/50 px-1.5 py-0.5 rounded border border-red-500/20 flex items-center gap-1.5">
-                                                                    <span className="text-[7.5px] opacity-80 font-bold uppercase tracking-widest text-red-700 dark:text-red-400">{format(new Date(d2), 'dd MMM')}</span>
+                                                                    <span className="text-[7.5px] opacity-80 font-bold uppercase tracking-widest text-red-700 dark:text-red-400">{format(new Date(d2!), 'dd MMM')}</span>
                                                                     <span className="font-black text-red-700 dark:text-red-400">{Math.round(i.kg)}</span>
                                                                     <span className="opacity-40">→</span>
                                                                     <span className="font-black text-foreground">0</span>
-                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d1), 'dd MMM')}</span>
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d1!), 'dd MMM')}</span>
                                                                 </span>
                                                             </div>
                                                         ))}
@@ -1525,11 +1525,11 @@ return (
                                                             <span className="text-foreground truncate mr-3">{i.cust?.name}</span>
                                                             <div className="flex items-center gap-3 shrink-0">
                                                                 <span className="text-muted-foreground text-[10px] bg-background dark:bg-muted/50 px-1.5 py-0.5 rounded border border-border/50 flex items-center gap-1.5">
-                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d2), 'dd MMM')}</span>
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d2!), 'dd MMM')}</span>
                                                                     <span className="font-black text-foreground">{Math.round(i.old)}</span>
                                                                     <span className="opacity-40">→</span>
                                                                     <span className="font-black text-foreground">{Math.round(i.new)}</span>
-                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d1), 'dd MMM')}</span>
+                                                                    <span className="text-[7.5px] opacity-60 uppercase tracking-widest">{format(new Date(d1!), 'dd MMM')}</span>
                                                                 </span>
                                                                 <span className={`w-[50px] shrink-0 text-center px-1.5 py-0.5 rounded ${i.diff > 0 ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/20 dark:bg-emerald-500/10' : 'text-red-700 dark:text-red-400 bg-red-500/20 dark:bg-red-500/10'}`}>
                                                                     {i.diff > 0 ? '+' : ''}{Math.round(i.diff)} KG
