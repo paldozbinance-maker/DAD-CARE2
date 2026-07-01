@@ -200,15 +200,25 @@ export default function DashboardPage() {
                                     <p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">
                                         Today&apos;s KG
                                     </p>
-                                    <p className="text-2xl md:text-3xl font-black text-primary tabular-nums mt-0.5">
-                                        {Math.round(data?.todayKg || 0)} <span className="text-sm font-bold text-primary/60">KG</span>
-                                    </p>
+                                    <div className="relative w-[130px] h-[36px] overflow-hidden mt-0.5">
+                                        <div className="animate-kinetic flex items-center w-max">
+                                            <p className="text-2xl md:text-3xl font-black text-primary tabular-nums animate-lightning">
+                                                ⚡ {Math.round(data?.todayKg || 0)} <span className="text-sm font-bold text-primary/60">KG</span>
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Active</p>
-                                <p className="text-lg font-black text-foreground">{data?.todayCustomerCount || 0}</p>
-                                <p className="text-[10px] text-muted-foreground">customers</p>
+                                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Active</p>
+                                <div className="relative w-[80px] h-[28px] overflow-hidden ml-auto">
+                                    <div className="animate-kinetic flex items-center w-max" style={{ animationDelay: '-1.5s' }}>
+                                        <p className="text-lg font-black text-foreground animate-lightning">
+                                            ⚡ {data?.todayCustomerCount || 0}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">customers</p>
                             </div>
                         </div>
                     </div>

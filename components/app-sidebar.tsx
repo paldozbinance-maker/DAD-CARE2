@@ -87,13 +87,15 @@ export function AppSidebar() {
                             {currentUser?.role ? currentUser.role.replace('_', ' ') : 'Business Ledger'}
                         </p>
                         {dates.standard && (
-                            <div className="flex flex-col gap-0.5">
-                                <p className="text-[9px] font-black tracking-widest uppercase text-primary/80 truncate">
-                                    {dates.standard}
-                                </p>
-                                <p className="text-[8.5px] font-bold tracking-widest uppercase text-emerald-600/80 dark:text-emerald-400/80 truncate">
-                                    {dates.hijri}
-                                </p>
+                            <div className="relative w-full max-w-[130px] h-[28px] overflow-hidden mt-0.5 border-t border-border/40 pt-1">
+                                <div className="animate-kinetic !flex-col !items-start !justify-center gap-0 w-max">
+                                    <p className="text-[9px] font-black tracking-widest uppercase text-primary/80 whitespace-nowrap animate-lightning">
+                                        📅 {dates.standard}
+                                    </p>
+                                    <p className="text-[8px] font-bold tracking-widest uppercase text-emerald-600/80 dark:text-emerald-400/80 whitespace-nowrap">
+                                        🌙 {dates.hijri}
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>
