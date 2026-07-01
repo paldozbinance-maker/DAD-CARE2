@@ -183,7 +183,6 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
             SELECT customer_id, SUM(amount) as total_paid
             FROM "Ledger"
             WHERE type = 'PAYMENT' AND deleted_at IS NULL
-            ${maxAllTimeDate ? `AND COALESCE(reference_date::date, created_at::date) <= '${maxAllTimeDate}'` : ''}
             GROUP BY customer_id
         ) p ON c.id = p.customer_id
         LEFT JOIN (

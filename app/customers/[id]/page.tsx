@@ -886,33 +886,34 @@ export default function CustomerDetailPage() {
                                             const owesColor = pct >= 50
                                                 ? 'bg-orange-500/15 text-orange-700 dark:text-orange-400'
                                                 : 'bg-red-500/15 text-red-700 dark:text-red-400';
+                                            
+                                            if (paymentsInReceipt === 0) return null;
+
                                             return (
-                                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                                    {/* % Paid badge */}
-                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-bold tracking-wider ${pct >= 100 ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-500' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>
-                                                        {pct}% Paid
-                                                    </span>
-                                                    {/* Diff badge */}
-                                                    {!isExact && (
-                                                        <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-black tracking-wider relative overflow-hidden ${
-                                                            isOverpaid
-                                                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                                                                : owesColor
-                                                        }`}>
-                                                            {isOverpaid
-                                                                ? `Kaso hartay -$${Math.abs(Math.round(diff))}`
-                                                                : `Ka dhiman +$${Math.abs(Math.round(diff))}`}
-                                                            {/* Subtle shimmer for Kaso hartay (overpaid = credit) */}
-                                                            {isOverpaid && (
-                                                                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-300/20 to-transparent animate-[shimmer_2s_infinite]" style={{backgroundSize:'200% 100%'}} />
-                                                            )}
+                                                <div className="mt-1.5 w-full h-[18px] overflow-hidden relative border-l-2 border-r-2 border-amber-400/40 dark:border-amber-500/30 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5 rounded shadow-[0_0_8px_rgba(251,191,36,0.15)]">
+                                                    <div className="inline-flex gap-4 w-max animate-kinetic px-2">
+                                                        {/* % Paid badge */}
+                                                        <span className={`text-[8px] font-black tracking-widest uppercase flex items-center gap-1 animate-lightning ${pct >= 100 ? 'text-emerald-600 dark:text-emerald-400' : pct >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                            ⚡ {pct}% Paid
                                                         </span>
-                                                    )}
-                                                    {isExact && pct >= 100 && (
-                                                        <span className="text-[8px] px-1.5 py-0.5 rounded-sm font-black bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
-                                                            ✓ Exact
-                                                        </span>
-                                                    )}
+                                                        {/* Diff badge */}
+                                                        {!isExact && (
+                                                            <span className={`text-[8px] font-black tracking-widest uppercase flex items-center gap-1 animate-lightning ${
+                                                                isOverpaid
+                                                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                                                    : (pct >= 50 ? 'text-orange-600 dark:text-orange-400' : 'text-red-600 dark:text-red-400')
+                                                            }`}>
+                                                                ⚡ {isOverpaid
+                                                                    ? `Kaso hartay -$${Math.abs(Math.round(diff))}`
+                                                                    : `Ka dhiman +$${Math.abs(Math.round(diff))}`}
+                                                            </span>
+                                                        )}
+                                                        {isExact && pct >= 100 && (
+                                                            <span className="text-[8px] font-black tracking-widest uppercase flex items-center gap-1 animate-lightning text-emerald-600 dark:text-emerald-400">
+                                                                ⚡ ✓ Exact
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })()}

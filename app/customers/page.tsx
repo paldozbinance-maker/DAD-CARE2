@@ -480,6 +480,7 @@ export default function CustomersPage() {
                                                 const icon = showAllTime ? <Globe className="w-2.5 h-2.5" /> : <CalendarDays className="w-2.5 h-2.5" />;
                                                 const label = showAllTime ? 'All Time' : '';
 
+                                                if (filterType === 'default') return null;
                                                 if (total <= 0 && allTimeTotal <= 0) return null;
 
                                                 return (

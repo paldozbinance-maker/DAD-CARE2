@@ -270,3 +270,29 @@ main {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+/* Kinetic Typography and Lightning */
+@keyframes kinetic-fluid {
+  0%, 10% { left: 0%; transform: translateX(0%); }
+  90%, 100% { left: 100%; transform: translateX(-100%); }
+}
+
+.animate-kinetic {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  animation: kinetic-fluid 5s ease-in-out infinite alternate;
+}
+
+@keyframes lightning {
+  0%, 94%, 98%, 100% { filter: brightness(1) drop-shadow(0 0 0px transparent); }
+  95% { filter: brightness(1.5) drop-shadow(0 0 4px #fbbf24); }
+  96% { filter: brightness(2) drop-shadow(0 0 8px #fbbf24); }
+  97% { filter: brightness(1.5) drop-shadow(0 0 4px #fbbf24); }
+}
+
+.animate-lightning {
+  animation: lightning 3s infinite;
+}
