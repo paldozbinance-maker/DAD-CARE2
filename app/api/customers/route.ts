@@ -247,14 +247,14 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+            res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
             return res;
         }
 
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

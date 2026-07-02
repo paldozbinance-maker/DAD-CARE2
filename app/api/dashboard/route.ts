@@ -207,7 +207,7 @@ export async function GET(request: Request) {
         const response = NextResponse.json(data);
         // Allow browsers to cache the dashboard for 30s, then silently refresh in background.
         // This makes repeat visits within 30s feel instant.
-        response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
         return response;
 
     } catch (error: any) {

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
+// Import XLSX dynamically when needed
 import { ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
 
 interface CustomerStats {
@@ -136,6 +136,7 @@ export default function ReportsPage() {
                     'Debt ($)': Number(c.currentDebt.toFixed(2)),
                 }));
 
+            const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
 
             const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);

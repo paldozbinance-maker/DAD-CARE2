@@ -1,7 +1,6 @@
-import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 
-interface ReceiptEntry {
+export interface ReceiptEntry {
     type: 'PRODUCT' | 'PAYMENT' | 'ADJUSTMENT';
     reference_date: string;
     kg?: number;
@@ -10,7 +9,7 @@ interface ReceiptEntry {
     note?: string;
 }
 
-interface ReceiptData {
+export interface ReceiptData {
     customerName: string;
     customerCode: string;
     titleString: string;
@@ -22,7 +21,10 @@ interface ReceiptData {
     closingBalance: number;
 }
 
-export function generateReceiptPDF(data: ReceiptData): jsPDF {
+// import jsPDF from 'jspdf'; removed for dynamic import
+
+export async function generateReceiptPDF(data: ReceiptData): Promise<any> {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -205,8 +207,8 @@ export function generateReceiptPDF(data: ReceiptData): jsPDF {
     return doc;
 }
 
-export function downloadReceiptPDF(data: ReceiptData) {
-    const doc = generateReceiptPDF(data);
+export async function downloadReceiptPDF(data: ReceiptData) {
+    const doc = await generateReceiptPDF(data);
     doc.save(`receipt-${data.customerCode}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
 }
 

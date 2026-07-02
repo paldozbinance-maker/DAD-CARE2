@@ -378,9 +378,9 @@ export default function CustomerDetailPage() {
         );
     };
 
-    const { data: allCustomers } = useSWR<Customer[]>('/api/customers', fetcher, {
+    const { data: allCustomers } = useSWR<Customer[]>('/api/customers?lite=true', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 120000,   // 2 min — shared cache with other pages
+        dedupingInterval: 60000,
         keepPreviousData: true,
     });
     
@@ -391,8 +391,8 @@ export default function CustomerDetailPage() {
     
     const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 30000,    // 30s
-        keepPreviousData: true,     // Show old data while refreshing
+        dedupingInterval: 60000,
+        keepPreviousData: true,
     });
 
     // Sync SWR cache instantly to local state

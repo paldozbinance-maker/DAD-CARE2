@@ -46,11 +46,9 @@ export default function DashboardPage() {
     const [isExpanded, setIsExpanded] = useState(false);
     const [dates, setDates] = useState({ standard: '', hijri: '' });
 
-    // ⚡ SWR: Shows instantly from cache, silently refreshes every 30s in background
     const { data, isLoading } = useSWR<DashboardData>('/api/dashboard', fetcher, {
-        refreshInterval: 30000,       // Auto-refresh every 30 seconds
-        revalidateOnFocus: true,      // Refresh when user comes back to the tab
-        dedupingInterval: 10000,      // No duplicate requests within 10 seconds
+        revalidateOnFocus: false,     // Don't refresh on tab focus
+        dedupingInterval: 60000,      // Cache results for 1 minute
     });
 
     useEffect(() => {
