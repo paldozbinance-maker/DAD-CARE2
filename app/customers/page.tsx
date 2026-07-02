@@ -48,7 +48,7 @@ export default function CustomersPage() {
     const [showAllTimePct, setShowAllTimePct] = useState<Record<string, boolean>>({});
     const [maqalSearch, setMaqalSearch] = useState('');
 
-    const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: true, dedupingInterval: 5000 });
+    const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: false, dedupingInterval: 120000 });
 
     // Latest pair = latest pair with ≥20 customers who paid (the "qualified" latest)
     const latestPair = maqalPairs?.find(pair => parseInt(pair.payment_count) >= 20) || null;

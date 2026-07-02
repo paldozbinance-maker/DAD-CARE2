@@ -206,7 +206,7 @@ export async function GET(request: Request) {
                 lastTransactionType: s.last_transaction_type || null,
             }
         });
-        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
         return response;
     } catch (error: any) {
         console.error('Fetch Ledger Error:', error);
