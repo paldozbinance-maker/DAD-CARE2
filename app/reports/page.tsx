@@ -101,7 +101,7 @@ export default function ReportsPage() {
 
     const performanceRanked = [...customers].sort((a, b) => b.performanceScore - a.performanceScore);
 
-    const handleExport = () => {
+    const handleExport = async () => {
         try {
             // Summary sheet data
             const summaryData = [
