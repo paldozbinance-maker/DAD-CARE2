@@ -366,22 +366,23 @@ export async function PATCH(request: Request) {
     const id = searchParams.get('id');
     const body = await request.json();
     const { name, gender, phone, customer_code } = body;
-    const supabase = await createClient();
 
     try {
-        const { data, error } = await supabase
-            .from('Customer')
-            .update({
-                name,
-                customer_code,
-                gender: gender || null,
-                phone: phone || null
-            })
-            .eq('id', id)
-            .select()
-            .single();
+        const query = `
+            UPDATE "Customer"
+            SET name = $1, customer_code = $2, gender = $3, phone = $4
+            WHERE id = $5
+            RETURNING *;
+        `;
+        const values = [name, customer_code, gender || null, phone || null, id];
+        const { rows } = await pool.query(query, values);
 
-        if (error) throw error;
+        if (rows.length === 0) {
+            throw new Error('Customer not found');
+        }
+
+        const data = rows[0];
+
         await logAudit(request, 'UPDATE_CUSTOMER', `Updated customer ${name} (${customer_code})`);
         return NextResponse.json(data);
     } catch (error: any) {
