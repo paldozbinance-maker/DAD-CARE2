@@ -198,6 +198,12 @@ export default function LedgerPage() {
     const [showLastMaqal, setShowLastMaqal] = useState(false);
     const [updateLastMaqal, setUpdateLastMaqal] = useState(false);
     const [isVoiding, setIsVoiding] = useState(false);
+    // Holds the actual post-save balance returned by the API so the new maqal
+    // reesto preview is correct before SWR re-fetches the ledger.
+    const [freshBalance, setFreshBalance] = useState<number | null>(null);
+    // Once the user saves payments on the old maqal, hide the toggle button so
+    // the new maqal form stays clean and uninterrupted.
+    const [oldMaqalDone, setOldMaqalDone] = useState(false);
     
     // Custom select state
     const [customerSearch, setCustomerSearch] = useState('');
@@ -393,6 +399,8 @@ export default function LedgerPage() {
         setExpandedExtraEntryIds(new Set());
         setStartDate('');
         setAllUnprocessedDates([]);
+        setFreshBalance(null);
+        setOldMaqalDone(false);
     };
 
     const sortedCustomers = useMemo(() => {
@@ -632,7 +640,10 @@ export default function LedgerPage() {
         return sum;
     }, 0);
 
-    const currentReesto = summary.currentBalance === 0 ? (parseFloat(adjustmentAmount) || 0) : summary.currentBalance;
+    // Use freshBalance (post-save API response) when available so the new maqal
+    // reesto is correct before SWR finishes re-fetching the ledger.
+    const effectiveBalance = freshBalance !== null ? freshBalance : summary.currentBalance;
+    const currentReesto = effectiveBalance === 0 ? (parseFloat(adjustmentAmount) || 0) : effectiveBalance;
     const subtotal = productGrandTotal - activeAdjustmentsAmount + currentReesto;
     const finalLacagtaGuud = subtotal - activePaymentAmount;
 
@@ -664,7 +675,7 @@ export default function LedgerPage() {
             return (p.date || isAdjustment) && parseFloat(p.amount) > 0;
         });
 
-        const hasAdjustment = !isReadOnlyMode && summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0;
+        const hasAdjustment = !isReadOnlyMode && effectiveBalance === 0 && parseFloat(adjustmentAmount) > 0;
 
         if (validEntries.length === 0 && validPayments.length === 0 && !hasAdjustment) {
             toast.error(isReadOnlyMode ? 'Add a payment amount first' : 'No valid data to save');
@@ -770,8 +781,19 @@ export default function LedgerPage() {
             // Workflow Auto-Transition:
             // If they just saved payments for the old maqal, seamlessly flip to the NEW maqal mode!
             if (isReadOnlyMode) {
+                // Store the post-payment balance so the new maqal reesto is correct
+                // before SWR re-fetches the ledger (avoids stale 702 showing instead of 222).
+                if (data.finalDebt !== undefined) {
+                    setFreshBalance(data.finalDebt);
+                }
                 setShowLastMaqal(false);
                 setUpdateLastMaqal(false);
+                // Mark old maqal as done — hide the toggle button so the new maqal
+                // form is clean and uninterrupted.
+                setOldMaqalDone(true);
+            } else {
+                // For a normal new maqal save, clear freshBalance so we rely on SWR again.
+                setFreshBalance(null);
             }
 
             const url = new URL(`/api/customer-daily-entries`, window.location.origin);
@@ -903,7 +925,7 @@ export default function LedgerPage() {
                                                 Current Balance: ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
                                                 {summary.currentBalance > 0 ? " (OWED)" : " (CREDIT)"}
                                             </div>
-                                            {history.length > 0 && (
+                                            {history.length > 0 && !oldMaqalDone && (
                                                 <Button type="button" variant="outline" size="sm" onClick={() => {
                                                     const nextShow = !showLastMaqal;
                                                     setShowLastMaqal(nextShow);
@@ -1595,10 +1617,10 @@ export default function LedgerPage() {
                                                         </div>
 
                                                         {/* Reesto (Carry-over Balance) */}
-                                                        {(currentReesto !== 0 || summary.currentBalance === 0) && (
+                                                        {(currentReesto !== 0 || effectiveBalance === 0) && (
                                                             <div className="flex justify-between items-center py-1.5 border-b border-border/40">
                                                                 <span className={cn("font-bold", currentReesto < 0 ? "text-emerald-600" : "text-destructive/80")}>{currentReesto < 0 ? 'Heyn' : 'Reesto'}</span>
-                                                                {summary.currentBalance === 0 ? (
+                                                                {effectiveBalance === 0 ? (
                                                                     <Input
                                                                         type="number"
                                                                         value={adjustmentAmount}
