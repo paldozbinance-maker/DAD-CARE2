@@ -178,7 +178,6 @@ export default function LedgerPage() {
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 120000,   // 2 min — customer list rarely changes
-        keepPreviousData: true,
     });
     const allCustomers = rawCustomers || [];
     
@@ -767,34 +766,35 @@ export default function LedgerPage() {
                 throw new Error(data.error || 'Failed to save receipt');
             }
 
-            // We are using Optimistic UI via SWR now. `mutateLedger` handles this.
+            // We are using Optimistic UI via SWR now.
             toast.success('Receipt saved successfully!');
+            
+            // Set blink effect
+            setFetchingDetails(true);
 
-            // 4. Refresh data (fast sync)
-            mutateCustomers();
-            mutateLedger();
+            // Always set the post-save balance so the reesto is correct instantly
+            if (data.finalDebt !== undefined) {
+                setFreshBalance(data.finalDebt);
+            }
+
+            // 4. Refresh data (fast sync) - await these to ensure they finish before removing blink
+            await Promise.all([
+                mutateCustomers(),
+                mutateLedger()
+            ]);
             
             setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
             setPaymentEntries([{ id: (Date.now() + 1).toString(), date: '', amount: '' }]);
             setAdjustmentAmount('');
             
             // Workflow Auto-Transition:
-            // If they just saved payments for the old maqal, seamlessly flip to the NEW maqal mode!
             if (isReadOnlyMode) {
-                // Store the post-payment balance so the new maqal reesto is correct
-                // before SWR re-fetches the ledger (avoids stale 702 showing instead of 222).
-                if (data.finalDebt !== undefined) {
-                    setFreshBalance(data.finalDebt);
-                }
                 setShowLastMaqal(false);
                 setUpdateLastMaqal(false);
-                // Mark old maqal as done — hide the toggle button so the new maqal
-                // form is clean and uninterrupted.
                 setOldMaqalDone(true);
-            } else {
-                // For a normal new maqal save, clear freshBalance so we rely on SWR again.
-                setFreshBalance(null);
             }
+            
+            setFetchingDetails(false); // End blink effect
 
             const url = new URL(`/api/customer-daily-entries`, window.location.origin);
             url.searchParams.set('customerId', selectedCustomerId);

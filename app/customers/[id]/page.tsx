@@ -227,6 +227,12 @@ export default function CustomerDetailPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to delete receipt');
+            
+            // Optimistic UI update: instantly remove the deleted receipt from state
+            const remainingTxns = transactions.filter(t => !transactionIds.includes(t.id));
+            setTransactions(remainingTxns);
+            setReceipts(groupTransactionsInfoReceipts(remainingTxns));
+            
             toast.success('Receipt successfully deleted and balance recalculated.');
             loadCustomerData(true);
         } catch (err: any) {
@@ -392,7 +398,7 @@ export default function CustomerDetailPage() {
     const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
-        keepPreviousData: true,
+        // Removed keepPreviousData: true so we don't flash stale UI on hard refresh
     });
 
     // Sync SWR cache instantly to local state
@@ -420,7 +426,10 @@ export default function CustomerDetailPage() {
             setHasMore(true);
             setLoading(true);
         }
-        mutateLedger();
+        // Pass a timestamp to the base url via SWR cache busting
+        const cacheBusterUrl = baseLedgerUrl + (baseLedgerUrl.includes('?') ? '&' : '?') + `t=${Date.now()}`;
+        const freshData = await fetcher(cacheBusterUrl);
+        mutateLedger(freshData);
     };
 
     const loadMore = async () => {
