@@ -466,7 +466,10 @@ export default function CustomerDetailPage() {
         try {
             const res = await fetch(`/api/customers?id=${customerId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-session-token': localStorage.getItem('dadwork_session_token') || ''
+                },
                 body: JSON.stringify({
                     name: editName,
                     phone: editPhone,
