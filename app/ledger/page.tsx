@@ -920,10 +920,10 @@ export default function LedgerPage() {
                                         <div className="flex flex-col items-end gap-1.5">
                                             <div className={cn(
                                                 "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter border animate-in fade-in zoom-in duration-300",
-                                                summary.currentBalance > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                                effectiveBalance > 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                                             )}>
-                                                Current Balance: ${Math.abs(Math.round(summary.currentBalance)).toLocaleString()}
-                                                {summary.currentBalance > 0 ? " (OWED)" : " (CREDIT)"}
+                                                Current Balance: ${Math.abs(Math.round(effectiveBalance)).toLocaleString()}
+                                                {effectiveBalance > 0 ? " (OWED)" : " (CREDIT)"}
                                             </div>
                                             {history.length > 0 && !oldMaqalDone && (
                                                 <Button type="button" variant="outline" size="sm" onClick={() => {
@@ -1649,7 +1649,7 @@ export default function LedgerPage() {
                                                         ))}
 
                                                         {/* Subtotal */}
-                                                        {(productGrandTotal > 0 || (summary.currentBalance === 0 && parseFloat(adjustmentAmount) > 0) || activeAdjustmentsAmount > 0) && (
+                                                        {(productGrandTotal > 0 || effectiveBalance !== 0 || activeAdjustmentsAmount > 0) && (
                                                             <div className="flex justify-between py-1.5 border-b-2 border-border font-black text-foreground">
                                                                 <span className={subtotal < 0 ? 'text-emerald-600 dark:text-emerald-500' : ''}>{subtotal < 0 ? 'Heyn' : 'Lacagta Guud'}</span>
                                                                 <span className={subtotal < 0 ? 'text-emerald-600 dark:text-emerald-500' : ''}>${Math.abs(Math.round(subtotal)).toLocaleString()}</span>
