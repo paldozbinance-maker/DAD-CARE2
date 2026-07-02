@@ -385,7 +385,7 @@ export default function CustomerDetailPage() {
     });
     
     // Construct the base URL for the first page of ledger data
-    let baseLedgerUrl = `/api/ledger?customerId=${customerId}&limit=200&offset=0`;
+    let baseLedgerUrl = `/api/ledger?customerId=${customerId}&limit=30&offset=0`;
     if (startDate) baseLedgerUrl += `&startDate=${startDate}`;
     if (endDate) baseLedgerUrl += `&endDate=${endDate}`;
     
@@ -427,7 +427,7 @@ export default function CustomerDetailPage() {
         setLoadingMore(true);
         try {
             const nextOffset = transactions.length;
-            let url = `/api/ledger?customerId=${customerId}&limit=200&offset=${nextOffset}&t=${Date.now()}`;
+            let url = `/api/ledger?customerId=${customerId}&limit=30&offset=${nextOffset}&t=${Date.now()}`;
             if (startDate) url += `&startDate=${startDate}`;
             if (endDate) url += `&endDate=${endDate}`;
 
@@ -438,7 +438,7 @@ export default function CustomerDetailPage() {
                 const newTxns = [...transactions, ...ledgerData.transactions];
                 setTransactions(newTxns);
                 setReceipts(groupTransactionsInfoReceipts(newTxns));
-                setHasMore(ledgerData.transactions.length === 200);
+                setHasMore(ledgerData.transactions.length === 30);
             } else {
                 setHasMore(false);
             }
