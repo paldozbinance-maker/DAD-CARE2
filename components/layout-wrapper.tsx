@@ -42,7 +42,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         return () => unsub();
     }, [pathname, router]);
 
-    // Secret Background Fetcher for Audit Data
+    // Secret Background Fetcher for Audit Data (Run once on mount)
     useEffect(() => {
         if (currentUser?.role === 'SUPER_ADMIN') {
             const fetchBackgroundStats = async () => {
@@ -62,20 +62,11 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                         .then(data => {
                             if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
                         }).catch(() => {});
-                    
-                    // Prefetch audit logs silently
-                    fetch('/api/audit-logs?limit=200&stats=false', { headers: { 'x-session-token': token } })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.logs) localStorage.setItem('dadwork_audit_logs', JSON.stringify(data.logs));
-                            if (data.total) localStorage.setItem('dadwork_audit_total', String(data.total));
-                        }).catch(() => {});
                 } catch(e) {}
             };
             fetchBackgroundStats();
-            // Refresh in background every 60 seconds
-            const interval = setInterval(fetchBackgroundStats, 60000);
-            return () => clearInterval(interval);
+            // Removed 60s interval to prevent massive Vercel usage spikes.
+            // Settings page already uses Supabase Realtime for instant updates.
         }
     }, [currentUser]);
 

@@ -66,6 +66,7 @@ export function MobileNav() {
                                 <Link
                                     key={tab.href}
                                     href={tab.href}
+                                    prefetch={false}
                                     className={cn(
                                         'relative flex flex-col items-center justify-center gap-1 w-full h-full rounded-2xl transition-all duration-300 active:scale-90',
                                         isActive
@@ -165,6 +166,7 @@ export function MobileNav() {
                                     <Link
                                         key={item.href}
                                         href={item.href}
+                                        prefetch={false}
                                         onClick={() => setShowMore(false)}
                                         className={cn(
                                             'flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all active:scale-[0.98]',
