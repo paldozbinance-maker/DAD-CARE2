@@ -5,7 +5,6 @@ import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import bcrypt from 'bcryptjs';
 
-export const dynamic = 'force-dynamic';
 
 async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) {
     const query = `

@@ -2,7 +2,6 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { validateSession } from '@/lib/sessions-store';
 
-export const dynamic = 'force-dynamic';
 
 const getDashboardData = async (today: string) => {
     try {
