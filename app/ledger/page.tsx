@@ -863,6 +863,7 @@ export default function LedgerPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
             
+            setFreshBalance(null);
             mutateLedger();
             mutateCustomers();
             toast.success('Receipt voided successfully!');
