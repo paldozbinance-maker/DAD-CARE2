@@ -435,6 +435,7 @@ export default function CustomersPage() {
                                 <Link
                                     href={`/customers/${customer.id}`}
                                     key={customer.id}
+                                    prefetch={false}
                                     className={`group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors cursor-pointer ${performanceColor}`}
                                 >
                                     {/* Avatar */}
