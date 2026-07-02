@@ -24,7 +24,8 @@ export interface ReceiptData {
 // import jsPDF from 'jspdf'; removed for dynamic import
 
 export async function generateReceiptPDF(data: ReceiptData): Promise<any> {
-    const { default: jsPDF } = await import('jspdf');
+    const jsPDFModule = await import('jspdf');
+    const jsPDF = (jsPDFModule.default || jsPDFModule) as any;
     const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',

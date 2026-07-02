@@ -136,7 +136,7 @@ export default function ReportsPage() {
                     'Debt ($)': Number(c.currentDebt.toFixed(2)),
                 }));
 
-            const XLSX = await import('xlsx');
+            const XLSX = (await import('xlsx')) as any;
             const wb = XLSX.utils.book_new();
 
             const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
