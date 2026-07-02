@@ -309,6 +309,7 @@ export default function ReportsPage() {
                                         <Link
                                             key={customer.id}
                                             href={`/customers/${customer.id}`}
+                                            prefetch={false}
                                             className="flex items-center justify-between px-5 py-4 hover:bg-muted/40 transition-colors group"
                                         >
                                             <div className="flex items-center gap-4">
