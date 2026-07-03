@@ -22,6 +22,13 @@ const PUBLIC_API_ROUTES = [
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
+    // ── KILL-SWITCH FOR BOTS ─────────────────────────────────────────────────
+    // Instantly block bot traffic hitting old routes to save Vercel bandwidth
+    const BOT_PATHS = ['/blog', '/api/generate', '/api/blog', '/api/demo'];
+    if (BOT_PATHS.some(r => pathname === r || pathname.startsWith(r + '/'))) {
+        return new NextResponse(null, { status: 404 });
+    }
+
     // Allow all public page routes
     if (PUBLIC_PAGE_ROUTES.some(r => pathname === r || pathname.startsWith(r + '/'))) {
         return NextResponse.next();
