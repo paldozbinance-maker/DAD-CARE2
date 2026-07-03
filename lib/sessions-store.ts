@@ -88,7 +88,7 @@ export async function createSession(
 export async function validateSession(token: string): Promise<{ userId: string; username: string; role: string } | null> {
     try {
         await ensureTable();
-        // Combine SELECT + touch last_seen_at into a single round-trip
+        // Combine SELECT + touch last_seen_at into a single round-trip, AND join with User table to check is_active
         const { rows } = await pool.query(
             `WITH updated AS (
                 UPDATE "AdminSession"
@@ -96,11 +96,21 @@ export async function validateSession(token: string): Promise<{ userId: string; 
                 WHERE token = $1 AND expires_at > NOW()
                 RETURNING *
              )
-             SELECT * FROM updated LIMIT 1`,
+             SELECT updated.*, u.is_active 
+             FROM updated 
+             JOIN "User" u ON u.username = updated.username 
+             LIMIT 1`,
             [token]
         );
         if (!rows.length) return null;
         const r = rows[0];
+        
+        // Kick out inactive/deleted users immediately
+        if (r.is_active === false) {
+            await pool.query(`DELETE FROM "AdminSession" WHERE token = $1`, [token]);
+            return null;
+        }
+        
         return { userId: r.user_id, username: r.username, role: r.role };
     } catch {
         return null;

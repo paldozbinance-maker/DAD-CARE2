@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import { UserCog, Plus, Shield, User, Trash2, Search, UserPlus } from 'lucide-react';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
+import { PriorityTracker } from '@/components/priority-tracker';
 
 interface UserData {
     id: string;
@@ -182,7 +183,9 @@ export default function UsersPage() {
                         {loading ? 'Loading...' : `${users.length} users registered`}
                     </p>
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <div className="flex items-center gap-3">
+                    <PriorityTracker />
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
                         <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20">
                             <Plus className="w-4 h-4 mr-2" />
@@ -254,6 +257,7 @@ export default function UsersPage() {
                         </div>
                     </DialogContent>
                 </Dialog>
+                </div>
             </div>
 
             {/* Search */}

@@ -217,6 +217,7 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
         LEFT JOIN latest_payment_stats lps ON c.id = lps.customer_id
         LEFT JOIN selected_maqal_stats sms ON c.id = sms.customer_id
         LEFT JOIN selected_payment_stats sps ON c.id = sps.customer_id
+        WHERE c.deleted_at IS NULL
         ORDER BY c.name ASC;
     `;
 
@@ -242,6 +243,7 @@ export async function GET(request: Request) {
                         (SELECT new_debt FROM "Ledger" WHERE customer_id = c.id AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1), 
                     0)::float as current_balance
                 FROM "Customer" c
+                WHERE c.deleted_at IS NULL
                 ORDER BY c.customer_code ASC;
             `;
             const { rows } = await pool.query(query);
@@ -322,36 +324,38 @@ export async function DELETE(request: Request) {
     const supabase = await createClient();
 
     try {
-        // First, delete all DailyBookItem records that reference this customer
+        const timestamp = new Date().toISOString();
+
+        // First, soft delete all DailyBookItem records that reference this customer
         const { error: dailyBookItemError } = await supabase
             .from('DailyBookItem')
-            .delete()
+            .update({ deleted_at: timestamp })
             .eq('customer_id', id);
 
         if (dailyBookItemError) {
-            console.error('Delete DailyBookItem Error:', dailyBookItemError);
+            console.error('Soft delete DailyBookItem Error:', dailyBookItemError);
             throw dailyBookItemError;
         }
 
-        // Then, delete all Ledger records that reference this customer
+        // Then, soft delete all Ledger records that reference this customer
         const { error: ledgerError } = await supabase
             .from('Ledger')
-            .delete()
+            .update({ deleted_at: timestamp })
             .eq('customer_id', id);
 
         if (ledgerError) {
-            console.error('Delete Ledger Error:', ledgerError);
+            console.error('Soft delete Ledger Error:', ledgerError);
             throw ledgerError;
         }
 
-        // Finally, delete the customer
+        // Finally, soft delete the customer
         const { error } = await supabase
             .from('Customer')
-            .delete()
+            .update({ deleted_at: timestamp })
             .eq('id', id);
 
         if (error) throw error;
-        await logAudit(request, 'DELETE_CUSTOMER', `Deleted customer ID: ${id}`);
+        await logAudit(request, 'DELETE_CUSTOMER', `Soft deleted customer ID: ${id}`);
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Delete Customer Error:', error);
