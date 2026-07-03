@@ -255,7 +255,8 @@ export async function GET(request: Request) {
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'no-store, max-age=0');
+        // Cache at the Vercel Edge for 30 seconds to massively reduce Serverless Execution and Database Bandwidth
+        res.headers.set('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);
