@@ -23,6 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createClient } from '@/lib/supabase/client';
 import { logout } from '@/lib/session';
 import { subscribeToDailyDates } from '@/lib/hijri-date';
+import { PriorityTracker } from '@/components/priority-tracker';
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -138,6 +139,11 @@ export function AppSidebar() {
 
             {/* Footer */}
             <div className="border-t border-sidebar-border/50 p-3 space-y-1">
+                {/* Priority Tracker */}
+                <div className="mb-4 flex justify-center">
+                    <PriorityTracker />
+                </div>
+
                 {/* Theme Toggle */}
                 <Button
                     variant="ghost"
