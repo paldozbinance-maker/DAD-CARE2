@@ -140,6 +140,24 @@ export default function CustomerDetailPage() {
     const isAtLeastAdmin = session?.role === 'SUPER_ADMIN' || session?.role === 'ADMIN';
     const isSuperAdmin = session?.role === 'SUPER_ADMIN';
 
+    // Latest maqal pair status for this customer
+    const [maqalStatus, setMaqalStatus] = useState<{ date1: string; date2: string; has_payment: boolean } | null>(null);
+
+    useEffect(() => {
+        const token = localStorage.getItem('dadwork_session_token') || '';
+        fetch('/api/maqal-latest', { headers: { 'x-session-token': token } })
+            .then(r => r.json())
+            .then(data => {
+                if (data?.customers && customerId) {
+                    const match = data.customers.find((c: any) => c.id === customerId);
+                    if (match) {
+                        setMaqalStatus({ date1: data.date1, date2: data.date2, has_payment: match.has_payment });
+                    }
+                }
+            })
+            .catch(() => {});
+    }, [customerId]);
+
     // Pagination & Filter State
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -765,7 +783,23 @@ export default function CustomerDetailPage() {
             </div>
 
             {/* 2. COMPACT PROFILE CARD */}
-            <Card className="glass-card overflow-hidden border">
+            <Card className="glass-card overflow-hidden border relative">
+                {/* Non-clickable maqal status corner badge */}
+                {maqalStatus && (
+                    <div className={`absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black border pointer-events-none select-none ${
+                        maqalStatus.has_payment
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                    }`}>
+                        {!maqalStatus.has_payment && (
+                            <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+                            </span>
+                        )}
+                        {maqalStatus.has_payment ? '✓' : '!'} Maqal
+                    </div>
+                )}
                 <CardContent className="p-2.5 sm:p-3">
                     <div className="flex items-center gap-2.5">
                         <Avatar className="h-10 w-10 border-2 border-background shadow shrink-0">

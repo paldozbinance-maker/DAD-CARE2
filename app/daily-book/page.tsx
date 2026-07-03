@@ -104,6 +104,8 @@ function DailyBookPageInner() {
     const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [pendingDeleteCustomerId, setPendingDeleteCustomerId] = useState<string | null>(null);
+    const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
     const [openNoteForCustomerId, setOpenNoteForCustomerId] = useState<string | null>(null);
     const [absentPopupData, setAbsentPopupData] = useState<{ date: string; items: DailyBookItem[] } | null>(null);
     const [vipPopupData, setVipPopupData] = useState<{ date: string; items: DailyBookItem[] } | null>(null);
@@ -345,6 +347,28 @@ function DailyBookPageInner() {
         }
     };
 
+    const handleSoftDeleteCustomer = async () => {
+        if (!pendingDeleteCustomerId) return;
+        setIsDeletingCustomer(true);
+        try {
+            const token = localStorage.getItem('dadwork_session_token') || '';
+            const res = await fetch(`/api/customers?id=${pendingDeleteCustomerId}`, {
+                method: 'DELETE',
+                headers: { 'x-session-token': token },
+            });
+            if (!res.ok) throw new Error(await res.text());
+            // Remove from local customer list (soft delete — history remains intact)
+            setCustomers(prev => prev.filter(c => c.id !== pendingDeleteCustomerId));
+            toast.success('Customer removed from Daily Book. Their history is preserved.');
+            setPendingDeleteCustomerId(null);
+            mutateInit(); // Refresh the init data
+        } catch (err: any) {
+            toast.error('Failed to remove customer: ' + (err.message || 'Server error'));
+        } finally {
+            setIsDeletingCustomer(false);
+        }
+    };
+
     const handleExportBackup = async () => {
         try {
             const { downloadDailyBookBackupPDF } = await import('@/lib/export-pdf');
@@ -432,6 +456,15 @@ function DailyBookPageInner() {
 }
 return (
         <div className="space-y-6 max-w-4xl mx-auto px-1 md:px-0">
+            {/* Customer Soft-Delete Security Verification */}
+            <SecurityVerificationDialog
+                isOpen={!!pendingDeleteCustomerId}
+                onOpenChange={(open) => { if (!open) setPendingDeleteCustomerId(null); }}
+                onConfirm={handleSoftDeleteCustomer}
+                isProcessing={isDeletingCustomer}
+                title="Remove Customer"
+                description={`Remove this customer from the Daily Book? Their full history and profile will be preserved.`}
+            />
             {/* Header / Cover */}
             <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
                 {/* Decorative background elements */}
@@ -535,8 +568,17 @@ return (
                                 <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
                                     {sortedCustomers.map((customer, index) => (
                                         <div key={customer.id} className="grid grid-cols-12 items-center px-2 md:px-4 py-1.5 transition-colors hover:bg-blue-100/20 dark:hover:bg-slate-800/30 group border-b border-blue-50/50 dark:border-slate-800/30 last:border-0">
-                                            <div className="col-span-2 flex items-center justify-start">
+                                            <div className="col-span-2 flex items-center justify-start gap-1">
                                                 <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">#{customer.customer_code}</span>
+                                                {isSuperAdmin && (
+                                                    <button
+                                                        title="Remove customer from Daily Book (history preserved)"
+                                                        onClick={() => setPendingDeleteCustomerId(customer.id)}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-4 w-4 flex items-center justify-center rounded text-red-400/60 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0"
+                                                    >
+                                                        <Trash2 className="w-2.5 h-2.5" />
+                                                    </button>
+                                                )}
                                             </div>
                                             <div className="col-span-5 flex flex-col justify-center pl-4 border-l border-red-200/50 dark:border-red-900/30">
                                                 <div className="relative inline-flex items-center gap-1.5 w-fit max-w-full">
@@ -659,8 +701,17 @@ return (
                                 <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
                                     {sortedCustomers.map((customer, index) => (
                                         <div key={customer.id} className="grid grid-cols-12 items-center px-2 md:px-4 py-1 transition-colors hover:bg-blue-100/20 dark:hover:bg-slate-800/30 group border-b border-blue-50/50 dark:border-slate-800/30 last:border-0 relative">
-                                            <div className="col-span-2 flex items-center justify-start">
+                                            <div className="col-span-2 flex items-center justify-start gap-1">
                                                 <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">#{customer.customer_code}</span>
+                                                {isSuperAdmin && (
+                                                    <button
+                                                        title="Remove customer from Daily Book (history preserved)"
+                                                        onClick={() => setPendingDeleteCustomerId(customer.id)}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-4 w-4 flex items-center justify-center rounded text-red-400/60 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0"
+                                                    >
+                                                        <Trash2 className="w-2.5 h-2.5" />
+                                                    </button>
+                                                )}
                                             </div>
                                             <div className="col-span-5 flex flex-col justify-center pl-4 border-l border-red-200/50 dark:border-red-900/30">
                                                 <div className="relative inline-flex items-center gap-1.5 w-fit max-w-full">
