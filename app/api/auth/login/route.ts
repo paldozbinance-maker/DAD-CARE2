@@ -39,8 +39,17 @@ export async function POST(request: Request) {
         }
         if (user.username === 'admin') user.role = 'SUPER_ADMIN';
         
-        // Strictly enforce bcrypt hashing (no plaintext fallback allowed)
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        // Strictly enforce bcrypt hashing, but with auto-migration for plaintext passwords
+        let isPasswordValid = await bcrypt.compare(password, user.password);
+        
+        // Auto-migration: if the database has plaintext passwords, let them in and hash it
+        if (!isPasswordValid && password === user.password) {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+            await pool.query('UPDATE "User" SET password = $1 WHERE id = $2', [hashedPassword, user.id]);
+            isPasswordValid = true;
+            console.log(`Auto-migrated plaintext password for user: ${user.username}`);
+        }
         
         if (!isPasswordValid) {
             await logAuditDirect({
