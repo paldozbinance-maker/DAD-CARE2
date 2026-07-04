@@ -1,20 +1,25 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import fs from 'fs';
-import path from 'path';
+import { requireSession } from '@/lib/require-session';
 
-export const fetchCache = 'force-no-store';
+export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    // Only superadmin can run backup — prevents accidental egress spikes
+    const { session, errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    if (session?.role !== 'ADMIN') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     try {
-        console.log('Attempting to extract data from Supabase...');
-
-        // Query all important tables
-        const [usersRes, customersRes, ledgerRes, dailyBookRes] = await Promise.all([
-            pool.query('SELECT * FROM "User"'),
-            pool.query('SELECT * FROM "Customer"'),
-            pool.query('SELECT * FROM "Ledger"'),
-            pool.query('SELECT * FROM "DailyBook"')
+        // Fetch only the columns needed — avoids downloading avatar_url blobs etc.
+        const [usersRes, customersRes, ledgerRes, dailyBookRes, dailyBookItemsRes] = await Promise.all([
+            pool.query('SELECT id, username, name, role, is_active, phone, created_at FROM "User"'),
+            pool.query('SELECT id, customer_code, name, created_at FROM "Customer"'),
+            pool.query('SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, created_at FROM "Ledger" WHERE deleted_at IS NULL'),
+            pool.query('SELECT id, date, created_at FROM "DailyBook" WHERE deleted_at IS NULL'),
+            pool.query('SELECT id, daily_book_id, customer_id, kg, present, note FROM "DailyBookItem"'),
         ]);
 
         const backupData = {
@@ -22,31 +27,25 @@ export async function GET() {
             customers: customersRes.rows,
             ledger: ledgerRes.rows,
             dailyBook: dailyBookRes.rows,
+            dailyBookItems: dailyBookItemsRes.rows,
             timestamp: new Date().toISOString()
         };
 
-        // Save to a local file in the project folder
-        const backupPath = path.join(process.cwd(), 'database_backup_safe.json');
-        fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
-
         return NextResponse.json({
             success: true,
-            message: 'Data successfully extracted and saved locally!',
-            file: backupPath,
+            message: 'Backup successful!',
             counts: {
                 users: backupData.users.length,
                 customers: backupData.customers.length,
                 ledger: backupData.ledger.length,
-                dailyBook: backupData.dailyBook.length
-            }
+                dailyBook: backupData.dailyBook.length,
+                dailyBookItems: backupData.dailyBookItems.length,
+            },
+            data: backupData,
         });
 
     } catch (error: any) {
         console.error('Backup Failed:', error);
-        return NextResponse.json({
-            success: false,
-            error: error.message,
-            hint: 'If the database connection is completely paused by Supabase, it will refuse connections.'
-        }, { status: 500 });
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

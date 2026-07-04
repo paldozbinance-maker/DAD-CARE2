@@ -174,7 +174,7 @@ export async function GET(request: Request) {
         // Single parallel query: transactions + summary in one round-trip
         const [txnResult, summaryResult] = await Promise.all([
             pool.query(
-                `SELECT * FROM "Ledger"
+                `SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, created_at FROM "Ledger"
                  WHERE customer_id = $1 AND deleted_at IS NULL ${dateClause}
                  ORDER BY created_at DESC, id DESC
                  LIMIT ${limit} OFFSET ${offset}`,
