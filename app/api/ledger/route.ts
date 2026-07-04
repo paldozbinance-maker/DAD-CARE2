@@ -101,7 +101,7 @@ export async function POST(request: Request) {
                     new_debt: runningDebt,
                     note: note || body.note || null,
                     receipt_id: receipt_id,
-                    created_at: new Date(now.getTime() + i).toISOString()
+                    created_at: new Date(now.getTime() + (i * 1000)).toISOString()
                 });
             }
 
