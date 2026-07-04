@@ -176,12 +176,24 @@ function DailyBookPageInner() {
         }
     }, [bookData]);
 
+    // Helper to attach customer objects locally to save massive API bandwidth
+    const populateHistoryWithCustomers = (historyArray: any[]) => {
+        if (!historyArray || !Array.isArray(historyArray)) return [];
+        return historyArray.map(entry => ({
+            ...entry,
+            items: entry.items.map((item: any) => ({
+                ...item,
+                customer: customers.find(c => c.id === item.customer_id) || item.customer
+            }))
+        }));
+    };
+
     // Sync SWR History Data to Local State
     useEffect(() => {
         if (Array.isArray(historyData)) {
-            setSavedEntries(historyData);
+            setSavedEntries(populateHistoryWithCustomers(historyData));
         }
-    }, [historyData]);
+    }, [historyData, customers]);
 
     // Force load history on mount to guarantee it loads
     useEffect(() => {
@@ -191,7 +203,7 @@ function DailyBookPageInner() {
                 if (res.ok) {
                     const data = await res.json();
                     if (Array.isArray(data)) {
-                        setSavedEntries(data);
+                        setSavedEntries(populateHistoryWithCustomers(data));
                     }
                 }
             } catch (err) {
@@ -199,7 +211,8 @@ function DailyBookPageInner() {
             }
         }
         fetchHistoryDirectly();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [customers]);
 
     // Sync SWR Ledger Status to Local State
     useEffect(() => {
@@ -229,7 +242,7 @@ function DailyBookPageInner() {
             const res = await fetch('/api/daily-book-history');
             const data = await res.json();
             if (res.ok && Array.isArray(data)) {
-                setSavedEntries(data);
+                setSavedEntries(populateHistoryWithCustomers(data));
             }
         } catch (e) {
             console.error('Failed to load history', e);

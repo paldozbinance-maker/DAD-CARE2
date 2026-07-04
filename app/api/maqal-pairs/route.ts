@@ -94,7 +94,9 @@ export async function GET(request: NextRequest) {
         
         const result = await pool.query(query);
         
-        return NextResponse.json(result.rows);
+        const res = NextResponse.json(result.rows);
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        return res;
     } catch (error: any) {
         console.error('Error fetching maqal pairs:', error);
         return NextResponse.json({ error: error.message || 'Internal Server Error', stack: error.stack }, { status: 500 });

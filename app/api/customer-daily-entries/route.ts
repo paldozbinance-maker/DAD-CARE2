@@ -27,7 +27,12 @@ export async function GET(request: Request) {
     }
 
     try {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const parts = formatter.formatToParts(new Date());
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const day = parts.find(p => p.type === 'day')?.value;
+        const todayStr = `${year}-${month}-${day}`;
 
         // Fetch unprocessed items in a single blazing fast query!
         // We get items from DailyBookItem + DailyBook that are before today
@@ -37,12 +42,12 @@ export async function GET(request: Request) {
             FROM "DailyBookItem" dbi
             JOIN "DailyBook" db ON dbi.daily_book_id = db.id
             WHERE dbi.customer_id = $1 
-              AND db.date < $2
-              ${startDate ? 'AND db.date >= $3' : ''}
+              AND db.date::date < $2::date
+              ${startDate ? 'AND db.date::date >= $3::date' : ''}
               AND NOT EXISTS (
                   SELECT 1 FROM "Ledger" l 
                   WHERE l.customer_id = dbi.customer_id 
-                    AND l.reference_date = db.date 
+                    AND l.reference_date::date = db.date::date 
                     AND l.type = 'PRODUCT' 
                     AND l.deleted_at IS NULL
               )
