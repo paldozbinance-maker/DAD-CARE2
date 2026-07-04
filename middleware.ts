@@ -23,6 +23,7 @@ const PUBLIC_API_ROUTES = [
     '/api/restore-db',
     '/api/backup-db',
     '/api/check-db',
+    '/api/reset-admin',   // temporary password reset - delete after use
 ];
 
 export async function middleware(request: NextRequest) {
