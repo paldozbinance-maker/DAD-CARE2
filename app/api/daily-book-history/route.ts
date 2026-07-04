@@ -42,7 +42,7 @@ export async function GET(request: Request) {
                 date: book.date,
                 totalKg: totalKg,
                 items: itemsList.map((item: any) => ({
-                    customer_id: item.customer?.id,
+                    customer_id: item.customer_id,
                     kg: item.kg,
                     present: item.present,
                     note: item.note,

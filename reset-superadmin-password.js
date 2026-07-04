@@ -10,7 +10,7 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
 // ─── CONFIGURE YOUR NEW PASSWORD HERE ─────────────────────────────────────────
-const NEW_PASSWORD = 'paldoz123';  // ← change this to whatever you want
+const NEW_PASSWORD = 'srk9043';  // ← change this to whatever you want
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DATABASE_URL =
