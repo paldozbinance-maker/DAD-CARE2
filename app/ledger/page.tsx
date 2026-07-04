@@ -101,12 +101,19 @@ const parseHeshiish = (note: string) => {
 const buildEntryFromDailyRecord = (
     id: string,
     record: DailyBookRecord,
-    defaultPrice: string
+    defaultPrice: string,
+    dateSpecificPrices?: Record<string, string>
 ): { entry: DateEntry; shouldExpandExtra: boolean } => {
     let kg = record.kg ? record.kg.toString() : '0';
-    let pricePerKg = defaultPrice;
+    
+    // Apply date-specific price if available, otherwise fallback to global default
+    const entryDateKey = record.date ? record.date.substring(0, 10) : '';
+    let pricePerKg = (dateSpecificPrices && dateSpecificPrices[entryDateKey]) 
+                        ? dateSpecificPrices[entryDateKey] 
+                        : defaultPrice;
+                        
     let extraKg = '';
-    let extraPricePerKg = defaultPrice;
+    let extraPricePerKg = pricePerKg;
     let extraNote = 'Notebook';
     let mainNote = '';
     let shouldExpandExtra = false;
@@ -115,6 +122,17 @@ const buildEntryFromDailyRecord = (
         const noteText = record.note.trim();
         const vipEntries = parseVipEntries(noteText);
         const heshiishData = parseHeshiish(noteText);
+
+        // Notebook Pricing Override — ONLY apply if there is NO date-specific price for this date.
+        // This ensures date-specific prices set in Settings always win over notebook numbers.
+        const hasDateSpecificPrice = dateSpecificPrices && dateSpecificPrices[entryDateKey];
+        if (!hasDateSpecificPrice) {
+            const priceMatch = noteText.match(/(?:^|\s)\$?(\d+(?:\.\d+)?)(?:\s|$)/);
+            if (priceMatch) {
+                pricePerKg = priceMatch[1];
+                extraPricePerKg = priceMatch[1];
+            }
+        }
 
         if (vipEntries.length > 0) {
             const firstVip = vipEntries[0];
@@ -170,6 +188,7 @@ export default function LedgerPage() {
     const [loading, setLoading] = useState(false);
     const [fetchingDetails, setFetchingDetails] = useState(false);
     const [defaultPrice, setDefaultPrice] = useState('35');
+    const [dateSpecificPrices, setDateSpecificPrices] = useState<Record<string, string>>({});
     const [isRestored, setIsRestored] = useState(false);
     const LOCAL_STORAGE_KEY = 'dadwork_ledger_draft';
     const SESSION_KEY = 'dadwork_ledger_session_active';
@@ -246,6 +265,12 @@ export default function LedgerPage() {
                 } else {
                     const savedPrice = localStorage.getItem('dadwork_price_per_kg');
                     if (savedPrice) setDefaultPrice(savedPrice);
+                }
+                if (data && data.dadwork_date_specific_prices) {
+                    try {
+                        const parsed = JSON.parse(data.dadwork_date_specific_prices);
+                        setDateSpecificPrices(parsed);
+                    } catch(e) {}
                 }
             } catch (e) {
                 const savedPrice = localStorage.getItem('dadwork_price_per_kg');
@@ -354,7 +379,7 @@ export default function LedgerPage() {
                             if (dailyData && dailyData.length > 0) {
                                 newEntries = dailyData.map((d: any, idx: number) => {
                                     const entryId = (Date.now() + idx).toString();
-                                    const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
+                                    const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice, dateSpecificPrices);
                                     if (shouldExpandExtra) {
                                         newExpandedIds.add(entryId);
                                     }
@@ -368,7 +393,7 @@ export default function LedgerPage() {
                             newEntries = prev.map((entry, idx) => {
                                 const d = dailyData[idx];
                                 if (!d) return { ...entry, date: '' };
-                                const { entry: parsedEntry, shouldExpandExtra } = buildEntryFromDailyRecord(entry.id, d, defaultPrice);
+                                const { entry: parsedEntry, shouldExpandExtra } = buildEntryFromDailyRecord(entry.id, d, defaultPrice, dateSpecificPrices);
                                 if (shouldExpandExtra) {
                                     newExpandedIds.add(entry.id);
                                 }
@@ -398,7 +423,7 @@ export default function LedgerPage() {
         };
 
         fetchDailyData();
-    }, [selectedCustomerId, startDate, defaultPrice]);
+    }, [selectedCustomerId, startDate, defaultPrice, dateSpecificPrices]);
 
     const handleCustomerChange = (customerId: string) => {
         setSelectedCustomerId(customerId);
@@ -850,19 +875,102 @@ export default function LedgerPage() {
                     });
                 });
             } else {
-                // Not read-only mode (normal save) -> Clear screen for next customer!
-                setFetchingDetails(false);
-                setLastSavedCustomerId(selectedCustomerId);
-                setSelectedCustomerId('');
-                setCustomerSearch('');
-                setShowLastMaqal(false);
-                setUpdateLastMaqal(false);
-                setOldMaqalDone(false);
-                setFreshBalance(null);
-                setCustomerDailyDates([]);
-                setAllUnprocessedDates([]);
-                setCustomerPopoverOpen(true);
-                return;
+                // Normal save completed.
+                // Check if this was an all-absent (0 KG) pair — if so, auto-skip through remaining absent pairs
+                // and land on the first real pair instead of jumping to the next customer.
+                const allAbsent = validEntries.length === 0 || validEntries.every(e => parseFloat(e.kg || '0') <= 0 && parseFloat(e.extraKg || '0') <= 0);
+
+                if (allAbsent) {
+                    // Stay on same customer and auto-skip absent pairs until we find real KG
+                    const token = localStorage.getItem('dadwork_session_token') || '';
+                    let foundRealPair = false;
+                    let safetyLimit = 10; // prevent infinite loops
+
+                    while (!foundRealPair && safetyLimit-- > 0) {
+                        const url = new URL(`/api/customer-daily-entries`, window.location.origin);
+                        url.searchParams.set('customerId', selectedCustomerId);
+                        const res2 = await fetch(url.toString());
+                        const allDatesHeader2 = res2.headers.get('x-all-unprocessed-dates');
+                        const nextPair: any[] = await res2.json();
+                        
+                        if (allDatesHeader2) {
+                            try { setAllUnprocessedDates(JSON.parse(allDatesHeader2)); } catch(e) {}
+                        }
+
+                        if (!nextPair || nextPair.length === 0) {
+                            // No more pairs — all done for this customer
+                            foundRealPair = true;
+                            setCustomerDailyDates([]);
+                            setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
+                            break;
+                        }
+
+                        const pairHasRealKg = nextPair.some((d: any) => parseFloat(d.kg || '0') > 0);
+
+                        if (pairHasRealKg) {
+                            // Found a real pair — load it and stop
+                            foundRealPair = true;
+                            setCustomerDailyDates(nextPair);
+                            const newExpandedIds = new Set<string>();
+                            const newEntries = nextPair.map((d: any, idx: number) => {
+                                const entryId = (Date.now() + idx).toString();
+                                const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice, dateSpecificPrices);
+                                if (shouldExpandExtra) newExpandedIds.add(entryId);
+                                return entry;
+                            });
+                            setDateEntries(newEntries);
+                            if (newExpandedIds.size > 0) {
+                                setTimeout(() => {
+                                    setExpandedExtraEntryIds(prev => {
+                                        const combined = new Set(prev);
+                                        newExpandedIds.forEach(id => combined.add(id));
+                                        return combined;
+                                    });
+                                }, 0);
+                            }
+                            toast.success(`✅ Skipped absent days — now showing ${nextPair.map((d: any) => d.date?.substring(5,10)).join(' & ')}`);
+                        } else {
+                            // This pair is also all-absent — auto-save it silently and continue
+                            const absentItems = nextPair.map((d: any) => ({
+                                type: 'PRODUCT',
+                                date: d.date,
+                                kg: '0',
+                                price: defaultPrice,
+                                note: 'Baaqatay'
+                            }));
+                            await fetch('/api/ledger', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'x-session-token': token
+                                },
+                                body: JSON.stringify({
+                                    customerId: selectedCustomerId,
+                                    receipt_id: crypto.randomUUID(),
+                                    items: absentItems
+                                })
+                            });
+                            // Loop continues to check next pair
+                        }
+                    }
+                    
+                    setFetchingDetails(false);
+                    await Promise.all([mutateCustomers(), mutateLedger()]);
+                } else {
+                    // Normal non-absent save → clear and go to next customer
+                    setFetchingDetails(false);
+                    setLastSavedCustomerId(selectedCustomerId);
+                    setSelectedCustomerId('');
+                    setCustomerSearch('');
+                    setShowLastMaqal(false);
+                    setUpdateLastMaqal(false);
+                    setOldMaqalDone(false);
+                    setFreshBalance(null);
+                    setCustomerDailyDates([]);
+                    setAllUnprocessedDates([]);
+                    setCustomerPopoverOpen(true);
+                    return;
+                }
             }
         } catch (err: any) {
             toast.error(err.message || 'Failed to save receipt');

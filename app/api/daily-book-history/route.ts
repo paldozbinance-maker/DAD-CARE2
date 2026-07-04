@@ -37,6 +37,7 @@ export async function GET(request: Request) {
             WHERE db.deleted_at IS NULL
             GROUP BY db.id, db.date
             ORDER BY db.date DESC
+            LIMIT 60
         `);
 
         // Transform data to match the SavedEntry format expected by the frontend
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
         });
 
         const response = NextResponse.json(history);
-        response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+        response.headers.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
         return response;
     } catch (error: any) {
         console.error('Fetch Daily Book History Error:', error);

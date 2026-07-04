@@ -357,11 +357,17 @@ function DailyBookPageInner() {
                 headers: { 'x-session-token': token },
             });
             if (!res.ok) throw new Error(await res.text());
-            // Remove from local customer list (soft delete — history remains intact)
-            setCustomers(prev => prev.filter(c => c.id !== pendingDeleteCustomerId));
-            toast.success('Customer removed from Daily Book. Their history is preserved.');
+            
+            // AUTOMATICALLY FIX IDs right after deleting so there are no gaps
+            const fixRes = await fetch('/api/resequence-customers', {
+                method: 'POST',
+                headers: { 'x-session-token': token }
+            });
+            if (!fixRes.ok) throw new Error('Customer removed, but failed to re-sequence IDs.');
+
+            toast.success('Customer removed & IDs re-sequenced automatically.');
             setPendingDeleteCustomerId(null);
-            mutateInit(); // Refresh the init data
+            mutateInit(); // Refresh the init data so the new IDs show up immediately
         } catch (err: any) {
             toast.error('Failed to remove customer: ' + (err.message || 'Server error'));
         } finally {

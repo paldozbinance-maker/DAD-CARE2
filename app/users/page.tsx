@@ -581,11 +581,11 @@ export default function UsersPage() {
                                                             </Button>
                                                         </div>
                                                     )}
-                                                    {/* Kickout leg button — tiny, only on hover */}
+                                                    {/* Kickout leg button — tiny, partially visible by default for mobile */}
                                                     {user.is_active && user.role !== 'SUPER_ADMIN' && (user.role === 'ADMIN' || user.role === 'CUSTOMER') && (
                                                         <button
                                                             onClick={() => setKickoutTarget({ userId: user.id, name: user.name || user.username })}
-                                                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 text-[11px]" 
+                                                            className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 text-[13px]" 
                                                             title={`Kick out ${user.name || user.username}`}
                                                         >
                                                             🦵

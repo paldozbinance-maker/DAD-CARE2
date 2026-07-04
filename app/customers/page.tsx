@@ -41,6 +41,7 @@ export default function CustomersPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [isSearching, setIsSearching] = useState(false);
+    const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
     const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
     const [visibleCount, setVisibleCount] = useState(20);
@@ -143,10 +144,21 @@ export default function CustomersPage() {
     const activeCustomers = customers.filter(c => !(c as any).is_inactive);
     const inactiveCustomers = customers.filter(c => (c as any).is_inactive);
 
-    const filteredCustomers = activeCustomers.filter(c =>
-        c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        c.customer_code.toLowerCase().includes(debouncedSearch.toLowerCase())
-    ).sort((a, b) => {
+    // If searching, search ALL customers regardless of tab. Otherwise use activeTab.
+    const baseList = debouncedSearch.trim() !== '' ? customers : (activeTab === 'active' ? activeCustomers : inactiveCustomers);
+
+    const filteredCustomers = baseList.filter(c => {
+        const term = debouncedSearch.toLowerCase().trim();
+        const cleanTerm = term.replace(/[^a-z0-9]/g, '');
+        const cleanPhoneQuery = debouncedSearch.replace(/[^0-9]/g, '');
+        
+        const nameMatch = c.name && c.name.toLowerCase().includes(term);
+        const cleanNameMatch = c.name && cleanTerm && c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanTerm);
+        const phoneMatch = c.phone && cleanPhoneQuery && c.phone.replace(/[^0-9]/g, '').includes(cleanPhoneQuery);
+        const codeMatch = c.customer_code && c.customer_code.toString().toLowerCase().includes(term);
+        
+        return nameMatch || cleanNameMatch || phoneMatch || codeMatch;
+    }).sort((a, b) => {
         if (filterType === 'most_paid') {
             return ((b as any).total_paid || 0) - ((a as any).total_paid || 0);
         } else if (filterType === 'least_paid') {
@@ -204,16 +216,19 @@ export default function CustomersPage() {
                         <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Customers</h2>
                     </div>
                     <div className="flex items-center gap-2 mt-1 ml-1 flex-wrap">
-                        <span className="text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full">
-                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin inline" /> : <>Total: {customers.length}</>}
-                        </span>
-                        <span className="text-xs font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full">
+                        <button 
+                            onClick={() => setActiveTab('active')}
+                            className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full transition-colors ${activeTab === 'active' ? 'text-emerald-500 bg-emerald-500/20 ring-1 ring-emerald-500/50' : 'text-emerald-500/60 bg-emerald-500/10 hover:bg-emerald-500/20'}`}
+                        >
                             Active: {activeCustomers.length}
-                        </span>
+                        </button>
                         {inactiveCustomers.length > 0 && (
-                            <span className="text-xs font-black uppercase tracking-widest text-red-500 bg-red-500/10 px-3 py-1 rounded-full">
+                            <button 
+                                onClick={() => setActiveTab('inactive')}
+                                className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full transition-colors ${activeTab === 'inactive' ? 'text-red-500 bg-red-500/20 ring-1 ring-red-500/50' : 'text-red-500/60 bg-red-500/10 hover:bg-red-500/20'}`}
+                            >
                                 Inactive: {inactiveCustomers.length}
-                            </span>
+                            </button>
                         )}
                     </div>
                     <p className="text-muted-foreground text-sm font-medium max-w-md ml-1 mt-1">

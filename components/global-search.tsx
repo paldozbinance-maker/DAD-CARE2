@@ -42,11 +42,18 @@ export function GlobalSearch() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const filtered = query.trim() === '' ? [] : customers.filter(c => 
-        (c.name && c.name.toLowerCase().includes(query.toLowerCase())) ||
-        (c.phone && c.phone.includes(query)) ||
-        (c.customer_code && c.customer_code.toString().includes(query))
-    );
+    const filtered = query.trim() === '' ? [] : customers.filter(c => {
+        const term = query.toLowerCase().trim();
+        const cleanTerm = term.replace(/[^a-z0-9]/g, '');
+        const cleanPhoneQuery = query.replace(/[^0-9]/g, '');
+        
+        const nameMatch = c.name && c.name.toLowerCase().includes(term);
+        const cleanNameMatch = c.name && cleanTerm && c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanTerm);
+        const phoneMatch = c.phone && cleanPhoneQuery && c.phone.replace(/[^0-9]/g, '').includes(cleanPhoneQuery);
+        const codeMatch = c.customer_code && c.customer_code.toString().toLowerCase().includes(term);
+        
+        return nameMatch || cleanNameMatch || phoneMatch || codeMatch;
+    });
 
     return (
         <div ref={searchRef} className="relative w-full max-w-2xl mx-auto mb-6 z-50">
@@ -91,7 +98,12 @@ export function GlobalSearch() {
                                             <User className="h-5 w-5" />
                                         </div>
                                         <div>
-                                            <p className="font-bold text-foreground text-sm group-hover:text-primary transition-colors">{customer.name}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className={`font-bold text-sm transition-colors ${customer.is_inactive ? 'text-muted-foreground line-through' : 'text-foreground group-hover:text-primary'}`}>{customer.name}</p>
+                                                {customer.is_inactive && (
+                                                    <span className="text-[9px] font-black uppercase bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded">Inactive</span>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground font-medium">
                                                 <span className="flex items-center gap-1"><Hash className="h-3 w-3"/>{customer.customer_code}</span>
                                                 {customer.phone && (

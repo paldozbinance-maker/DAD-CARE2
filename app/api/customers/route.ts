@@ -327,27 +327,8 @@ export async function DELETE(request: Request) {
     try {
         const timestamp = new Date().toISOString();
 
-        // First, soft delete all DailyBookItem records that reference this customer
-        const { error: dailyBookItemError } = await supabase
-            .from('DailyBookItem')
-            .update({ deleted_at: timestamp })
-            .eq('customer_id', id);
-
-        if (dailyBookItemError) {
-            console.error('Soft delete DailyBookItem Error:', dailyBookItemError);
-            throw dailyBookItemError;
-        }
-
-        // Then, soft delete all Ledger records that reference this customer
-        const { error: ledgerError } = await supabase
-            .from('Ledger')
-            .update({ deleted_at: timestamp })
-            .eq('customer_id', id);
-
-        if (ledgerError) {
-            console.error('Soft delete Ledger Error:', ledgerError);
-            throw ledgerError;
-        }
+        // NO CASCADING DELETES: The user explicitly wants to keep historical Ledger and DailyBook records intact.
+        // We only soft-delete the customer profile itself, which marks them as inactive in dropdowns.
 
         // Finally, soft delete the customer
         const { error } = await supabase

@@ -52,6 +52,7 @@ import {
     ChevronDown,
     Zap,
     Crown,
+    CalendarIcon,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { createClient } from '@/lib/supabase/client';
@@ -92,6 +93,25 @@ export default function SettingsPage() {
 
     // Price per KG
     const [pricePerKg, setPricePerKg] = useState('35');
+    const [dateSpecificPrices, setDateSpecificPrices] = useState<Record<string, string>>({});
+    const [isDatePricingOpen, setIsDatePricingOpen] = useState(false);
+    
+    const allowedDates = useMemo(() => {
+        const today = new Date();
+        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+        const dayBefore = new Date(today); dayBefore.setDate(dayBefore.getDate() - 2);
+        
+        const formatLocal = (d: Date) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+        
+        return [formatLocal(yesterday), formatLocal(dayBefore)];
+    }, []);
+
+    const [newDatePrice, setNewDatePrice] = useState({ date: allowedDates[0], price: '' });
     const [loading, setLoading] = useState(false);
     const [resequenceLoading, setResequenceLoading] = useState(false);
 
@@ -107,6 +127,12 @@ export default function SettingsPage() {
     const [searchCustomer, setSearchCustomer] = useState('');
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+
+    // Kickout state
+    const [kickoutTarget, setKickoutTarget] = useState<{ userId: string, name: string } | null>(null);
+    const [kickPin1, setKickPin1] = useState('');
+    const [kickPin2, setKickPin2] = useState('');
+    const [kickoutLoading, setKickoutLoading] = useState(false);
 
     // Audit Logs state
     const [auditLogs, setAuditLogs] = useState<any[]>(() => {
@@ -307,6 +333,15 @@ export default function SettingsPage() {
                     setPricePerKg(data.dadwork_price_per_kg);
                     localStorage.setItem('dadwork_price_per_kg', data.dadwork_price_per_kg); // fallback for quick load
                 }
+                if (data && data.dadwork_date_specific_prices) {
+                    try {
+                        const rawVal = data.dadwork_date_specific_prices;
+                        const parsed = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
+                        setDateSpecificPrices(parsed);
+                    } catch(e) {
+                        console.error('Failed to parse date prices:', e);
+                    }
+                }
             } catch (e) {
                 console.error('Failed to load global settings:', e);
             }
@@ -390,15 +425,25 @@ export default function SettingsPage() {
                 headers: { 'x-session-token': token }
             });
             if (res.ok) {
-                const data = await res.json();
-                setAuditLogs(data.logs || []);
-                setAuditTotal(data.total || 0);
-                localStorage.setItem('dadwork_audit_logs', JSON.stringify(data.logs || []));
-                localStorage.setItem('dadwork_audit_total', String(data.total || 0));
-                if (includeStats) {
-                    setAuditUserStats(data.userStats || []);
-                    setAuditActions(data.actions || []);
-                    if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
+                try {
+                    const data = await res.json();
+                    setAuditLogs(data.logs || []);
+                    setAuditTotal(data.total || 0);
+                    try {
+                        // Only cache first 50 items to avoid quota limit
+                        localStorage.setItem('dadwork_audit_logs', JSON.stringify((data.logs || []).slice(0, 50)));
+                        localStorage.setItem('dadwork_audit_total', String(data.total || 0));
+                    } catch (e) { console.warn('LocalStorage quota limit reached for audit logs', e); }
+                    
+                    if (includeStats) {
+                        setAuditUserStats(data.userStats || []);
+                        setAuditActions(data.actions || []);
+                        try {
+                            if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
+                        } catch (e) {}
+                    }
+                } catch (err) {
+                    console.error("Failed to parse audit logs JSON", err);
                 }
             }
         } catch (e) {
@@ -416,10 +461,16 @@ export default function SettingsPage() {
                 headers: { 'x-session-token': token }
             });
             if (res.ok) {
-                const data = await res.json();
-                setAuditUserStats(data.userStats || []);
-                setAuditActions(data.actions || []);
-                if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
+                try {
+                    const data = await res.json();
+                    setAuditUserStats(data.userStats || []);
+                    setAuditActions(data.actions || []);
+                    try {
+                        if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
+                    } catch(e) {}
+                } catch (err) {
+                    console.error("Failed to parse audit stats JSON", err);
+                }
             }
         } catch (e) {
             console.error('Failed to load audit stats:', e);
@@ -433,10 +484,16 @@ export default function SettingsPage() {
                 headers: { 'x-session-token': token }
             });
             if (res.ok) {
-                const data = await res.json();
-                setOnlineSessions(data.online || []);
-                setAllSessions(data.all || []);
-                if (data.online) localStorage.setItem('dadwork_online_sessions', JSON.stringify(data.online));
+                try {
+                    const data = await res.json();
+                    setOnlineSessions(data.online || []);
+                    setAllSessions(data.all || []);
+                    try {
+                        if (data.online) localStorage.setItem('dadwork_online_sessions', JSON.stringify(data.online));
+                    } catch(e) {}
+                } catch (err) {
+                    console.error("Failed to parse online sessions JSON", err);
+                }
             }
         } catch (e) {
             console.error('Failed to load online sessions:', e);
@@ -489,6 +546,72 @@ export default function SettingsPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSaveDatePrice = async (newPrices: Record<string, string>) => {
+        // Optimistic UI Update for instant feedback
+        const previousPrices = { ...dateSpecificPrices };
+        setDateSpecificPrices(newPrices);
+        setLoading(true);
+        
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'dadwork_date_specific_prices', value: JSON.stringify(newPrices) })
+            });
+            if (res.ok) {
+                toast.success('Date-specific prices updated');
+            } else {
+                setDateSpecificPrices(previousPrices); // Rollback
+                toast.error('Failed to save date-specific prices');
+            }
+        } catch (e) {
+            setDateSpecificPrices(previousPrices); // Rollback
+            toast.error('Network error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAddDatePrice = () => {
+        if (!newDatePrice.date || !newDatePrice.price) {
+            toast.error('Please enter both date and price');
+            return;
+        }
+        if (!allowedDates.includes(newDatePrice.date)) {
+            toast.error('You can only set prices for the last two days');
+            return;
+        }
+        if (dateSpecificPrices[newDatePrice.date]) {
+            toast.error('This date already has a price. Delete it first to change it.');
+            return;
+        }
+        const numericPrice = parseFloat(newDatePrice.price);
+        if (isNaN(numericPrice) || numericPrice > 100 || numericPrice <= 0) {
+            toast.error('Please enter a valid price (1-100)');
+            return;
+        }
+        
+        let updated = { ...dateSpecificPrices, [newDatePrice.date]: newDatePrice.price };
+        
+        // Prune older dates so it's strictly limited to the allowed two dates
+        const pruned: Record<string, string> = {};
+        allowedDates.forEach(d => {
+             if (updated[d]) pruned[d] = updated[d];
+        });
+        
+        handleSaveDatePrice(pruned);
+        
+        // After adding, auto-switch the dropdown to the OTHER date if it's not added yet
+        const otherDate = allowedDates.find(d => d !== newDatePrice.date && !pruned[d]);
+        setNewDatePrice({ date: otherDate || allowedDates[0], price: '' });
+    };
+
+    const handleRemoveDatePrice = (dateToRemove: string) => {
+        const updated = { ...dateSpecificPrices };
+        delete updated[dateToRemove];
+        handleSaveDatePrice(updated);
     };
 
     // Backup/Export
@@ -627,6 +750,50 @@ export default function SettingsPage() {
 
     const handleDeleteUser = (userId: string, username: string) => {
         setPendingSecurityAction({ type: 'delete_user', userId, username });
+    };
+
+    const handleKickout = async () => {
+        if (!kickoutTarget) return;
+        setKickoutLoading(true);
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: kickoutTarget.userId, action: 'kickout', pin1: kickPin1, pin2: kickPin2 })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast.success(`🦵 ${kickoutTarget.name} has been kicked out!`);
+                setKickoutTarget(null);
+                setKickPin1('');
+                setKickPin2('');
+                loadUsers();
+            } else {
+                toast.error(data.error || 'Failed to kick out user');
+            }
+        } catch {
+            toast.error('Network error');
+        } finally {
+            setKickoutLoading(false);
+        }
+    };
+
+    const handleAllowUser = async (userId: string) => {
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: userId, action: 'allow' })
+            });
+            if (res.ok) {
+                toast.success('User access restored');
+                loadUsers();
+            } else {
+                toast.error('Failed to restore user');
+            }
+        } catch {
+            toast.error('Network error');
+        }
     };
 
     const executeDeleteUser = async () => {
@@ -920,6 +1087,81 @@ export default function SettingsPage() {
                                         </Button>
                                     </div>
                                 </div>
+                                
+                                {/* ── Date-Specific Pricing ── */}
+                                <div className="mt-3 rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+                                    <div 
+                                        className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-blue-500/5 to-transparent cursor-pointer hover:bg-blue-500/10 transition-colors flex items-center justify-between"
+                                        onClick={() => setIsDatePricingOpen(!isDatePricingOpen)}
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 rounded-lg bg-blue-500/15">
+                                                <CalendarIcon className="w-4 h-4 text-blue-500" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-bold text-foreground">Date-Specific Pricing</h3>
+                                                <p className="text-[10px] text-muted-foreground">Override price for specific days</p>
+                                            </div>
+                                        </div>
+                                        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isDatePricingOpen ? 'rotate-180' : ''}`} />
+                                    </div>
+                                    
+                                    {isDatePricingOpen && (
+                                        <div className="p-3 bg-background/30">
+                                            <div className="flex gap-2 mb-3">
+                                                <select 
+                                                    value={newDatePrice.date} 
+                                                    onChange={e => setNewDatePrice({ ...newDatePrice, date: e.target.value })}
+                                                    className="flex h-10 w-full items-center justify-between rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    <option value={allowedDates[0]}>{allowedDates[0]} (Yesterday)</option>
+                                                    <option value={allowedDates[1]}>{allowedDates[1]} (Day Before)</option>
+                                                </select>
+                                                <div className="relative w-24">
+                                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-xs">$</div>
+                                                    <Input 
+                                                        type="number" 
+                                                        value={newDatePrice.price} 
+                                                        onChange={e => setNewDatePrice({ ...newDatePrice, price: e.target.value })}
+                                                        placeholder="Price"
+                                                        className="pl-6 h-10 text-xs font-bold bg-background/50 border-border/60 rounded-xl"
+                                                    />
+                                                </div>
+                                                <Button 
+                                                    onClick={handleAddDatePrice}
+                                                    className="h-10 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-95 transition-all shrink-0"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+
+                                            {Object.entries(dateSpecificPrices).length > 0 ? (
+                                                <div className="space-y-1.5">
+                                                    {Object.entries(dateSpecificPrices).sort((a, b) => b[0].localeCompare(a[0])).map(([date, price]) => (
+                                                        <div key={date} className="flex items-center justify-between p-2 rounded-xl bg-background border border-border/40 hover:border-blue-500/30 transition-colors">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xs font-bold text-foreground bg-muted px-2 py-1 rounded-md">{date}</span>
+                                                                <span className="text-xs font-black text-emerald-500">${price}</span>
+                                                            </div>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="sm"
+                                                                onClick={() => handleRemoveDatePrice(date)}
+                                                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-4 text-xs text-muted-foreground border border-dashed border-border/60 rounded-xl">
+                                                    No date-specific prices set.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* ── Re-sequence Customer IDs (Tiny Button) ── */}
                                 <div className="mt-3 flex justify-end">
@@ -1051,8 +1293,8 @@ export default function SettingsPage() {
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            {/* Priority stars + Per-user Maqal badge */}
-                                                            {assignedCount > 0 && (() => {
+                                                            {/* Priority stars + Per-user Maqal badge — always visible */}
+                                                            {(() => {
                                                                 const userMaqal = perUserMaqal.find(m => m.user_id === user.id);
                                                                 const solved = userMaqal?.solved || 0;
                                                                 const total = userMaqal?.total || 0;
@@ -1060,11 +1302,14 @@ export default function SettingsPage() {
                                                                 const allDone = remaining === 0 && total > 0;
                                                                 const customers = userMaqal?.customers || [];
                                                                 return (
-                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                                                                         <div className="flex items-center gap-1">
-                                                                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                                                                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">{assignedCount} Priority</span>
+                                                                            <Star className={`w-3 h-3 ${assignedCount > 0 ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/40'}`} />
+                                                                            <span className={`text-[9px] font-bold ${assignedCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground/50'}`}>{assignedCount} Priority</span>
                                                                         </div>
+                                                                        {(user as any).is_kicked_out && (
+                                                                            <span className="text-[8px] font-black bg-red-500/15 text-red-500 border border-red-500/30 px-1.5 py-0.5 rounded-md">🦵 KICKED OUT</span>
+                                                                        )}
                                                                         {total > 0 && (
                                                                             <Popover>
                                                                                 <PopoverTrigger asChild>
@@ -1145,6 +1390,25 @@ export default function SettingsPage() {
                                                                 >
                                                                     <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                                                                 </button>
+                                                                {(user as any).is_kicked_out ? (
+                                                                    <button
+                                                                        onClick={() => handleAllowUser(user.id)}
+                                                                        title="Restore access"
+                                                                        className="p-2 rounded-xl border border-emerald-500/30 hover:bg-emerald-500/10 active:scale-90 transition-all"
+                                                                    >
+                                                                        <span className="text-sm">✅</span>
+                                                                    </button>
+                                                                ) : (
+                                                                    user.username !== currentUser?.username && (
+                                                                        <button
+                                                                            onClick={() => setKickoutTarget({ userId: user.id, name: user.name || user.username })}
+                                                                            title="Kick out user"
+                                                                            className="p-2 rounded-xl border border-orange-500/30 hover:bg-orange-500/10 active:scale-90 transition-all"
+                                                                        >
+                                                                            <span className="text-sm">🦵</span>
+                                                                        </button>
+                                                                    )
+                                                                )}
                                                                 {user.username !== 'admin' && (
                                                                     <button
                                                                         onClick={() => handleDeleteUser(user.id, user.username)}
@@ -2201,6 +2465,46 @@ export default function SettingsPage() {
                                     })}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Kickout PIN Dialog (Settings Users tab) ── */}
+            <Dialog open={!!kickoutTarget} onOpenChange={(open) => { if (!open) { setKickoutTarget(null); setKickPin1(''); setKickPin2(''); } }}>
+                <DialogContent className="max-w-sm rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-destructive">🦵 Kick Out {kickoutTarget?.name}?</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <p className="text-sm text-muted-foreground">
+                            ⚠️ <strong>WARNING:</strong> This will immediately log out <strong>{kickoutTarget?.name}</strong> and block them from accessing the system until you restore their access.
+                        </p>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">PIN 1</label>
+                            <input
+                                type="password"
+                                value={kickPin1}
+                                onChange={e => setKickPin1(e.target.value)}
+                                placeholder="Enter PIN 1"
+                                className="w-full h-10 px-3 rounded-xl border border-border/60 bg-background/50 text-sm focus:outline-none focus:ring-2 focus:ring-destructive/30"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">PIN 2</label>
+                            <input
+                                type="password"
+                                value={kickPin2}
+                                onChange={e => setKickPin2(e.target.value)}
+                                placeholder="Enter PIN 2"
+                                className="w-full h-10 px-3 rounded-xl border border-border/60 bg-background/50 text-sm focus:outline-none focus:ring-2 focus:ring-destructive/30"
+                            />
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                            <Button variant="outline" onClick={() => { setKickoutTarget(null); setKickPin1(''); setKickPin2(''); }} className="flex-1">Cancel</Button>
+                            <Button onClick={handleKickout} disabled={kickoutLoading || !kickPin1 || !kickPin2} className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                {kickoutLoading ? 'Kicking...' : '🦵 Kick Out'}
+                            </Button>
                         </div>
                     </div>
                 </DialogContent>
