@@ -196,6 +196,10 @@ export default function UsersPage() {
         role: 'CUSTOMER' as 'ADMIN' | 'CUSTOMER'
     });
     const [pendingSecurityAction, setPendingSecurityAction] = useState<{ userId: string, username: string } | null>(null);
+    const [kickoutTarget, setKickoutTarget] = useState<{ userId: string, name: string } | null>(null);
+    const [kickPin1, setKickPin1] = useState('');
+    const [kickPin2, setKickPin2] = useState('');
+    const [kickoutLoading, setKickoutLoading] = useState(false);
 
     const loadUsers = async () => {
         try {
@@ -299,6 +303,68 @@ export default function UsersPage() {
         user.username?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const handleKickout = async () => {
+        if (!kickoutTarget) return;
+        setKickoutLoading(true);
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: kickoutTarget.userId, action: 'kickout', pin1: kickPin1, pin2: kickPin2 })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast.success(`${kickoutTarget.name} has been kicked out!`);
+                setKickoutTarget(null);
+                setKickPin1('');
+                setKickPin2('');
+                loadUsers();
+            } else {
+                toast.error(data.error || 'Failed to kick out user');
+            }
+        } catch {
+            toast.error('Network error');
+        } finally {
+            setKickoutLoading(false);
+        }
+    };
+
+    const handleAllowUser = async (userId: string) => {
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: userId, action: 'allow' })
+            });
+            if (res.ok) {
+                toast.success('User access restored');
+                loadUsers();
+            } else {
+                toast.error('Failed to allow user');
+            }
+        } catch {
+            toast.error('Network error');
+        }
+    };
+
+    const handleDenyUser = async (userId: string) => {
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: userId, action: 'deny' })
+            });
+            if (res.ok) {
+                toast.success('User access denied');
+                loadUsers();
+            } else {
+                toast.error('Failed to deny user');
+            }
+        } catch {
+            toast.error('Network error');
+        }
+    };
+
     if (currentUser && currentUser.role !== 'SUPER_ADMIN') {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-6">
@@ -334,6 +400,37 @@ export default function UsersPage() {
                 title="Delete User"
                 description={`Permanently delete user "${pendingSecurityAction?.username}"?`}
             />
+
+            {/* Kickout PIN Dialog */}
+            <Dialog open={!!kickoutTarget} onOpenChange={(open) => { if (!open) { setKickoutTarget(null); setKickPin1(''); setKickPin2(''); } }}>
+                <DialogContent className="bg-card border-border sm:max-w-[380px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <span className="text-2xl">🦵</span>
+                            Kick Out {kickoutTarget?.name}?
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 pt-2">
+                        <p className="text-sm text-muted-foreground">
+                            ⚠️ <strong>WARNING:</strong> This will immediately log out <strong>{kickoutTarget?.name}</strong> and block them from accessing the system until you allow them back.
+                        </p>
+                        <div className="space-y-2">
+                            <Label className="text-foreground text-xs font-bold uppercase">PIN 1</Label>
+                            <Input type="password" value={kickPin1} onChange={e => setKickPin1(e.target.value)} placeholder="Enter PIN 1" className="bg-background border-input" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-foreground text-xs font-bold uppercase">PIN 2</Label>
+                            <Input type="password" value={kickPin2} onChange={e => setKickPin2(e.target.value)} placeholder="Enter PIN 2" className="bg-background border-input" />
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <Button variant="outline" onClick={() => { setKickoutTarget(null); setKickPin1(''); setKickPin2(''); }} className="flex-1 border-border">Cancel</Button>
+                            <Button onClick={handleKickout} disabled={kickoutLoading || !kickPin1 || !kickPin2} className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                {kickoutLoading ? 'Kicking...' : '🦵 Kick Out'}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -432,7 +529,7 @@ export default function UsersPage() {
                                     const userMaqal = perUserMaqal.find(m => m.user_id === user.id);
 
                                     return (
-                                        <TableRow key={user.id} className="border-border hover:bg-muted/30">
+                                        <TableRow key={user.id} className={`border-border hover:bg-muted/30 group ${!user.is_active ? 'opacity-60' : ''}`}>
                                             <TableCell className="font-medium text-foreground">
                                                 <div className="flex items-center gap-2">
                                                     <div className={`relative w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 ${isAdmin ? 'bg-amber-500/10 ring-2 ring-amber-500/30' : 'bg-primary/10 ring-2 ring-primary/20'}`}>
@@ -471,9 +568,33 @@ export default function UsersPage() {
                                                 <Switch checked={isAdmin} onCheckedChange={() => handleToggleAdmin(user.id, user.role)} />
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteUser(user.id, user.username)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {/* Kicked out badge + Allow/Deny */}
+                                                    {!user.is_active && user.role !== 'SUPER_ADMIN' && (
+                                                        <div className="flex items-center gap-1 mr-1">
+                                                            <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 animate-pulse">Kicked</span>
+                                                            <Button variant="ghost" size="sm" onClick={() => handleAllowUser(user.id)} className="h-6 px-1.5 text-[10px] font-bold text-emerald-500 hover:bg-emerald-500/10" title="Allow access">
+                                                                ✅
+                                                            </Button>
+                                                            <Button variant="ghost" size="sm" onClick={() => handleDenyUser(user.id)} className="h-6 px-1.5 text-[10px] font-bold text-destructive hover:bg-destructive/10" title="Deny access">
+                                                                ❌
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    {/* Kickout leg button — tiny, only on hover */}
+                                                    {user.is_active && user.role !== 'SUPER_ADMIN' && (user.role === 'ADMIN' || user.role === 'CUSTOMER') && (
+                                                        <button
+                                                            onClick={() => setKickoutTarget({ userId: user.id, name: user.name || user.username })}
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 text-[11px]" 
+                                                            title={`Kick out ${user.name || user.username}`}
+                                                        >
+                                                            🦵
+                                                        </button>
+                                                    )}
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteUser(user.id, user.username)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     );

@@ -137,6 +137,7 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
             CASE WHEN COALESCE(td.target_days_count, 0) >= 2 THEN true ELSE false END as is_target_days_done,
             tp.date1 as pair_date1,
             tp.date2 as pair_date2,
+            CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive,
             
             -- Latest Maqal
             COALESCE(lms.maqal_total, 0)::float as latest_maqal_total,
@@ -217,7 +218,6 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
         LEFT JOIN latest_payment_stats lps ON c.id = lps.customer_id
         LEFT JOIN selected_maqal_stats sms ON c.id = sms.customer_id
         LEFT JOIN selected_payment_stats sps ON c.id = sps.customer_id
-        WHERE c.deleted_at IS NULL
         ORDER BY c.name ASC;
     `;
 
@@ -241,9 +241,9 @@ export async function GET(request: Request) {
                     c.id, c.name, c.customer_code, c.phone,
                     COALESCE(
                         (SELECT new_debt FROM "Ledger" WHERE customer_id = c.id AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1), 
-                    0)::float as current_balance
+                    0)::float as current_balance,
+                    CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive
                 FROM "Customer" c
-                WHERE c.deleted_at IS NULL
                 ORDER BY c.customer_code ASC;
             `;
             const { rows } = await pool.query(query);
@@ -356,6 +356,10 @@ export async function DELETE(request: Request) {
             .eq('id', id);
 
         if (error) throw error;
+
+        // Remove from assigned_customer_ids for all users to update priority lists
+        await pool.query('UPDATE "User" SET assigned_customer_ids = array_remove(assigned_customer_ids, $1) WHERE $1 = ANY(assigned_customer_ids)', [id]);
+
         await logAudit(request, 'DELETE_CUSTOMER', `Soft deleted customer ID: ${id}`);
         return NextResponse.json({ success: true });
     } catch (error: any) {

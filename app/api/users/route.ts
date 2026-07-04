@@ -79,3 +79,65 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+export async function PATCH(request: Request) {
+    const { errorResponse } = await requireSuperAdmin(request);
+    if (errorResponse) return errorResponse;
+    const body = await request.json();
+    const { id, action, pin1, pin2, assigned_customer_ids } = body;
+
+    if (!id) {
+        return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    }
+
+    try {
+        if (action === 'kickout') {
+            // Verify PINs
+            if (pin1 !== '1234' || pin2 !== '5678') {
+                return NextResponse.json({ error: 'Invalid security PINs' }, { status: 403 });
+            }
+
+            // Deactivate user
+            await pool.query('UPDATE "User" SET is_active = false, updated_at = NOW() WHERE id = $1', [id]);
+
+            // Kill all their sessions immediately
+            const { rows: userRows } = await pool.query('SELECT username FROM "User" WHERE id = $1', [id]);
+            if (userRows.length > 0) {
+                await pool.query('DELETE FROM "AdminSession" WHERE username = $1', [userRows[0].username]);
+            }
+
+            await logAudit(request, 'KICKOUT_USER', `Kicked out user ID: ${id}`);
+            return NextResponse.json({ success: true, message: 'User kicked out and all sessions destroyed' });
+        }
+
+        if (action === 'allow') {
+            // Reactivate user
+            await pool.query('UPDATE "User" SET is_active = true, updated_at = NOW() WHERE id = $1', [id]);
+            await logAudit(request, 'ALLOW_USER', `Reactivated user ID: ${id}`);
+            return NextResponse.json({ success: true, message: 'User reactivated' });
+        }
+
+        if (action === 'deny') {
+            // Keep user deactivated, nothing to change — just log
+            await logAudit(request, 'DENY_USER', `Denied reactivation for user ID: ${id}`);
+            return NextResponse.json({ success: true, message: 'User access denied' });
+        }
+
+        if (action === 'update_priority') {
+            if (!Array.isArray(assigned_customer_ids)) {
+                return NextResponse.json({ error: 'assigned_customer_ids must be an array' }, { status: 400 });
+            }
+            await pool.query(
+                'UPDATE "User" SET assigned_customer_ids = $1, updated_at = NOW() WHERE id = $2',
+                [assigned_customer_ids, id]
+            );
+            await logAudit(request, 'UPDATE_USER_PRIORITY', `Updated priority list for user ID: ${id}`);
+            return NextResponse.json({ success: true });
+        }
+
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    } catch (error: any) {
+        console.error('Patch User Error:', error);
+        return NextResponse.json({ error: error.message || 'Update failed' }, { status: 500 });
+    }
+}

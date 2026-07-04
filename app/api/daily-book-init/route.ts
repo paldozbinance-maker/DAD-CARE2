@@ -9,6 +9,7 @@ async function getDailyBookInit() {
     const { rows: customers } = await pool.query(`
       SELECT id, name, customer_code, gender, avatar_url, phone
       FROM "Customer"
+      WHERE deleted_at IS NULL
       ORDER BY name ASC
     `);
 

@@ -629,7 +629,7 @@ export default function CustomerDetailPage() {
                 description={
                     pendingSecurityAction === 'clear_history' ? 'Permanently clear all ledger history for this customer?' : 
                     pendingSecurityAction === 'delete_receipt' ? `Permanently delete ${receiptToDelete?.entries.length} transactions from "${receiptToDelete?.titleString}"?` :
-                    'Permanently delete this customer and all their data?'
+                    `⚠️ Are you sure you want to DELETE "${customer?.name}"? This will remove them from Daily Book, Ledger, and all priority lists. This action cannot be undone!`
                 }
                 isProcessing={updating}
             />

@@ -179,7 +179,7 @@ export default function LedgerPage() {
         revalidateOnFocus: false,
         dedupingInterval: 120000,   // 2 min — customer list rarely changes
     });
-    const allCustomers = rawCustomers || [];
+    const allCustomers = (rawCustomers || []).filter((c: any) => !c.is_inactive);
     
     // Form state
     const [selectedCustomerId, setSelectedCustomerId] = useState('');

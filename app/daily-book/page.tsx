@@ -463,7 +463,7 @@ return (
                 onConfirm={handleSoftDeleteCustomer}
                 isProcessing={isDeletingCustomer}
                 title="Remove Customer"
-                description={`Remove this customer from the Daily Book? Their full history and profile will be preserved.`}
+                description={`⚠️ Are you sure you want to DELETE "${customers.find(c => c.id === pendingDeleteCustomerId)?.name || 'this customer'}"? This will remove them from Daily Book, Ledger, and all priority lists. This action cannot be undone!`}
             />
             {/* Header / Cover */}
             <div className="relative p-6 md:p-8 rounded-2xl bg-card overflow-hidden border border-border flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">

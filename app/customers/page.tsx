@@ -34,6 +34,7 @@ interface Customer {
     gender?: string;
     phone?: string;
     avatar_url?: string;
+    is_inactive?: boolean;
 }
 
 export default function CustomersPage() {
@@ -139,7 +140,10 @@ export default function CustomersPage() {
         }
     }, []);
 
-    const filteredCustomers = customers.filter(c =>
+    const activeCustomers = customers.filter(c => !(c as any).is_inactive);
+    const inactiveCustomers = customers.filter(c => (c as any).is_inactive);
+
+    const filteredCustomers = activeCustomers.filter(c =>
         c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
         c.customer_code.toLowerCase().includes(debouncedSearch.toLowerCase())
     ).sort((a, b) => {
@@ -198,11 +202,21 @@ export default function CustomersPage() {
                             <Users className="w-6 h-6" />
                         </div>
                         <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight uppercase">Customers</h2>
-                        <span className="text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full ml-2">
-                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin inline" /> : customers.length}
-                        </span>
                     </div>
-                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1">
+                    <div className="flex items-center gap-2 mt-1 ml-1 flex-wrap">
+                        <span className="text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full">
+                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin inline" /> : <>Total: {customers.length}</>}
+                        </span>
+                        <span className="text-xs font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full">
+                            Active: {activeCustomers.length}
+                        </span>
+                        {inactiveCustomers.length > 0 && (
+                            <span className="text-xs font-black uppercase tracking-widest text-red-500 bg-red-500/10 px-3 py-1 rounded-full">
+                                Inactive: {inactiveCustomers.length}
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-muted-foreground text-sm font-medium max-w-md ml-1 mt-1">
                         Manage all registered clients, review balances, and find individuals in your ledger instantly.
                     </p>
                 </div>
