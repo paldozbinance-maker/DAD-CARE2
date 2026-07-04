@@ -114,7 +114,7 @@ export function useDailyBookHistory() {
         {
             revalidateOnFocus: false,
             dedupingInterval: 60000, // 1 min
-            revalidateIfStale: true,
+            revalidateIfStale: false,
             onError: (err) => {
                 console.error('[useDailyBookHistory] SWR error:', err);
             },

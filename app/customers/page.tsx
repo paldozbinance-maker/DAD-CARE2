@@ -126,7 +126,7 @@ export default function CustomersPage() {
     const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
         customersUrl,
         fetcher,
-        { revalidateOnFocus: false, dedupingInterval: 60000 }
+        { revalidateOnFocus: false, dedupingInterval: 60000, revalidateIfStale: false }
     );
     const customers = customersData || [];
 

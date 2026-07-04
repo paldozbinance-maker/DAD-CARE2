@@ -197,6 +197,7 @@ export default function LedgerPage() {
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 120000,   // 2 min — customer list rarely changes
+        revalidateIfStale: false
     });
     const allCustomers = (rawCustomers || []).filter((c: any) => !c.is_inactive);
     
