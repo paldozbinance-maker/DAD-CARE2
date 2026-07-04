@@ -2,6 +2,7 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { validateSession } from '@/lib/sessions-store';
 
+export const dynamic = 'force-dynamic';
 
 const getDashboardData = async (today: string) => {
     try {
@@ -204,9 +205,8 @@ export async function GET(request: Request) {
         const data = await getDashboardData(today);
 
         const response = NextResponse.json(data);
-        // Allow browsers to cache the dashboard for 30s, then silently refresh in background.
-        // This makes repeat visits within 30s feel instant.
-        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        // Prevent Vercel edge from caching stale dashboard data for too long
+        response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
         return response;
 
     } catch (error: any) {
