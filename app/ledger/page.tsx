@@ -610,7 +610,7 @@ export default function LedgerPage() {
         }
         const nextUnprocessed = customerDailyDates[nextIndex];
         const newEntryId = Date.now().toString();
-        const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(newEntryId, nextUnprocessed, defaultPrice);
+        const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(newEntryId, nextUnprocessed, defaultPrice, dateSpecificPrices);
         if (shouldExpandExtra) {
             setExpandedExtraEntryIds(prev => {
                 const next = new Set(prev);
@@ -624,7 +624,21 @@ export default function LedgerPage() {
     const updateDateEntry = (id: string, field: keyof DateEntry, value: string) => {
         setDateEntries(entries => entries.map(entry => {
             if (entry.id !== id) return entry;
-            return { ...entry, [field]: value };
+            
+            const newEntry = { ...entry, [field]: value };
+            
+            if (field === 'date') {
+                const dateKey = value;
+                if (dateSpecificPrices && dateSpecificPrices[dateKey]) {
+                    newEntry.pricePerKg = dateSpecificPrices[dateKey];
+                    newEntry.extraPricePerKg = dateSpecificPrices[dateKey];
+                } else if (dateSpecificPrices) {
+                    newEntry.pricePerKg = defaultPrice;
+                    newEntry.extraPricePerKg = defaultPrice;
+                }
+            }
+            
+            return newEntry;
         }));
     };
 
@@ -639,7 +653,7 @@ export default function LedgerPage() {
             const mapped = filtered.map((entry, idx) => {
                 const d = customerDailyDates[idx];
                 if (!d) return { ...entry, date: '' };
-                const { entry: parsedEntry, shouldExpandExtra } = buildEntryFromDailyRecord(entry.id, d, defaultPrice);
+                const { entry: parsedEntry, shouldExpandExtra } = buildEntryFromDailyRecord(entry.id, d, defaultPrice, dateSpecificPrices);
                 if (shouldExpandExtra) {
                     nextExpandedIds.add(entry.id);
                 }
