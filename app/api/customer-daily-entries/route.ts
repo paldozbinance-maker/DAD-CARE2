@@ -37,14 +37,17 @@ export async function GET(request: Request) {
         // Fetch unprocessed items AND global pair index in a single query
         const query = `
             WITH past_dates AS (
-                SELECT date::date as db_date,
-                       ROW_NUMBER() OVER (ORDER BY date DESC) as rn
+                SELECT DISTINCT date::date as db_date
                 FROM "DailyBook"
                 WHERE deleted_at IS NULL AND date::date < $2::date
             ),
+            numbered_dates AS (
+                SELECT db_date, ROW_NUMBER() OVER (ORDER BY db_date DESC) as rn
+                FROM past_dates
+            ),
             global_pairs AS (
                 SELECT db_date, CEIL(rn / 2.0) as pair_index
-                FROM past_dates
+                FROM numbered_dates
             ),
             customer_unprocessed AS (
                 SELECT gp.pair_index, TO_CHAR(db.date, 'YYYY-MM-DD') as date, dbi.kg, dbi.note
@@ -68,13 +71,20 @@ export async function GET(request: Request) {
         const params = startDate ? [customerId, todayStr, startDate] : [customerId, todayStr];
         const { rows: items } = await pool.query(query, params);
 
-        let pastUnprocessed = items.map(item => ({
+        let rawUnprocessed = items.map(item => ({
             date: item.date as string,
             kg: Number(item.kg),
             note: (item.note as string | null) ?? null,
             pair_index: Number(item.pair_index),
             processed: false,
         }));
+
+        // Deduplicate defensively (in case multiple DailyBook rows exist for the same date due to race conditions)
+        const uniqueDatesMap = new Map<string, typeof rawUnprocessed[0]>();
+        for (const item of rawUnprocessed) {
+            uniqueDatesMap.set(item.date, item);
+        }
+        let pastUnprocessed = Array.from(uniqueDatesMap.values());
 
         // 6. Apply the PAIR RULE: only release complete pairs based on GLOBAL boundaries.
         // We find the oldest pair_index, and return all unprocessed dates belonging to that pair_index.
