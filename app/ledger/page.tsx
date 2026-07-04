@@ -190,8 +190,19 @@ export default function LedgerPage() {
         dedupingInterval: 30000,    // 30s — per-customer ledger can change after a save
     });
     
-    const history: Transaction[] = ledgerData?.transactions || [];
-    const summary: CustomerSummary = ledgerData?.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 };
+    const history: Transaction[] = (ledgerData?.transactions || []).map((t: any) => ({
+        ...t,
+        amount: Number(t.amount || 0),
+        kg: t.kg != null ? Number(t.kg) : undefined,
+        price_per_kg: t.price_per_kg != null ? Number(t.price_per_kg) : undefined,
+        previous_debt: Number(t.previous_debt || 0),
+        new_debt: Number(t.new_debt || 0)
+    }));
+    const summary: CustomerSummary = ledgerData?.summary ? {
+        totalKg: Number(ledgerData.summary.totalKg || 0),
+        totalPaid: Number(ledgerData.summary.totalPaid || 0),
+        currentBalance: Number(ledgerData.summary.currentBalance || 0)
+    } : { totalKg: 0, totalPaid: 0, currentBalance: 0 };
 
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [showLastMaqal, setShowLastMaqal] = useState(false);
