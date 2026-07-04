@@ -15,10 +15,11 @@ export async function GET(request: Request) {
 
         if (custError) throw custError;
 
-        // Fetch all ledger entries to calculate metrics
+        // Fetch all ledger entries to calculate metrics (exclude soft-deleted)
         const { data: allLedger, error: ledgerError } = await supabase
             .from('Ledger')
             .select('customer_id, type, kg, amount, new_debt, created_at, id')
+            .is('deleted_at', null)
             .order('created_at', { ascending: false })
             .order('id', { ascending: false });
 
