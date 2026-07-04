@@ -248,7 +248,8 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'no-store, max-age=0');
+            // Cache lite customers to prevent DB load from GlobalSearch remounts
+            res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
             return res;
         }
 

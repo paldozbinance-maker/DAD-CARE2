@@ -49,6 +49,7 @@ export default function DashboardPage() {
     const { data, isLoading } = useSWR<DashboardData>('/api/dashboard', fetcher, {
         revalidateOnFocus: false,     // Don't refresh on tab focus
         dedupingInterval: 60000,      // Cache results for 1 minute
+        revalidateIfStale: false
     });
 
     useEffect(() => {

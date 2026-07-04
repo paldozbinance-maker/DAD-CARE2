@@ -5,32 +5,26 @@ import { Search, User, Phone, Hash, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
 import { useClickAway } from '@/lib/hooks/use-click-away'; // I will check if this exists or just write click away logic
+import useSWR from 'swr';
+
+const fetcher = async (url: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {} });
+    if (!res.ok) throw new Error('Fetch error');
+    return res.json();
+};
 
 export function GlobalSearch() {
     const [query, setQuery] = useState('');
-    const [customers, setCustomers] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const router = useRouter();
     const searchRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const fetchCustomers = async () => {
-            setLoading(true);
-            try {
-                const res = await fetch('/api/customers?lite=true');
-                if (res.ok) {
-                    const data = await res.json();
-                    setCustomers(data);
-                }
-            } catch (e) {
-                console.error('Search fetch error', e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchCustomers();
-    }, []);
+    const { data: customers, isLoading: loading } = useSWR<any[]>('/api/customers?lite=true', fetcher, {
+        revalidateOnFocus: false,
+        dedupingInterval: 60000,
+        revalidateIfStale: false
+    });
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
