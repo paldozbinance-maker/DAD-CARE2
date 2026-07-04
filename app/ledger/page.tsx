@@ -219,6 +219,7 @@ export default function LedgerPage() {
     const [customerSearch, setCustomerSearch] = useState('');
     const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false);
     const [showUnprocessedOnly, setShowUnprocessedOnly] = useState(false);
+    const [lastSavedCustomerId, setLastSavedCustomerId] = useState('');
 
     const unprocessedCustomersCount = useMemo(() => {
         return allCustomers.filter(c => !c.is_target_days_done && (c.unprocessed_books_count || c.total_books_count)).length;
@@ -851,6 +852,7 @@ export default function LedgerPage() {
             } else {
                 // Not read-only mode (normal save) -> Clear screen for next customer!
                 setFetchingDetails(false);
+                setLastSavedCustomerId(selectedCustomerId);
                 setSelectedCustomerId('');
                 setCustomerSearch('');
                 setShowLastMaqal(false);
@@ -859,6 +861,7 @@ export default function LedgerPage() {
                 setFreshBalance(null);
                 setCustomerDailyDates([]);
                 setAllUnprocessedDates([]);
+                setCustomerPopoverOpen(true);
                 return;
             }
         } catch (err: any) {
@@ -1040,7 +1043,7 @@ export default function LedgerPage() {
                                                             }}
                                                         >
                                                             {isPriority && "⭐ "}
-                                                            {c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : ''))}
+                                                            {c.id === lastSavedCustomerId ? '✅ (Just Saved) ' : (c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')))}
                                                             {c.name.toUpperCase()} (ID: {c.customer_code})
                                                         </div>
                                                     );

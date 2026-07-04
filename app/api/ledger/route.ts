@@ -109,7 +109,7 @@ export async function POST(request: Request) {
             for (const entry of entriesToInsert) {
                 await client.query(
                     `INSERT INTO "Ledger" (id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at)
-                     VALUES (gen_random_uuid(), $1, $2::"LedgerType", $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
                     [
                         entry.customer_id, 
                         entry.type, 
