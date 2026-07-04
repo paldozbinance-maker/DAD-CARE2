@@ -63,9 +63,6 @@ export async function POST(request: Request) {
     const { date: dateStr, items } = body;
 
     try {
-        // 0. Pre-check removed: We now allow editing processed dates and will sync the changes to the Ledger automatically.
-
-        // 1. Get or Create DailyBook (recycle if soft-deleted)
         let bookId;
         const { rows: existing } = await pool.query(
             `SELECT id, deleted_at FROM "DailyBook" WHERE date = $1::date`,
@@ -83,7 +80,9 @@ export async function POST(request: Request) {
             }
         } else {
             const { rows: newBook } = await pool.query(
-                `INSERT INTO "DailyBook" (id, date, created_at) VALUES (gen_random_uuid(), $1::date, NOW()) RETURNING id`,
+                `INSERT INTO "DailyBook" (id, date, created_at) VALUES (gen_random_uuid(), $1::date, NOW())
+                 ON CONFLICT (date) DO UPDATE SET deleted_at = NULL, deleted_by = NULL
+                 RETURNING id`,
                 [dateStr]
             );
             bookId = newBook[0].id;
@@ -148,20 +147,20 @@ export async function POST(request: Request) {
                 const dailyItem = items?.find((i: any) => i.customer_id === ledger.customer_id);
                 // If the customer was removed from the daily book, new KG is 0.
                 const newKg = dailyItem ? (parseFloat(dailyItem.kg) || 0) : 0;
-                
+
                 // Compare rounded to 2 decimal places to avoid tiny float diffs
                 if (Math.abs((ledger.kg || 0) - newKg) > 0.001) {
                     const newAmount = Math.round(newKg * parseFloat(ledger.price_per_kg));
-                    
+
                     await pool.query(
                         `UPDATE "Ledger" SET kg = $1, amount = $2 WHERE id = $3`,
                         [newKg, newAmount, ledger.id]
                     );
-                    
+
                     customersToRecalculate.add(ledger.customer_id);
                 }
             }
-            
+
             // 5. Trigger the cascade recalculation for any affected customers
             for (const customerId of customersToRecalculate) {
                 await recalculateCustomerLedger(customerId);
@@ -193,7 +192,7 @@ export async function DELETE(request: Request) {
         if (books.length === 0) {
             return NextResponse.json({ error: 'Book not found' }, { status: 404 });
         }
-        
+
         const bookId = books[0].id;
         const username = session?.username || 'unknown';
 
