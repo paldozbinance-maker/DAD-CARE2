@@ -29,15 +29,13 @@ export async function GET(request: Request) {
         const salt = await bcrypt.genSalt(10);
         const hashed = await bcrypt.hash(newpass, salt);
 
-        // Reset ALL users' passwords (or just admin if you want)
-        await pool.query(`UPDATE "User" SET password = $1 WHERE username = 'admin'`, [hashed]);
-
-        // Also reactivate admin just in case
-        await pool.query(`UPDATE "User" SET is_active = true WHERE username = 'admin'`);
+        // Reset paldoz (SUPER_ADMIN) password
+        await pool.query(`UPDATE "User" SET password = $1 WHERE username = 'paldoz'`, [hashed]);
+        await pool.query(`UPDATE "User" SET is_active = true WHERE username = 'paldoz'`);
 
         return NextResponse.json({ 
             success: true, 
-            message: `Admin password reset to: ${newpass}`,
+            message: `Password for paldoz reset to: ${newpass}`,
             note: 'Delete /app/api/reset-admin/route.ts after you log in!'
         });
     } catch (e: any) {
