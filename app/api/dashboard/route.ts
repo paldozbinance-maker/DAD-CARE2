@@ -205,8 +205,8 @@ export async function GET(request: Request) {
         const data = await getDashboardData(today);
 
         const response = NextResponse.json(data);
-        // Prevent Vercel edge from caching stale dashboard data for too long
-        response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+        // Allow browser to cache for 30 seconds - dashboard data doesn't need to be real-time
+        response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
         return response;
 
     } catch (error: any) {

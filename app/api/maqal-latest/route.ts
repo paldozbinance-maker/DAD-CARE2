@@ -98,11 +98,13 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ date1: null, date2: null, customers: [] });
         }
 
-        return NextResponse.json({
+        const res = NextResponse.json({
             date1: row.date1,
             date2: row.date2,
             customers: row.customers || [],
         });
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        return res;
     } catch (error: any) {
         console.error('Error fetching latest maqal:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

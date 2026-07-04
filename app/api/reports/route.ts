@@ -105,7 +105,9 @@ export async function GET(request: Request) {
             };
         });
 
-        return NextResponse.json(reportData);
+        const res = NextResponse.json(reportData);
+        res.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=120');
+        return res;
     } catch (error: any) {
         console.error('Reports API Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

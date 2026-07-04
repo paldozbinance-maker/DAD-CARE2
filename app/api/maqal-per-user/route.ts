@@ -123,11 +123,13 @@ export async function GET(request: NextRequest) {
             };
         });
 
-        return NextResponse.json({
+        const res = NextResponse.json({
             users: perUserData,
             date1: date1?.toString() || null,
             date2: date2?.toString() || null,
         });
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        return res;
 
     } catch (error: any) {
         console.error('Error fetching per-user maqal:', error);
