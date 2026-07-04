@@ -248,16 +248,16 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            // Cache lite customers to prevent DB load from GlobalSearch remounts
-            res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+            // Disable cache so the UI updates instantly after saving a receipt
+            res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
             return res;
         }
 
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        // Cache in the user's browser for 30 seconds to drastically reduce Serverless Execution and Database load during navigation
-        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        // Disable cache so the UI updates instantly after saving a receipt
+        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

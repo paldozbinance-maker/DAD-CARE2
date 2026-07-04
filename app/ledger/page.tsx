@@ -828,7 +828,7 @@ export default function LedgerPage() {
             
             // Workflow Auto-Transition:
             if (isReadOnlyMode) {
-                // Keep showLastMaqal TRUE so they can see the payment they just added!
+                setShowLastMaqal(false);
                 setUpdateLastMaqal(false);
                 setOldMaqalDone(true);
                 setFetchingDetails(false); // End blink effect
@@ -961,16 +961,18 @@ export default function LedgerPage() {
                     setFetchingDetails(false);
                     await Promise.all([mutateCustomers(), mutateLedger()]);
                 } else {
-                    // Normal non-absent save → STAY on customer so they can see the updates!
+                    // Normal non-absent save → clear and go to next customer
                     setFetchingDetails(false);
+                    setLastSavedCustomerId(selectedCustomerId);
+                    setSelectedCustomerId('');
+                    setCustomerSearch('');
+                    setShowLastMaqal(false);
                     setUpdateLastMaqal(false);
-                    setOldMaqalDone(true);
-                    
-                    // Automatically switch to viewing the receipt they just created
-                    setShowLastMaqal(true);
-                    
+                    setOldMaqalDone(false);
+                    setFreshBalance(null);
                     setCustomerDailyDates([]);
                     setAllUnprocessedDates([]);
+                    setCustomerPopoverOpen(true);
                     
                     // Refresh data instantly to show new profile details
                     await Promise.all([mutateCustomers(), mutateLedger()]);
