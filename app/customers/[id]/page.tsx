@@ -403,10 +403,10 @@ export default function CustomerDetailPage() {
     };
 
     const { data: allCustomers } = useSWR<Customer[]>('/api/customers?lite=true', fetcher, {
-        revalidateOnFocus: false,
-        dedupingInterval: 60000,
+        revalidateOnFocus: true,
+        dedupingInterval: 2000,
         keepPreviousData: true,
-        revalidateIfStale: false,
+        revalidateIfStale: true,
     });
     
     // Construct the base URL for the first page of ledger data
@@ -415,9 +415,9 @@ export default function CustomerDetailPage() {
     if (endDate) baseLedgerUrl += `&endDate=${endDate}`;
     
     const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, {
-        revalidateOnFocus: false,
-        dedupingInterval: 60000,
-        revalidateIfStale: false,
+        revalidateOnFocus: true,
+        dedupingInterval: 2000,
+        revalidateIfStale: true,
     });
 
     // Sync SWR cache instantly to local state
