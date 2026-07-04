@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireSession } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { session, errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
     try {
         const [usersRes, customersRes] = await Promise.all([
             pool.query('SELECT count(*) FROM "User"'),
