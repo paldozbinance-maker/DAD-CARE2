@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     try {
         // Get Book (only if not soft-deleted)
         const { rows: books } = await pool.query(
-            `SELECT * FROM "DailyBook" WHERE date = $1::date AND deleted_at IS NULL`,
+            `SELECT id, date, created_at FROM "DailyBook" WHERE date = $1::date AND deleted_at IS NULL`,
             [dateStr]
         );
 

@@ -11,19 +11,6 @@ const PUBLIC_API_ROUTES = [
     '/api/auth/login',
     '/api/auth/verify',
     '/api/ping',          // keep-alive health check — no auth needed
-    '/api/temp-cleanup',
-    '/api/recover-check',
-    '/api/restore-june24',
-    '/api/verify-june24',
-    '/api/run-migration',
-    '/api/test-db',
-    '/api/fix-all-columns',
-    '/api/rescue',
-    '/api/fix-receipt-id',
-    '/api/restore-db',
-    '/api/backup-db',
-    '/api/check-db',
-    '/api/reset-admin',   // temporary password reset - delete after use
 ];
 
 export async function middleware(request: NextRequest) {

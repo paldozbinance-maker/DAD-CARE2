@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireSession } from '@/lib/require-session';
 
-export const fetchCache = 'force-no-store';
+export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
     try {
         const [usersRes, customersRes, ledgerRes, dailyBookRes] = await Promise.all([
             pool.query('SELECT count(*) FROM "User"'),

@@ -320,8 +320,9 @@ export async function POST(request: Request) {
         for (const cust of (customers || [])) {
             const { data: txns } = await supabase
                 .from('Ledger')
-                .select('*')
+                .select('id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at')
                 .eq('customer_id', cust.id)
+                .is('deleted_at', null)
                 .order('created_at', { ascending: false })
                 .limit(10000);
 

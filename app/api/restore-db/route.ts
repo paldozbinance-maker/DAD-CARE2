@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { requireSession } from '@/lib/require-session';
 
-export const fetchCache = 'force-no-store';
+export const dynamic = 'force-dynamic';
 
 // Helper for bulk inserts
 async function bulkInsert(tableName: string, columns: string[], dataArray: any[]) {
@@ -39,7 +40,10 @@ async function bulkInsert(tableName: string, columns: string[], dataArray: any[]
     }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { session, errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     try {
         console.log('Starting BULK restoration process...');
 

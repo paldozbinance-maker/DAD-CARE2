@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const { errorResponse } = await requireSuperAdmin(request);
     if (errorResponse) return errorResponse;
     try {
-        const { rows } = await pool.query('SELECT * FROM "User" ORDER BY created_at DESC');
+        const { rows } = await pool.query('SELECT id, username, name, role, is_active, gender, phone, avatar_url, assigned_customer_ids, created_at, updated_at FROM "User" ORDER BY created_at DESC');
         const res = NextResponse.json(rows);
         res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
         return res;

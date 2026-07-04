@@ -133,10 +133,12 @@ const getDashboardData = async (today: string) => {
             // 7. Recent transactions (last 5)
             pool.query(`
                 SELECT 
-                    l.*, 
+                    l.id, l.customer_id, l.type, l.reference_date, l.kg, l.price_per_kg,
+                    l.amount, l.previous_debt, l.new_debt, l.note, l.created_at,
                     c.name as "customerName"
                 FROM "Ledger" l
                 JOIN "Customer" c ON l.customer_id = c.id
+                WHERE l.deleted_at IS NULL
                 ORDER BY l.created_at DESC
                 LIMIT 5
             `)

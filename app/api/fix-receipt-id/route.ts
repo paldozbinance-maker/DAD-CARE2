@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { requireSession } from '@/lib/require-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { session, errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     try {
         console.log('Fixing Ledger receipt_id...');
 
