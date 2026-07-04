@@ -39,6 +39,7 @@ interface UserData {
     created_at: string;
     priority?: number;
     avatar_url?: string;
+    assigned_customer_ids?: string[];
 }
 
 interface MaqalCustomer {
@@ -49,31 +50,41 @@ interface MaqalCustomer {
     has_payment: boolean;
 }
 
-interface MaqalLatest {
-    date1: string | null;
-    date2: string | null;
+interface PerUserMaqal {
+    user_id: string;
+    username: string;
+    total: number;
+    solved: number;
     customers: MaqalCustomer[];
 }
 
-// Kinetic scrolling ticker of customer avatars for the maqal badge
-function MaqalTicker({ customers, solved, total }: { customers: MaqalCustomer[]; solved: number; total: number }) {
+// ═══════════════════════════════════════════════════════════════
+// Per-user kinetic Maqal badge with scrolling avatars
+// ═══════════════════════════════════════════════════════════════
+function UserMaqalBadge({ data }: { data: PerUserMaqal }) {
+    const { customers, solved, total } = data;
     const remaining = total - solved;
     const isWarning = remaining > 0;
+    const allDone = remaining === 0 && total > 0;
+
+    if (total === 0) {
+        return <span className="text-[10px] text-muted-foreground/40">—</span>;
+    }
 
     return (
         <Popover>
             <PopoverTrigger asChild>
-                <button className={`relative flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-black transition-all hover:scale-105 cursor-pointer overflow-hidden ${
-                    isWarning
-                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
-                        : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                <button className={`relative flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-black transition-all hover:scale-105 cursor-pointer overflow-hidden ${
+                    allDone
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
                 }`}>
-                    {/* Kinetic lightning background sweep */}
-                    <span className={`absolute inset-0 opacity-20 ${isWarning ? 'animate-lightning-sweep-amber' : 'animate-lightning-sweep-green'}`}
+                    {/* Kinetic lightning sweep */}
+                    <span className="absolute inset-0 opacity-20"
                         style={{
-                            background: isWarning
-                                ? 'linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.8) 50%, transparent 100%)'
-                                : 'linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.8) 50%, transparent 100%)',
+                            background: allDone
+                                ? 'linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.8) 50%, transparent 100%)'
+                                : 'linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.8) 50%, transparent 100%)',
                             animation: 'lightningSwipe 1.8s ease-in-out infinite',
                         }}
                     />
@@ -121,20 +132,20 @@ function MaqalTicker({ customers, solved, total }: { customers: MaqalCustomer[];
             </PopoverTrigger>
             <PopoverContent className="w-64 p-0 bg-card border-border shadow-2xl rounded-xl z-50 overflow-hidden" align="start" sideOffset={6}>
                 {/* Header */}
-                <div className={`px-3 py-2 flex items-center justify-between ${isWarning ? 'bg-amber-500/10' : 'bg-emerald-500/10'}`}>
-                    <span className="text-xs font-black uppercase tracking-widest text-foreground">Latest Maqal</span>
-                    {isWarning ? (
-                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
-                            {remaining} Remaining
-                        </span>
-                    ) : (
+                <div className={`px-3 py-2 flex items-center justify-between ${allDone ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
+                    <span className="text-xs font-black uppercase tracking-widest text-foreground">Priority Maqal</span>
+                    {allDone ? (
                         <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
                             All Done ✓
+                        </span>
+                    ) : (
+                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                            {remaining} Remaining
                         </span>
                     )}
                 </div>
 
-                {/* Customer list — only remaining first, then solved */}
+                {/* Customer list — unsolved first, then solved */}
                 <div className="p-2 space-y-1 max-h-[220px] overflow-y-auto">
                     {/* Unsolved first */}
                     {customers.filter(c => !c.has_payment).map(c => (
@@ -163,7 +174,7 @@ function MaqalTicker({ customers, solved, total }: { customers: MaqalCustomer[];
                         </div>
                     ))}
                     {customers.length === 0 && (
-                        <p className="text-center text-xs text-muted-foreground py-4">No customers in latest pair</p>
+                        <p className="text-center text-xs text-muted-foreground py-4">No priority customers assigned</p>
                     )}
                 </div>
             </PopoverContent>
@@ -174,7 +185,7 @@ function MaqalTicker({ customers, solved, total }: { customers: MaqalCustomer[];
 export default function UsersPage() {
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [users, setUsers] = useState<UserData[]>([]);
-    const [maqalLatest, setMaqalLatest] = useState<MaqalLatest | null>(null);
+    const [perUserMaqal, setPerUserMaqal] = useState<PerUserMaqal[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -198,16 +209,16 @@ export default function UsersPage() {
         }
     };
 
-    const loadMaqalLatest = async () => {
+    const loadPerUserMaqal = async () => {
         try {
             const token = localStorage.getItem('dadwork_session_token') || '';
-            const res = await fetch('/api/maqal-latest', { headers: { 'x-session-token': token } });
+            const res = await fetch('/api/maqal-per-user', { headers: { 'x-session-token': token } });
             if (res.ok) {
                 const data = await res.json();
-                setMaqalLatest(data);
+                setPerUserMaqal(data.users || []);
             }
         } catch (e) {
-            console.error('Failed to load latest maqal:', e);
+            console.error('Failed to load per-user maqal:', e);
         }
     };
 
@@ -217,7 +228,7 @@ export default function UsersPage() {
             try { setCurrentUser(JSON.parse(storedUser)); } catch (e) {}
         }
         loadUsers();
-        loadMaqalLatest();
+        loadPerUserMaqal();
     }, []);
 
     const handleCreateUser = async () => {
@@ -287,10 +298,6 @@ export default function UsersPage() {
         user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.username?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-
-    const maqalCustomers = maqalLatest?.customers ?? [];
-    const maqalSolved = maqalCustomers.filter(c => c.has_payment).length;
-    const maqalTotal = maqalCustomers.length;
 
     if (currentUser && currentUser.role !== 'SUPER_ADMIN') {
         return (
@@ -422,6 +429,8 @@ export default function UsersPage() {
                             <TableBody>
                                 {filteredUsers.map(user => {
                                     const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+                                    const userMaqal = perUserMaqal.find(m => m.user_id === user.id);
+
                                     return (
                                         <TableRow key={user.id} className="border-border hover:bg-muted/30">
                                             <TableCell className="font-medium text-foreground">
@@ -434,17 +443,13 @@ export default function UsersPage() {
                                                         ) : (
                                                             <User className="w-4 h-4 text-primary" />
                                                         )}
-                                                        {/* Priority badge */}
-                                                        {typeof user.priority === 'number' && user.priority > 0 && (
-                                                            <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center w-4 h-4 rounded-full bg-primary text-[8px] font-black text-white ring-1 ring-background shadow-sm">
-                                                                {user.priority}
-                                                            </span>
-                                                        )}
                                                     </div>
                                                     <div className="flex flex-col">
                                                         <span className="font-semibold text-sm">{user.username}</span>
-                                                        {typeof user.priority === 'number' && user.priority > 0 && (
-                                                            <span className="text-[10px] text-muted-foreground">Priority #{user.priority}</span>
+                                                        {(user.assigned_customer_ids?.length || 0) > 0 && (
+                                                            <span className="text-[10px] text-muted-foreground">
+                                                                {user.assigned_customer_ids!.length} priority
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -456,13 +461,8 @@ export default function UsersPage() {
                                                 </span>
                                             </TableCell>
                                             <TableCell>
-                                                {/* Only show maqal badge for admin users with real data */}
-                                                {isAdmin && maqalTotal > 0 ? (
-                                                    <MaqalTicker
-                                                        customers={maqalCustomers}
-                                                        solved={maqalSolved}
-                                                        total={maqalTotal}
-                                                    />
+                                                {userMaqal && userMaqal.total > 0 ? (
+                                                    <UserMaqalBadge data={userMaqal} />
                                                 ) : (
                                                     <span className="text-[10px] text-muted-foreground/40">—</span>
                                                 )}

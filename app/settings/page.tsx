@@ -58,6 +58,20 @@ import { createClient } from '@/lib/supabase/client';
 import { SecurityVerificationDialog } from '@/components/security-verification-dialog';
 import { AppearanceTab } from '@/components/settings/AppearanceTab';
 import { TrashTab } from '@/components/settings/TrashTab';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { CheckCircle2, Circle } from 'lucide-react';
+
+interface PerUserMaqal {
+    user_id: string;
+    username: string;
+    total: number;
+    solved: number;
+    customers: { id: string; name: string; customer_code: string; avatar_url?: string; has_payment: boolean; }[];
+}
 
 interface UserData {
     id: string;
@@ -88,6 +102,7 @@ export default function SettingsPage() {
     const [users, setUsers] = useState<UserData[]>([]);
     const [allCustomers, setAllCustomers] = useState<any[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
+    const [perUserMaqal, setPerUserMaqal] = useState<PerUserMaqal[]>([]);
     const [searchUser, setSearchUser] = useState('');
     const [searchCustomer, setSearchCustomer] = useState('');
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -312,6 +327,18 @@ export default function SettingsPage() {
             // Always load users + customers for all admin roles
             loadUsers();
             loadCustomers();
+            // Load per-user maqal progress
+            const loadPerUserMaqal = async () => {
+                try {
+                    const token = localStorage.getItem('dadwork_session_token') || '';
+                    const res = await fetch('/api/maqal-per-user', { headers: { 'x-session-token': token } });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setPerUserMaqal(data.users || []);
+                    }
+                } catch (e) { console.error('Failed to load per-user maqal:', e); }
+            };
+            loadPerUserMaqal();
 
             if (parsedUser.role === 'SUPER_ADMIN') {
                 loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true, false);
@@ -750,6 +777,20 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-4 max-w-4xl mx-auto w-full pb-24" suppressHydrationWarning>
+            {/* Keyframe styles for kinetic animation */}
+            <style>{`
+                @keyframes lightningSwipe {
+                    0% { transform: translateX(-100%); opacity: 0; }
+                    30% { opacity: 1; }
+                    70% { opacity: 1; }
+                    100% { transform: translateX(200%); opacity: 0; }
+                }
+                @keyframes tickerScroll {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-50%); }
+                }
+            `}</style>
+
             <SecurityVerificationDialog
                 isOpen={!!pendingSecurityAction}
                 onOpenChange={(open) => {
@@ -1010,13 +1051,89 @@ export default function SettingsPage() {
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            {/* Priority stars */}
-                                                            {assignedCount > 0 && (
-                                                                <div className="flex items-center gap-1 mt-1">
-                                                                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                                                                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">{assignedCount} Priority</span>
-                                                                </div>
-                                                            )}
+                                                            {/* Priority stars + Per-user Maqal badge */}
+                                                            {assignedCount > 0 && (() => {
+                                                                const userMaqal = perUserMaqal.find(m => m.user_id === user.id);
+                                                                const solved = userMaqal?.solved || 0;
+                                                                const total = userMaqal?.total || 0;
+                                                                const remaining = total - solved;
+                                                                const allDone = remaining === 0 && total > 0;
+                                                                const customers = userMaqal?.customers || [];
+                                                                return (
+                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                                                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">{assignedCount} Priority</span>
+                                                                        </div>
+                                                                        {total > 0 && (
+                                                                            <Popover>
+                                                                                <PopoverTrigger asChild>
+                                                                                    <button className={`relative flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black transition-all hover:scale-105 cursor-pointer overflow-hidden ${
+                                                                                        allDone
+                                                                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                                                                                            : 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                                                                                    }`}>
+                                                                                        <span className="absolute inset-0 opacity-20"
+                                                                                            style={{
+                                                                                                background: allDone
+                                                                                                    ? 'linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.8) 50%, transparent 100%)'
+                                                                                                    : 'linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.8) 50%, transparent 100%)',
+                                                                                                animation: 'lightningSwipe 1.8s ease-in-out infinite',
+                                                                                            }}
+                                                                                        />
+                                                                                        {remaining > 0 && (
+                                                                                            <span className="absolute -top-0.5 -right-0.5 flex h-1.5 w-1.5 z-10">
+                                                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                                                                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+                                                                                            </span>
+                                                                                        )}
+                                                                                        <span className="relative z-10 flex items-center gap-0.5 overflow-hidden w-[28px]">
+                                                                                            <span className="flex items-center gap-0.5" style={{ animation: customers.length > 3 ? 'tickerScroll 5s linear infinite' : 'none', whiteSpace: 'nowrap' }}>
+                                                                                                {[...customers, ...customers].slice(0, Math.max(6, customers.length * 2)).map((c, i) => (
+                                                                                                    <span key={i} className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[6px] font-black shrink-0 border ${c.has_payment ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-amber-500 border-amber-400 text-white'}`} title={c.name}>
+                                                                                                        {c.avatar_url ? <img src={c.avatar_url} className="w-full h-full rounded-full object-cover" alt={c.name} /> : c.name.charAt(0).toUpperCase()}
+                                                                                                    </span>
+                                                                                                ))}
+                                                                                            </span>
+                                                                                        </span>
+                                                                                        <span className="relative z-10 font-black tabular-nums">{solved}/{total}</span>
+                                                                                    </button>
+                                                                                </PopoverTrigger>
+                                                                                <PopoverContent className="w-56 p-0 bg-card border-border shadow-2xl rounded-xl z-50 overflow-hidden" align="start" sideOffset={6}>
+                                                                                    <div className={`px-3 py-1.5 flex items-center justify-between ${allDone ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
+                                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-foreground">Maqal</span>
+                                                                                        {allDone ? (
+                                                                                            <span className="text-[8px] font-bold text-emerald-500 bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30">Done ✓</span>
+                                                                                        ) : (
+                                                                                            <span className="text-[8px] font-bold text-amber-500 bg-amber-500/20 px-1.5 py-0.5 rounded-full border border-amber-500/30">{remaining} left</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="p-1.5 space-y-0.5 max-h-[180px] overflow-y-auto">
+                                                                                        {customers.filter(c => !c.has_payment).map(c => (
+                                                                                            <div key={c.id} className="flex items-center gap-1.5 p-1 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                                                                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[7px] font-black shrink-0">
+                                                                                                    {c.avatar_url ? <img src={c.avatar_url} className="w-full h-full rounded-full object-cover" alt={c.name} /> : c.name.charAt(0).toUpperCase()}
+                                                                                                </span>
+                                                                                                <span className="text-[10px] font-semibold text-foreground truncate flex-1">{c.name}</span>
+                                                                                                <Circle className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                                                                            </div>
+                                                                                        ))}
+                                                                                        {customers.filter(c => c.has_payment).map(c => (
+                                                                                            <div key={c.id} className="flex items-center gap-1.5 p-1 rounded-lg bg-muted/30 border border-transparent opacity-50">
+                                                                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500 text-white text-[7px] font-black shrink-0">
+                                                                                                    {c.avatar_url ? <img src={c.avatar_url} className="w-full h-full rounded-full object-cover" alt={c.name} /> : c.name.charAt(0).toUpperCase()}
+                                                                                                </span>
+                                                                                                <span className="text-[10px] font-semibold text-muted-foreground line-through truncate flex-1">{c.name}</span>
+                                                                                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </PopoverContent>
+                                                                            </Popover>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
 
                                                         {/* Actions */}

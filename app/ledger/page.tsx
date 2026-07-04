@@ -792,53 +792,64 @@ export default function LedgerPage() {
                 setShowLastMaqal(false);
                 setUpdateLastMaqal(false);
                 setOldMaqalDone(true);
-            }
-            
-            setFetchingDetails(false); // End blink effect
+                setFetchingDetails(false); // End blink effect
 
-            const url = new URL(`/api/customer-daily-entries`, window.location.origin);
-            url.searchParams.set('customerId', selectedCustomerId);
-            if (startDate) {
-                url.searchParams.set('startDate', startDate);
-            }
-            fetch(url.toString()).then(res => {
-                const allDatesHeader = res.headers.get('x-all-unprocessed-dates');
-                if (allDatesHeader) {
-                    try {
-                        setAllUnprocessedDates(JSON.parse(allDatesHeader));
-                    } catch (e) {}
+                // Fetch new dates for the SAME customer since we just paid the old maqal
+                const url = new URL(`/api/customer-daily-entries`, window.location.origin);
+                url.searchParams.set('customerId', selectedCustomerId);
+                if (startDate) {
+                    url.searchParams.set('startDate', startDate);
                 }
-                return res.json();
-            }).then(dailyData => {
-                setCustomerDailyDates(dailyData || []);
-                setDateEntries(prev => {
-                    const newExpandedIds = new Set<string>();
-                    let newEntries;
-                    if (dailyData && dailyData.length > 0) {
-                        newEntries = dailyData.map((d: any, idx: number) => {
-                            const entryId = (Date.now() + idx).toString();
-                            const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
-                            if (shouldExpandExtra) {
-                                newExpandedIds.add(entryId);
-                            }
-                            return entry;
-                        });
-                    } else {
-                        newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                fetch(url.toString()).then(res => {
+                    const allDatesHeader = res.headers.get('x-all-unprocessed-dates');
+                    if (allDatesHeader) {
+                        try {
+                            setAllUnprocessedDates(JSON.parse(allDatesHeader));
+                        } catch (e) {}
                     }
-                    if (newExpandedIds.size > 0) {
-                        setTimeout(() => {
-                            setExpandedExtraEntryIds(prevExpanded => {
-                                const combined = new Set(prevExpanded);
-                                newExpandedIds.forEach(id => combined.add(id));
-                                return combined;
+                    return res.json();
+                }).then(dailyData => {
+                    setCustomerDailyDates(dailyData || []);
+                    setDateEntries(prev => {
+                        const newExpandedIds = new Set<string>();
+                        let newEntries;
+                        if (dailyData && dailyData.length > 0) {
+                            newEntries = dailyData.map((d: any, idx: number) => {
+                                const entryId = (Date.now() + idx).toString();
+                                const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
+                                if (shouldExpandExtra) {
+                                    newExpandedIds.add(entryId);
+                                }
+                                return entry;
                             });
-                        }, 0);
-                    }
-                    return newEntries;
+                        } else {
+                            newEntries = [{ id: Date.now().toString(), date: '', kg: '0', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }];
+                        }
+                        if (newExpandedIds.size > 0) {
+                            setTimeout(() => {
+                                setExpandedExtraEntryIds(prevExpanded => {
+                                    const combined = new Set(prevExpanded);
+                                    newExpandedIds.forEach(id => combined.add(id));
+                                    return combined;
+                                });
+                            }, 0);
+                        }
+                        return newEntries;
+                    });
                 });
-            });
-
+            } else {
+                // Not read-only mode (normal save) -> Clear screen for next customer!
+                setFetchingDetails(false);
+                setSelectedCustomerId('');
+                setSearchTerm('');
+                setShowLastMaqal(false);
+                setUpdateLastMaqal(false);
+                setOldMaqalDone(false);
+                setFreshBalance(null);
+                setCustomerDailyDates([]);
+                setAllUnprocessedDates([]);
+                return;
+            }
         } catch (err: any) {
             toast.error(err.message || 'Failed to save receipt');
         } finally {
