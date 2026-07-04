@@ -83,61 +83,15 @@ export async function GET(request: Request) {
         }
         const pastUnprocessed = Array.from(uniqueDatesMap.values());
 
-        // ── MATHEMATICAL PAIR RULE ──
-        // Calculate offset of firstItem from EPOCH to determine which slot in the pair it occupies.
+        // ── DYNAMIC PAIR RULE ──
+        // Just take the oldest two unprocessed dates available in the DB.
+        // No injecting 0 KG for missing days, no strict calendar locking.
         const result: typeof pastUnprocessed = [];
 
         if (pastUnprocessed.length > 0) {
-            const firstItem = pastUnprocessed[0];
-            const firstDate = new Date(firstItem.date);
-
-            // Days since epoch (integer)
-            const diffDays = Math.round((firstDate.getTime() - EPOCH.getTime()) / (1000 * 60 * 60 * 24));
-
-            if (diffDays % 2 === 0) {
-                // firstItem is the FIRST day of a pair — find or inject its twin (next day)
-                const twinDate = new Date(firstDate);
-                twinDate.setUTCDate(twinDate.getUTCDate() + 1);
-                const twinDateStr = twinDate.toISOString().substring(0, 10);
-
-                // Only release the pair if twin date is already in the past
-                if (twinDateStr < todayStr) {
-                    result.push(firstItem);
-
-                    const existingTwin = pastUnprocessed.find(i => i.date === twinDateStr);
-                    if (existingTwin) {
-                        result.push(existingTwin);
-                    } else {
-                        // Check if it's missing because it's ALREADY in the Ledger
-                        const { rows: ledgerCheck } = await pool.query(`
-                            SELECT 1 FROM "Ledger"
-                            WHERE customer_id = $1
-                              AND (
-                                  reference_date::date = $2::date
-                                  OR
-                                  (reference_date::timestamptz AT TIME ZONE 'Africa/Mogadishu')::date = $2::date
-                              )
-                              AND type = 'PRODUCT'
-                              AND deleted_at IS NULL
-                        `, [customerId, twinDateStr]);
-
-                        if (ledgerCheck.length === 0) {
-                            // Truly missing (no ledger, no daily book) -> Inject 0 KG
-                            result.push({
-                                date: twinDateStr,
-                                kg: 0,
-                                note: null,
-                                processed: false,
-                            });
-                        }
-                        // If it IS in the ledger, we just leave it alone. The UI will process Day 1 as an orphan.
-                    }
-                }
-                // If twin not yet in the past, withhold everything (not ready yet)
-            } else {
-                // firstItem is the SECOND day of a pair — its partner was already processed.
-                // Return it alone as an orphan so the user can clear it.
-                result.push(firstItem);
+            result.push(pastUnprocessed[0]);
+            if (pastUnprocessed.length > 1) {
+                result.push(pastUnprocessed[1]);
             }
         }
 
