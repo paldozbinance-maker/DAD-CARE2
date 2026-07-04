@@ -28,6 +28,7 @@ const getDashboardData = async (today: string) => {
                         new_debt,
                         (type = 'PAYMENT') as is_reesto
                     FROM "Ledger"
+                    WHERE deleted_at IS NULL
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) latest_balances
                 WHERE is_reesto = false AND new_debt != 0
@@ -41,6 +42,7 @@ const getDashboardData = async (today: string) => {
                         new_debt,
                         (type = 'PAYMENT') as is_reesto
                     FROM "Ledger"
+                    WHERE deleted_at IS NULL
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) latest_balances
                 WHERE is_reesto = true AND new_debt != 0
@@ -50,14 +52,14 @@ const getDashboardData = async (today: string) => {
             pool.query(`
                 SELECT COALESCE(SUM(amount), 0)::float as total_paid
                 FROM "Ledger"
-                WHERE type = 'PAYMENT'
+                WHERE type = 'PAYMENT' AND deleted_at IS NULL
             `),
 
             // 4. Total KG all time
             pool.query(`
                 SELECT COALESCE(SUM(kg), 0)::float as total_kg
                 FROM "Ledger"
-                WHERE type = 'PRODUCT'
+                WHERE type = 'PRODUCT' AND deleted_at IS NULL
             `),
 
             // 5. Today's daily book stats (KG and active customer count)
@@ -67,7 +69,7 @@ const getDashboardData = async (today: string) => {
                     COUNT(dbi.id)::int as today_customer_count
                 FROM "DailyBookItem" dbi
                 JOIN "DailyBook" db ON dbi.daily_book_id = db.id
-                WHERE db.date = $1
+                WHERE db.date = $1 AND dbi.deleted_at IS NULL AND db.deleted_at IS NULL
             `, [today]),
 
             // 6. Top Debtors — percentage_paid based on LATEST receipt only (not all-time)
