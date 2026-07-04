@@ -34,24 +34,35 @@ export async function GET(request: Request) {
         const day = parts.find(p => p.type === 'day')?.value;
         const todayStr = `${year}-${month}-${day}`;
 
-        // Fetch unprocessed items in a single blazing fast query!
-        // We get items from DailyBookItem + DailyBook that are before today
-        // AND not already in Ledger (type = PRODUCT, deleted_at is null).
+        // Fetch unprocessed items AND global pair index in a single query
         const query = `
-            SELECT TO_CHAR(db.date, 'YYYY-MM-DD') as date, dbi.kg, dbi.note
-            FROM "DailyBookItem" dbi
-            JOIN "DailyBook" db ON dbi.daily_book_id = db.id
-            WHERE dbi.customer_id = $1 
-              AND db.date::date < $2::date
-              ${startDate ? 'AND db.date::date >= $3::date' : ''}
-              AND NOT EXISTS (
-                  SELECT 1 FROM "Ledger" l 
-                  WHERE l.customer_id = dbi.customer_id 
-                    AND l.reference_date::date = db.date::date 
-                    AND l.type = 'PRODUCT' 
-                    AND l.deleted_at IS NULL
-              )
-            ORDER BY db.date ASC
+            WITH past_dates AS (
+                SELECT date::date as db_date,
+                       ROW_NUMBER() OVER (ORDER BY date DESC) as rn
+                FROM "DailyBook"
+                WHERE deleted_at IS NULL AND date::date < $2::date
+            ),
+            global_pairs AS (
+                SELECT db_date, CEIL(rn / 2.0) as pair_index
+                FROM past_dates
+            ),
+            customer_unprocessed AS (
+                SELECT gp.pair_index, TO_CHAR(db.date, 'YYYY-MM-DD') as date, dbi.kg, dbi.note
+                FROM "DailyBookItem" dbi
+                JOIN "DailyBook" db ON dbi.daily_book_id = db.id
+                JOIN global_pairs gp ON gp.db_date = db.date::date
+                WHERE dbi.customer_id = $1 
+                  ${startDate ? 'AND db.date::date >= $3::date' : ''}
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "Ledger" l 
+                      WHERE l.customer_id = dbi.customer_id 
+                        AND l.reference_date::date = db.date::date 
+                        AND l.type = 'PRODUCT' 
+                        AND l.deleted_at IS NULL
+                  )
+            )
+            SELECT * FROM customer_unprocessed
+            ORDER BY date ASC
         `;
         
         const params = startDate ? [customerId, todayStr, startDate] : [customerId, todayStr];
@@ -61,15 +72,24 @@ export async function GET(request: Request) {
             date: item.date as string,
             kg: Number(item.kg),
             note: (item.note as string | null) ?? null,
+            pair_index: Number(item.pair_index),
             processed: false,
         }));
 
-        // 6. Apply the PAIR RULE: only release complete pairs.
-        //    We strictly return a maximum of 2 dates (1 pair) to force sequential processing.
-        const result: typeof pastUnprocessed = [];
-        if (pastUnprocessed.length >= 2) {
-            result.push(pastUnprocessed[0]);
-            result.push(pastUnprocessed[1]);
+        // 6. Apply the PAIR RULE: only release complete pairs based on GLOBAL boundaries.
+        // We find the oldest pair_index, and return all unprocessed dates belonging to that pair_index.
+        const result: Omit<typeof pastUnprocessed[0], 'pair_index'>[] = [];
+        if (pastUnprocessed.length > 0) {
+            // Because it's ordered by date ASC, the first item has the oldest date (which has the HIGHEST pair_index)
+            const oldestPairIndex = pastUnprocessed[0].pair_index;
+            
+            // Collect all dates that belong to this exact same global pair
+            for (const item of pastUnprocessed) {
+                if (item.pair_index === oldestPairIndex) {
+                    const { pair_index, ...cleanItem } = item;
+                    result.push(cleanItem);
+                }
+            }
         }
 
         // 7. Also return allUnprocessedDates so the frontend can build a date picker
