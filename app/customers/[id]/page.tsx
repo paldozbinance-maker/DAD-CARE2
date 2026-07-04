@@ -409,7 +409,7 @@ export default function CustomerDetailPage() {
     });
     
     // Construct the base URL for the first page of ledger data
-    let baseLedgerUrl = `/api/ledger?customerId=${customerId}&limit=30&offset=0`;
+    let baseLedgerUrl = `/api/ledger?customerId=${customerId}&limit=200&offset=0`;
     if (startDate) baseLedgerUrl += `&startDate=${startDate}`;
     if (endDate) baseLedgerUrl += `&endDate=${endDate}`;
     
@@ -428,10 +428,22 @@ export default function CustomerDetailPage() {
 
     useEffect(() => {
         if (initialLedgerData) {
-            const allTxns = initialLedgerData.transactions || [];
+            const allTxns = (initialLedgerData.transactions || []).map((t: any) => ({
+                ...t,
+                amount: Number(t.amount || 0),
+                kg: t.kg != null ? Number(t.kg) : undefined,
+                price_per_kg: t.price_per_kg != null ? Number(t.price_per_kg) : undefined,
+                previous_debt: Number(t.previous_debt || 0),
+                new_debt: Number(t.new_debt || 0)
+            }));
             setTransactions(allTxns);
             setReceipts(groupTransactionsInfoReceipts(allTxns));
-            setSummary(initialLedgerData.summary || { totalKg: 0, totalPaid: 0, currentBalance: 0 });
+            setSummary({
+                totalKg: Number(initialLedgerData.summary?.totalKg || 0),
+                totalPaid: Number(initialLedgerData.summary?.totalPaid || 0),
+                currentBalance: Number(initialLedgerData.summary?.currentBalance || 0),
+                lastTransactionType: initialLedgerData.summary?.lastTransactionType
+            });
             setHasMore(allTxns.length === 200);
             setLoading(false);
         }
@@ -454,7 +466,7 @@ export default function CustomerDetailPage() {
         setLoadingMore(true);
         try {
             const nextOffset = transactions.length;
-            let url = `/api/ledger?customerId=${customerId}&limit=30&offset=${nextOffset}&t=${Date.now()}`;
+            let url = `/api/ledger?customerId=${customerId}&limit=200&offset=${nextOffset}&t=${Date.now()}`;
             if (startDate) url += `&startDate=${startDate}`;
             if (endDate) url += `&endDate=${endDate}`;
 
@@ -462,10 +474,18 @@ export default function CustomerDetailPage() {
             const ledgerData = await ledgerRes.json();
 
             if (ledgerData.transactions && ledgerData.transactions.length > 0) {
-                const newTxns = [...transactions, ...ledgerData.transactions];
+                const fetchedTxns = ledgerData.transactions.map((t: any) => ({
+                    ...t,
+                    amount: Number(t.amount || 0),
+                    kg: t.kg != null ? Number(t.kg) : undefined,
+                    price_per_kg: t.price_per_kg != null ? Number(t.price_per_kg) : undefined,
+                    previous_debt: Number(t.previous_debt || 0),
+                    new_debt: Number(t.new_debt || 0)
+                }));
+                const newTxns = [...transactions, ...fetchedTxns];
                 setTransactions(newTxns);
                 setReceipts(groupTransactionsInfoReceipts(newTxns));
-                setHasMore(ledgerData.transactions.length === 30);
+                setHasMore(fetchedTxns.length === 200);
             } else {
                 setHasMore(false);
             }
