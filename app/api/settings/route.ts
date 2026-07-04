@@ -9,21 +9,15 @@ export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     try {
-        // Create table if not exists
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS "Settings" (
-                key VARCHAR(255) PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-        `);
-
         const { rows } = await pool.query('SELECT key, value FROM "Settings"');
         const settings = rows.reduce((acc, row) => {
             acc[row.key] = row.value;
             return acc;
         }, {});
 
-        return NextResponse.json(settings);
+        const res = NextResponse.json(settings);
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        return res;
     } catch (error: any) {
         console.error('Settings GET Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

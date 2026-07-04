@@ -36,7 +36,7 @@ export function GlobalSearch() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const filtered = query.trim() === '' ? [] : customers.filter(c => {
+    const filtered = query.trim() === '' ? [] : (customers || []).filter(c => {
         const term = query.toLowerCase().trim();
         const cleanTerm = term.replace(/[^a-z0-9]/g, '');
         const cleanPhoneQuery = query.replace(/[^0-9]/g, '');

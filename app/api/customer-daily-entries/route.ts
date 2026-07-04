@@ -75,11 +75,13 @@ export async function GET(request: Request) {
         // 7. Also return allUnprocessedDates so the frontend can build a date picker
         const allUnprocessedDates = pastUnprocessed.map(d => d.date);
 
-        return NextResponse.json(result, {
+        const res = NextResponse.json(result, {
             headers: {
                 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates),
             }
         });
+        res.headers.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
+        return res;
     } catch (error: any) {
         console.error('Fetch Customer Daily Entries Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

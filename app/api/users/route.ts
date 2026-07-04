@@ -9,7 +9,9 @@ export async function GET(request: Request) {
     if (errorResponse) return errorResponse;
     try {
         const { rows } = await pool.query('SELECT * FROM "User" ORDER BY created_at DESC');
-        return NextResponse.json(rows);
+        const res = NextResponse.json(rows);
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        return res;
     } catch (error: any) {
         console.error('Fetch Users Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

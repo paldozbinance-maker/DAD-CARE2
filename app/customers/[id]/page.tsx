@@ -406,6 +406,7 @@ export default function CustomerDetailPage() {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
         keepPreviousData: true,
+        revalidateIfStale: false,
     });
     
     // Construct the base URL for the first page of ledger data
@@ -416,7 +417,7 @@ export default function CustomerDetailPage() {
     const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 60000,
-        // Removed keepPreviousData: true so we don't flash stale UI on hard refresh
+        revalidateIfStale: false,
     });
 
     // Sync SWR cache instantly to local state
