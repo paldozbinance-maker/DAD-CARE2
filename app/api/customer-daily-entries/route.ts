@@ -11,6 +11,8 @@ import { requireSession } from '@/lib/require-session';
 // A pair is only released when BOTH dates are in the past (< today).
 // If Day 1 is unprocessed but Day 2 is missing from DB, it is INJECTED (0 KG).
 // ──────────────────────────────────────────────────────────────────────────
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
@@ -49,7 +51,6 @@ export async function GET(request: Request) {
               AND db.date::date < $2::date
               ${startDate ? 'AND db.date::date >= $3::date' : ''}
               AND db.deleted_at IS NULL
-              AND dbi.deleted_at IS NULL
               AND NOT EXISTS (
                   SELECT 1 FROM "Ledger" l
                   WHERE l.customer_id = dbi.customer_id
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
             if (diffDays % 2 === 0) {
                 // firstItem is the FIRST day of a pair — find or inject its twin (next day)
                 const twinDate = new Date(firstDate);
-                twinDate.setDate(twinDate.getDate() + 1);
+                twinDate.setUTCDate(twinDate.getUTCDate() + 1);
                 const twinDateStr = twinDate.toISOString().substring(0, 10);
 
                 // Only release the pair if twin date is already in the past
