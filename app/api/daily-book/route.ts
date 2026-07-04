@@ -185,7 +185,7 @@ export async function DELETE(request: Request) {
     try {
         // First get the book ID
         const { rows: books } = await pool.query(
-            `SELECT id FROM "DailyBook" WHERE date = $1::date AND deleted_at IS NULL`,
+            `SELECT id FROM "DailyBook" WHERE date::date = $1::date AND deleted_at IS NULL`,
             [dateStr]
         );
 
