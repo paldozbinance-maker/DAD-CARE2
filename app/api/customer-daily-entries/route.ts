@@ -49,6 +49,7 @@ export async function GET(request: Request) {
               AND db.date::date < $2::date
               ${startDate ? 'AND db.date::date >= $3::date' : ''}
               AND db.deleted_at IS NULL
+              AND dbi.deleted_at IS NULL
               AND NOT EXISTS (
                   SELECT 1 FROM "Ledger" l
                   WHERE l.customer_id = dbi.customer_id
@@ -106,13 +107,29 @@ export async function GET(request: Request) {
                     if (existingTwin) {
                         result.push(existingTwin);
                     } else {
-                        // Inject missing twin with 0 KG (absent customer)
-                        result.push({
-                            date: twinDateStr,
-                            kg: 0,
-                            note: null,
-                            processed: false,
-                        });
+                        // Check if it's missing because it's ALREADY in the Ledger
+                        const { rows: ledgerCheck } = await pool.query(`
+                            SELECT 1 FROM "Ledger"
+                            WHERE customer_id = $1
+                              AND (
+                                  reference_date::date = $2::date
+                                  OR
+                                  (reference_date::timestamptz AT TIME ZONE 'Africa/Mogadishu')::date = $2::date
+                              )
+                              AND type = 'PRODUCT'
+                              AND deleted_at IS NULL
+                        `, [customerId, twinDateStr]);
+
+                        if (ledgerCheck.length === 0) {
+                            // Truly missing (no ledger, no daily book) -> Inject 0 KG
+                            result.push({
+                                date: twinDateStr,
+                                kg: 0,
+                                note: null,
+                                processed: false,
+                            });
+                        }
+                        // If it IS in the ledger, we just leave it alone. The UI will process Day 1 as an orphan.
                     }
                 }
                 // If twin not yet in the past, withhold everything (not ready yet)
