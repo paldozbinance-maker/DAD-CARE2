@@ -38,6 +38,7 @@ interface UserData {
     is_active: boolean;
     created_at: string;
     priority?: number;
+    avatar_url?: string;
 }
 
 interface MaqalCustomer {
@@ -425,10 +426,27 @@ export default function UsersPage() {
                                         <TableRow key={user.id} className="border-border hover:bg-muted/30">
                                             <TableCell className="font-medium text-foreground">
                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isAdmin ? 'bg-amber-500/10' : 'bg-primary/10'}`}>
-                                                        {isAdmin ? <Shield className="w-4 h-4 text-amber-500" /> : <User className="w-4 h-4 text-primary" />}
+                                                    <div className={`relative w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 ${isAdmin ? 'bg-amber-500/10 ring-2 ring-amber-500/30' : 'bg-primary/10 ring-2 ring-primary/20'}`}>
+                                                        {user.avatar_url ? (
+                                                            <img src={user.avatar_url} className="w-full h-full rounded-full object-cover" alt={user.name} />
+                                                        ) : isAdmin ? (
+                                                            <Shield className="w-4 h-4 text-amber-500" />
+                                                        ) : (
+                                                            <User className="w-4 h-4 text-primary" />
+                                                        )}
+                                                        {/* Priority badge */}
+                                                        {typeof user.priority === 'number' && user.priority > 0 && (
+                                                            <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center w-4 h-4 rounded-full bg-primary text-[8px] font-black text-white ring-1 ring-background shadow-sm">
+                                                                {user.priority}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    {user.username}
+                                                    <div className="flex flex-col">
+                                                        <span className="font-semibold text-sm">{user.username}</span>
+                                                        {typeof user.priority === 'number' && user.priority > 0 && (
+                                                            <span className="text-[10px] text-muted-foreground">Priority #{user.priority}</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{user.name || '-'}</TableCell>
