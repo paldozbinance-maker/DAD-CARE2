@@ -17,6 +17,12 @@ const PUBLIC_API_ROUTES = [
     '/api/verify-june24',
     '/api/run-migration',
     '/api/test-db',
+    '/api/fix-all-columns',
+    '/api/rescue',
+    '/api/fix-receipt-id',
+    '/api/restore-db',
+    '/api/backup-db',
+    '/api/check-db',
 ];
 
 export async function middleware(request: NextRequest) {
