@@ -841,7 +841,7 @@ export default function LedgerPage() {
                 // Not read-only mode (normal save) -> Clear screen for next customer!
                 setFetchingDetails(false);
                 setSelectedCustomerId('');
-                setSearchTerm('');
+                setCustomerSearch('');
                 setShowLastMaqal(false);
                 setUpdateLastMaqal(false);
                 setOldMaqalDone(false);
