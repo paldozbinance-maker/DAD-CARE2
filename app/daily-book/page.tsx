@@ -406,6 +406,17 @@ function DailyBookPageInner() {
             return;
         }
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const selected = new Date(newDate);
+        selected.setHours(0, 0, 0, 0);
+
+        if (selected > today) {
+            toast.error("You cannot enter a date in the future!");
+            return;
+        }
+
         if (latestSavedDateStr) {
             const nextRequired = addDays(parseISO(latestSavedDateStr), 1);
             if (!isSameDay(newDate, nextRequired)) {
@@ -413,6 +424,7 @@ function DailyBookPageInner() {
                 return;
             }
         }
+        
         setDate(newDate);
     };
 
