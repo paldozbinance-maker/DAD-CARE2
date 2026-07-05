@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
 import pool from '@/lib/db';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;

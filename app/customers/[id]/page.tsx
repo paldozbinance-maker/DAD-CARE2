@@ -458,7 +458,7 @@ export default function CustomerDetailPage() {
             setLoading(true);
         }
         // Pass a timestamp to the base url via SWR cache busting
-        const cacheBusterUrl = baseLedgerUrl + (baseLedgerUrl.includes('?') ? '&' : '?') + `t=${Date.now()}`;
+        const cacheBusterUrl = baseLedgerUrl;
         const freshData = await fetcher(cacheBusterUrl);
         mutateLedger(freshData);
     };
@@ -467,7 +467,7 @@ export default function CustomerDetailPage() {
         setLoadingMore(true);
         try {
             const nextOffset = transactions.length;
-            let url = `/api/ledger?customerId=${customerId}&limit=200&offset=${nextOffset}&t=${Date.now()}`;
+            let url = `/api/ledger?customerId=${customerId}&limit=200&offset=${nextOffset}`;
             if (startDate) url += `&startDate=${startDate}`;
             if (endDate) url += `&endDate=${endDate}`;
 

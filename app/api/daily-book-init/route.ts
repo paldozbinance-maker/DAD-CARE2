@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
 
-export const dynamic = 'force-dynamic';
-
 async function getDailyBookInit() {
     // Fetch customers only
     const { rows: customers } = await pool.query(`

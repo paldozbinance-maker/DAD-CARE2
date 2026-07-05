@@ -2,9 +2,6 @@ import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
 
-export const fetchCache = 'force-no-store';
-export const revalidate = 0;
-
 // Returns the LATEST maqal pair with full customer list and payment status per customer
 export async function GET(request: NextRequest) {
     try {

@@ -11,7 +11,6 @@ import { requireSession } from '@/lib/require-session';
 // All customers always see the same pair (e.g. Jul 02 + Jul 03 today).
 // If a date is missing from DB for this customer, it is INJECTED (0 KG).
 // ──────────────────────────────────────────────────────────────────────────
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
@@ -119,7 +118,7 @@ export async function GET(request: Request) {
                 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates),
             }
         });
-        res.headers.set('Cache-Control', 'no-store');
+        res.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=120');
         return res;
     } catch (error: any) {
         console.error('Fetch Customer Daily Entries Error:', error);

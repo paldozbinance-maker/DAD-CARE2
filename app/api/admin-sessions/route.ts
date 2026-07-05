@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { validateSession, touchSession, getOnlineSessions, getAllSessions } from '@/lib/sessions-store';
 
-export const dynamic = 'force-dynamic';
-
 /**
  * GET /api/admin-sessions
  * Returns online and recent session data for the super admin dashboard.

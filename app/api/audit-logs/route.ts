@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server';
 import { validateSession, touchSession } from '@/lib/sessions-store';
 import { ensureAuditLogTable } from '@/lib/audit';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: Request) {
     try {
         // Accept token from httpOnly cookie OR x-session-token header

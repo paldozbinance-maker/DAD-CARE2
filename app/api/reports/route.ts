@@ -1,108 +1,83 @@
-import { createClient } from '@/lib/supabase/server';
+import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
-    const supabase = await createClient();
 
     try {
-        // Fetch all customers
-        const { data: customers, error: custError } = await supabase
-            .from('Customer')
-            .select('id, name, customer_code');
+        // Single aggregated SQL query — computes all stats in the DB.
+        // This avoids fetching ALL ledger rows over the Supabase PostgREST API
+        // (which was the #1 cause of Supabase egress usage).
+        const { rows } = await pool.query(`
+            SELECT
+                c.id,
+                c.name,
+                c.customer_code as code,
 
-        if (custError) throw custError;
+                -- Total KG from all PRODUCT entries
+                COALESCE(SUM(CASE WHEN l.type = 'PRODUCT' THEN l.kg ELSE 0 END), 0)::float        AS "totalKg",
 
-        // Fetch all ledger entries to calculate metrics (exclude soft-deleted)
-        const { data: allLedger, error: ledgerError } = await supabase
-            .from('Ledger')
-            .select('customer_id, type, kg, amount, new_debt, created_at, id')
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false })
-            .order('id', { ascending: false });
+                -- Total PRODUCT amount (what they consumed = maqal)
+                COALESCE(SUM(CASE WHEN l.type = 'PRODUCT' THEN l.amount ELSE 0 END), 0)::float    AS "totalProductAmount",
 
-        if (ledgerError) throw ledgerError;
+                -- Total payments made
+                COALESCE(SUM(CASE WHEN l.type = 'PAYMENT' THEN l.amount ELSE 0 END), 0)::float    AS "totalPaid",
 
-        // Group ledger entries by customer
-        const customerStats: Record<string, any> = {};
+                -- Count of PRODUCT transactions
+                COUNT(CASE WHEN l.type = 'PRODUCT' THEN 1 END)::int                               AS "productTxnCount",
 
-        // Initialize
-        customers.forEach(cust => {
-            customerStats[cust.id] = {
-                id: cust.id,
-                name: cust.name,
-                code: cust.customer_code,
-                totalPaid: 0,
-                totalKg: 0,
-                totalProductAmount: 0,
-                productTxnCount: 0,
-                currentDebt: 0,
-                hasDebtRecord: false
-            };
-        });
+                -- Current balance = new_debt from the most recent ledger entry
+                COALESCE((
+                    SELECT new_debt FROM "Ledger" l2
+                    WHERE l2.customer_id = c.id AND l2.deleted_at IS NULL
+                    ORDER BY l2.created_at DESC, l2.id DESC
+                    LIMIT 1
+                ), 0)::float AS "currentDebt",
 
-        // The query is ordered descending, so the FIRST entry we see for a customer
-        // is their latest, which gives us their current balance.
-        allLedger.forEach(entry => {
-            const stats = customerStats[entry.customer_id];
-            if (!stats) return;
+                -- Is Reesto = last transaction was a PAYMENT (meaning balance is negative/credit)
+                COALESCE((
+                    SELECT (type = 'PAYMENT') FROM "Ledger" l2
+                    WHERE l2.customer_id = c.id AND l2.deleted_at IS NULL
+                    ORDER BY l2.created_at DESC, l2.id DESC
+                    LIMIT 1
+                ), false) AS "is_reesto"
 
-            // Capture the latest new_debt as the current debt
-            if (!stats.hasDebtRecord) {
-                stats.currentDebt = entry.new_debt || 0;
-                stats.is_reesto = entry.type === 'PAYMENT';
-                stats.hasDebtRecord = true;
-            }
+            FROM "Customer" c
+            LEFT JOIN "Ledger" l ON l.customer_id = c.id AND l.deleted_at IS NULL
+            GROUP BY c.id, c.name, c.customer_code
+            ORDER BY c.name ASC
+        `);
 
-            if (entry.type === 'PRODUCT') {
-                stats.totalKg += (entry.kg || 0);
-                stats.totalProductAmount += (entry.amount || 0);
-                stats.productTxnCount += 1;
-            } else if (entry.type === 'PAYMENT') {
-                stats.totalPaid += (entry.amount || 0);
-            }
-        });
+        const reportData = rows.map((stats: any) => {
+            const totalProductAmount = parseFloat(stats.totalProductAmount) || 0;
+            const totalPaid = parseFloat(stats.totalPaid) || 0;
+            const totalKg = parseFloat(stats.totalKg) || 0;
+            const productTxnCount = parseInt(stats.productTxnCount) || 0;
+            const averageKg = productTxnCount > 0 ? totalKg / productTxnCount : 0;
 
-        const reportData = Object.values(customerStats).map(stats => {
-            // Calculate averages
-            const averageKg = stats.productTxnCount > 0 ? (stats.totalKg / stats.productTxnCount) : 0;
-            
-            // Performance logic (CORRECTED):
-            // Performance = how much of the PRODUCT charges (what they consumed) have they paid?
-            // This ignores Initial Debt Setups (ADJUSTMENT entries) which are old pre-existing debts.
-            //
-            // Example: Customer bought $700 worth of product and paid $700 → 100% (GREEN)
-            //   even if they have an old $1,365 initial debt setup. They paid what they consumed NOW.
-            //
-            // Formula: totalPaid / totalProductAmount * 100
-            const totalProductAmount = stats.totalProductAmount;
             let performanceScore = 0;
-
-            if (totalProductAmount === 0 && stats.totalPaid === 0) {
-                // No activity at all
+            if (totalProductAmount === 0 && totalPaid === 0) {
                 performanceScore = 100;
-            } else if (totalProductAmount === 0 && stats.totalPaid > 0) {
-                // Paid something but no product entries (maybe pre-payment) → excellent
+            } else if (totalProductAmount === 0 && totalPaid > 0) {
                 performanceScore = 100;
             } else {
-                // Core formula: paid vs what they consumed as products
-                performanceScore = Math.min((stats.totalPaid / totalProductAmount) * 100, 100);
+                performanceScore = Math.min((totalPaid / totalProductAmount) * 100, 100);
             }
 
             return {
                 id: stats.id,
                 name: stats.name,
                 code: stats.code,
-                totalPaid: stats.totalPaid,
-                totalProductAmount: totalProductAmount,
-                totalKg: stats.totalKg,
-                averageKg: averageKg,
-                productTxnCount: stats.productTxnCount,
-                currentDebt: stats.currentDebt,
+                totalPaid,
+                totalProductAmount,
+                totalKg,
+                averageKg,
+                productTxnCount,
+                currentDebt: parseFloat(stats.currentDebt) || 0,
                 is_reesto: stats.is_reesto,
-                performanceScore: performanceScore
+                performanceScore
             };
         });
 

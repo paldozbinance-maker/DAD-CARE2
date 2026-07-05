@@ -2,8 +2,6 @@ import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
 
-export const dynamic = 'force-dynamic';
-
 // Returns per-user maqal progress based on assigned_customer_ids
 export async function GET(request: NextRequest) {
     try {

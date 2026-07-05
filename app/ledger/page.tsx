@@ -365,7 +365,7 @@ export default function LedgerPage() {
                 if (startDate) {
                     url.searchParams.set('startDate', startDate);
                 }
-                url.searchParams.set('t', Date.now().toString()); // Cache buster
+
                 const dailyRes = await fetch(url.toString());
                 if (dailyRes.ok) {
                     const allDatesHeader = dailyRes.headers.get('x-all-unprocessed-dates');
@@ -859,7 +859,7 @@ export default function LedgerPage() {
                 if (startDate) {
                     url.searchParams.set('startDate', startDate);
                 }
-                url.searchParams.set('t', Date.now().toString()); // Cache buster
+
                 fetch(url.toString()).then(res => {
                     const allDatesHeader = res.headers.get('x-all-unprocessed-dates');
                     if (allDatesHeader) {
@@ -912,7 +912,7 @@ export default function LedgerPage() {
                     while (!foundRealPair && safetyLimit-- > 0) {
                         const url = new URL(`/api/customer-daily-entries`, window.location.origin);
                         url.searchParams.set('customerId', selectedCustomerId);
-                        url.searchParams.set('t', Date.now().toString()); // Cache buster
+
                         const res2 = await fetch(url.toString());
                         const allDatesHeader2 = res2.headers.get('x-all-unprocessed-dates');
                         const nextPair: any[] = await res2.json();

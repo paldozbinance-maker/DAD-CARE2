@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { format } from 'date-fns';
 import fs from 'fs';
@@ -289,7 +288,6 @@ function buildMaalinlahaHTML(entries: any[]) {
 export async function POST(request: Request) {
     const { errorResponse } = await requireSuperAdmin(request);
     if (errorResponse) return errorResponse;
-    const supabase = await createClient();
     const backupDir = path.join('C:', 'Users', 'abdiq', 'OneDrive', 'Desktop', 'dadcare app', 'Backups');
     const dateStr = format(new Date(), 'yyyy-MM-dd');
     const todayDir = path.join(backupDir, dateStr);
@@ -304,11 +302,11 @@ export async function POST(request: Request) {
         if (!fs.existsSync(maalinlahaDir)) fs.mkdirSync(maalinlahaDir, { recursive: true });
 
         // ─── 1. Fetch ALL customers ───
-        const { data: customers, error: custErr } = await supabase
-            .from('Customer')
-            .select('id, name, customer_code, gender, phone')
-            .order('name');
-        if (custErr) throw custErr;
+        const { rows: customers } = await pool.query(`
+            SELECT id, name, customer_code, gender, phone
+            FROM "Customer"
+            ORDER BY name ASC
+        `);
 
         // ─── 2. Build Buuga Maqalka per customer ───
         let combinedMaqalkaText = '';
@@ -318,13 +316,13 @@ export async function POST(request: Request) {
         let totalTransactions = 0;
 
         for (const cust of (customers || [])) {
-            const { data: txns } = await supabase
-                .from('Ledger')
-                .select('id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at')
-                .eq('customer_id', cust.id)
-                .is('deleted_at', null)
-                .order('created_at', { ascending: false })
-                .limit(10000);
+            const { rows: txns } = await pool.query(`
+                SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at
+                FROM "Ledger"
+                WHERE customer_id = $1 AND deleted_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 10000
+            `, [cust.id]);
 
             if (!txns || txns.length === 0) continue;
             customerCount++;
@@ -348,30 +346,50 @@ export async function POST(request: Request) {
         fs.writeFileSync(path.join(todayDir, `BUUGA-MAQALKA-FULL-BACKUP-${dateStr}.html`), combinedMaqalkaHTML, 'utf-8');
 
         // ─── 3. Build Buuga Maalinlaha ───
-        const { data: books, error: booksErr } = await supabase
-            .from('DailyBook')
-            .select(`
-                id, date,
-                items:DailyBookItem (
-                    id, kg, present, note,
-                    customer:Customer ( id, name, customer_code, gender )
-                )
-            `)
-            .order('date', { ascending: false });
+        const { rows: historyResult } = await pool.query(`
+            SELECT 
+                db.id, 
+                db.date,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', dbi.id,
+                            'kg', dbi.kg,
+                            'present', dbi.present,
+                            'note', dbi.note,
+                            'customer_id', dbi.customer_id,
+                            'customer', json_build_object(
+                                'id', c.id,
+                                'name', c.name,
+                                'customer_code', c.customer_code,
+                                'gender', c.gender
+                            )
+                        )
+                    ) FILTER (WHERE dbi.id IS NOT NULL), 
+                    '[]'::json
+                ) as items
+            FROM "DailyBook" db
+            LEFT JOIN "DailyBookItem" dbi ON dbi.daily_book_id = db.id AND dbi.deleted_at IS NULL
+            LEFT JOIN "Customer" c ON c.id = dbi.customer_id
+            WHERE db.deleted_at IS NULL
+            GROUP BY db.id, db.date
+            ORDER BY db.date DESC
+        `);
 
-        if (booksErr) throw booksErr;
-
-        const history = (books || []).map((book: any) => ({
-            date: book.date,
-            totalKg: book.items.reduce((s: number, i: any) => s + (i.kg || 0), 0),
-            items: book.items.map((item: any) => ({
-                customer_id: item.customer?.id,
-                kg: item.kg,
-                present: item.present,
-                note: item.note,
-                customer: item.customer
-            }))
-        }));
+        const history = (historyResult || []).map((book: any) => {
+            const itemsList = typeof book.items === 'string' ? JSON.parse(book.items) : (book.items || []);
+            return {
+                date: book.date,
+                totalKg: itemsList.reduce((s: number, i: any) => s + (i.kg || 0), 0),
+                items: itemsList.map((item: any) => ({
+                    customer_id: item.customer?.id,
+                    kg: item.kg,
+                    present: item.present,
+                    note: item.note,
+                    customer: item.customer
+                }))
+            };
+        });
 
         const maalinlahaText = buildMaalinlahaText(history);
         const maalinlahaHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Buuga Maalinlaha Backup - ${dateStr}</title><style>body{margin:0;padding:20px;background:#fff;} @media print { div { page-break-inside: avoid; } }</style></head><body>${buildMaalinlahaHTML(history)}</body></html>`;

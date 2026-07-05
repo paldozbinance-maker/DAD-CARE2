@@ -2,8 +2,6 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
 
-export const dynamic = 'force-dynamic';
-
 // Returns list of customer_ids that already have a PRODUCT ledger entry for a given date
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);

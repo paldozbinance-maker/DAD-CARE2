@@ -2,9 +2,6 @@ import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
 
-export const fetchCache = 'force-no-store';
-export const revalidate = 0;
-
 export async function GET(request: NextRequest) {
     try {
         const sessionRes = await requireSession(request);
