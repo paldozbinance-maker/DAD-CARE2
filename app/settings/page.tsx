@@ -103,35 +103,33 @@ export default function SettingsPage() {
     const [isDatePricingOpen, setIsDatePricingOpen] = useState(false);
     
     const allowedDates = useMemo(() => {
-        const today = new Date();
-        const y = today.getFullYear();
-        const m = today.getMonth() + 1; // 0-indexed, so 7 is July
-        const d = today.getDate();
-        
-        let date1, date2;
+        // Compute the Global Active Pair dynamically based on Mogadishu time
+        // Matches exact logic from api/maqal-per-user/route.ts
+        const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const todayStr = formatter.format(new Date());
+        const epochMs = new Date('2026-06-28T00:00:00Z').getTime();
+        const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
+        const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
 
-        if (y === 2026 && m === 7 && d <= 5) {
-            // Until July 5th, we are solving July 2 and July 3
-            date1 = new Date(2026, 6, 2); // Month is 0-indexed (6 = July)
-            date2 = new Date(2026, 6, 3);
-        } else if (y === 2026 && m === 7 && d >= 6) {
-            // Starting July 6th, we solve July 4 and July 5
-            date1 = new Date(2026, 6, 4);
-            date2 = new Date(2026, 6, 5);
-        } else {
-            // Fallback just in case
-            date1 = new Date(today); date1.setDate(today.getDate() - 3);
-            date2 = new Date(today); date2.setDate(today.getDate() - 2);
+        let activeStartOffset = 0;
+        for (let i = diffDaysToday - 1; i >= 0; i--) {
+            if (i % 2 === 0 && (i + 1) < diffDaysToday) {
+                activeStartOffset = i;
+                break;
+            }
         }
-        
-        const formatLocal = (dt: Date) => {
-            const yyyy = dt.getFullYear();
-            const mm = String(dt.getMonth() + 1).padStart(2, '0');
-            const dd = String(dt.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
+
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const day1Ms = epochMs + activeStartOffset * 86400000;
+        const day2Ms = epochMs + (activeStartOffset + 1) * 86400000;
+
+        const toDateStr = (ms: number) => {
+            const d = new Date(ms);
+            return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
         };
-        
-        return [formatLocal(date2), formatLocal(date1)];
+
+        // UI expects [newerDate, olderDate]
+        return [toDateStr(day2Ms), toDateStr(day1Ms)];
     }, []);
 
     const [newDatePrice, setNewDatePrice] = useState({ date: allowedDates[0], price: '' });
