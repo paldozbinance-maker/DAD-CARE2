@@ -114,14 +114,20 @@ export default function SettingsPage() {
         }
 
         // Compute fallback dynamically based on Mogadishu time
+        // ACTIVE pair = currentPair - 2 (users should be working on this)
+        // WAITING pair = currentPair (upcoming pair)
         const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
         const todayStr = formatter.format(new Date());
         const epochMs = new Date('2026-06-28T00:00:00Z').getTime();
         const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
         const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
 
-        let currentPairStartOffset = Math.floor(diffDaysToday / 2) * 2;
-        let prevPairStartOffset = currentPairStartOffset - 2;
+        // currentPairOffset = the pair that includes today (e.g., Jul 4 & 5 when today=Jul 5)
+        const currentPairOffset = Math.floor(diffDaysToday / 2) * 2;
+        // activePairOffset = the pair BEFORE today (e.g., Jul 2 & 3 when today=Jul 5)
+        const activePairOffset = Math.max(0, currentPairOffset - 2);
+        // waitingPairOffset = the pair that includes today (e.g., Jul 4 & 5)
+        const waitingPairOffset = activePairOffset + 2;
 
         const pad = (n: number) => String(n).padStart(2, '0');
         const toDateStr = (ms: number) => {
@@ -129,11 +135,12 @@ export default function SettingsPage() {
             return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
         };
 
+        // Order: [waitingDay2, waitingDay1, activeDay2, activeDay1]
         const dates = [
-            toDateStr(epochMs + (currentPairStartOffset + 1) * 86400000), // e.g. Jul 05
-            toDateStr(epochMs + currentPairStartOffset * 86400000),       // e.g. Jul 04
-            toDateStr(epochMs + (prevPairStartOffset + 1) * 86400000),    // e.g. Jul 03
-            toDateStr(epochMs + prevPairStartOffset * 86400000),          // e.g. Jul 02
+            toDateStr(epochMs + (waitingPairOffset + 1) * 86400000), // e.g. Jul 05 (waiting day 2)
+            toDateStr(epochMs + waitingPairOffset * 86400000),       // e.g. Jul 04 (waiting day 1)
+            toDateStr(epochMs + (activePairOffset + 1) * 86400000),  // e.g. Jul 03 (active day 2)
+            toDateStr(epochMs + activePairOffset * 86400000),        // e.g. Jul 02 (active day 1)
         ];
         
         return dates;
@@ -992,19 +999,6 @@ export default function SettingsPage() {
                 }
                 isProcessing={isClearingHistory}
             />
-            {/* Compact Header */}
-            <div className="relative px-4 pt-4 pb-3 rounded-2xl bg-card overflow-hidden border border-border/50 mx-1 shadow-sm">
-                <div className="absolute -top-20 -right-20 w-52 h-52 bg-primary/8 rounded-full blur-[80px] pointer-events-none" />
-                <div className="relative z-10 flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 shadow-inner">
-                        <Settings className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-black text-foreground tracking-tight">Settings</h2>
-                        <p className="text-[11px] text-muted-foreground font-medium -mt-0.5">Users, theme & data</p>
-                    </div>
-                </div>
-            </div>
 
             {/* Tabs - Compact pill style */}
             <div className="px-1">
@@ -1365,14 +1359,15 @@ export default function SettingsPage() {
                                                                                                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
                                                                                             </span>
                                                                                         )}
-                                                                                        <span className="relative z-10 flex items-center gap-0.5 overflow-hidden w-[28px]">
-                                                                                            <span className="flex items-center gap-0.5" style={{ animation: customers.length > 3 ? 'tickerScroll 5s linear infinite' : 'none', whiteSpace: 'nowrap' }}>
-                                                                                                {[...customers, ...customers].slice(0, Math.max(6, customers.length * 2)).map((c, i) => (
-                                                                                                    <span key={i} className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[6px] font-black shrink-0 border ${c.has_payment ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-amber-500 border-amber-400 text-white'}`} title={c.name}>
-                                                                                                        {c.avatar_url ? <img src={c.avatar_url} className="w-full h-full rounded-full object-cover" alt={c.name} /> : c.name.charAt(0).toUpperCase()}
-                                                                                                    </span>
-                                                                                                ))}
-                                                                                            </span>
+                                                                                        <span className="relative z-10 flex items-center gap-0.5 ml-1">
+                                                                                            {customers.slice(0, 3).map((c: any) => (
+                                                                                                <span key={c.id} className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[6px] font-black shrink-0 border ${c.has_payment ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-amber-500 border-amber-400 text-white'}`} title={c.name}>
+                                                                                                    {c.avatar_url ? <img src={c.avatar_url} className="w-full h-full rounded-full object-cover" alt={c.name} /> : c.name.charAt(0).toUpperCase()}
+                                                                                                </span>
+                                                                                            ))}
+                                                                                            {customers.length > 3 && (
+                                                                                                <span className="text-[7px] font-bold text-muted-foreground ml-0.5">+{customers.length - 3}</span>
+                                                                                            )}
                                                                                         </span>
                                                                                         <span className="relative z-10 font-black tabular-nums">{solved}/{total}</span>
                                                                                     </button>

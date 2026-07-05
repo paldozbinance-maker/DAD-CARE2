@@ -24,7 +24,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         if (storedUser) {
             try {
                 setCurrentUser(JSON.parse(storedUser));
-            } catch (e) {}
+            } catch (e) { }
         }
         const loggedIn = !!storedUser;
         setIsAuthenticated(loggedIn);
@@ -54,15 +54,15 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                         .then(res => res.json())
                         .then(data => {
                             if (data.online) localStorage.setItem('dadwork_online_sessions', JSON.stringify(data.online));
-                        }).catch(() => {});
-                    
+                        }).catch(() => { });
+
                     // Prefetch audit stats silently
                     fetch('/api/audit-logs?limit=1&stats=true', { headers: { 'x-session-token': token } })
                         .then(res => res.json())
                         .then(data => {
                             if (data.userStats) localStorage.setItem('dadwork_audit_stats', JSON.stringify(data.userStats));
-                        }).catch(() => {});
-                } catch(e) {}
+                        }).catch(() => { });
+                } catch (e) { }
             };
             fetchBackgroundStats();
             // Removed 60s interval to prevent massive Vercel usage spikes.
@@ -185,6 +185,8 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                                 )}
                             </div>
                         </div>
+
+
                     </div>
                 )}
                 {children}

@@ -138,6 +138,7 @@ export function AppSidebar() {
 
             {/* Footer */}
             <div className="border-t border-sidebar-border/50 p-3 space-y-1">
+
                 {/* Theme Toggle */}
                 <Button
                     variant="ghost"
