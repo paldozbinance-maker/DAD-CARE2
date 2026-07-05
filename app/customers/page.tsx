@@ -50,7 +50,7 @@ export default function CustomersPage() {
     const [showAllTimePct, setShowAllTimePct] = useState<Record<string, boolean>>({});
     const [maqalSearch, setMaqalSearch] = useState('');
 
-    const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: false, dedupingInterval: 120000, revalidateIfStale: false });
+    const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: false, dedupingInterval: 600000, revalidateIfStale: false });
 
     // Latest pair = latest pair with ≥20 customers who paid (the "qualified" latest)
     const latestPair = maqalPairs?.find(pair => parseInt(pair.payment_count) >= 20) || null;
@@ -126,7 +126,7 @@ export default function CustomersPage() {
     const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
         customersUrl,
         fetcher,
-        { revalidateOnFocus: false, dedupingInterval: 30000, revalidateIfStale: false }
+        { revalidateOnFocus: false, dedupingInterval: 300000, revalidateIfStale: false }
     );
     const customers = customersData || [];
 
@@ -473,6 +473,7 @@ export default function CustomersPage() {
                                     <div className="flex-1 min-w-0">
                                         <p className={`text-xs font-black truncate group-hover:${accentColor} transition-colors uppercase flex items-center gap-1.5`}>
                                             {customer.name}
+                                            {(customer as any).is_target_days_done && <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 fill-blue-500/20" />}
                                             {currentUser?.assigned_customer_ids?.includes(customer.id) && (
                                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase bg-amber-500/10 text-amber-500 border border-amber-500/30 px-1.5 py-0.5 rounded-md shadow-[0_0_10px_rgba(245,158,11,0.2)]">
                                                     <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />

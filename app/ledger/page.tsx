@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info, BookOpen, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, User, Scale, CalendarIcon, TrendingUp, TrendingDown, Info, BookOpen, RefreshCw, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ interface DateEntry {
     extraPricePerKg?: string;
     extraNote?: string;
     mainNote?: string;
+    isReady?: boolean;
 }
 
 interface PaymentEntry {
@@ -63,6 +64,7 @@ interface DailyBookRecord {
     kg: number;
     processed: boolean;
     note?: string | null;
+    isReady?: boolean;
 }
 
 const parseVipEntries = (note: string) => {
@@ -177,7 +179,8 @@ const buildEntryFromDailyRecord = (
             extraKg,
             extraPricePerKg,
             extraNote,
-            mainNote
+            mainNote,
+            isReady: record.isReady !== false
         },
         shouldExpandExtra
     };
@@ -202,8 +205,9 @@ export default function LedgerPage() {
     // Data state
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 120000,
-        revalidateIfStale: false
+        dedupingInterval: 600000,  // 10 min — customer list rarely changes
+        revalidateIfStale: false,
+        revalidateOnReconnect: false,
     });
     const allCustomers = (rawCustomers || []).filter((c: any) => !c.is_inactive);
     
@@ -213,7 +217,8 @@ export default function LedgerPage() {
     const ledgerUrl = selectedCustomerId ? `/api/ledger?customerId=${selectedCustomerId}&limit=50` : null;
     const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 30000,    // 30s — per-customer ledger can change after a save
+        dedupingInterval: 120000,   // 2 min — per-customer ledger
+        revalidateOnReconnect: false,
     });
     
     const history: Transaction[] = (ledgerData?.transactions || []).map((t: any) => ({
@@ -542,22 +547,36 @@ export default function LedgerPage() {
                 const d1 = recentDates[i];
                 const d2 = recentDates[i+1];
                 if (d1 && d2) {
-                    options.push(`✅ ${format(parseISO(d1), "MMM dd")} & ${format(parseISO(d2), "MMM dd")} (Done)`);
+                    options.push(`☑️ ${format(parseISO(d1), "MMM dd")} & ${format(parseISO(d2), "MMM dd")} (Done)`);
                 } else if (d1) {
-                    options.push(`✅ ${format(parseISO(d1), "MMM dd")} (Done)`);
+                    options.push(`☑️ ${format(parseISO(d1), "MMM dd")} (Done)`);
                 }
             }
         }
 
-        // 2. Unprocessed dates
+        // 2. Unprocessed dates (from API — always includes waiting pair as last item)
         if (allUnprocessedDates && allUnprocessedDates.length > 0) {
+            const totalPairs = Math.ceil(allUnprocessedDates.length / 2);
             for (let i = 0; i < allUnprocessedDates.length; i += 2) {
                 const d1 = allUnprocessedDates[i];
-                const d2 = allUnprocessedDates[i+1];
-                const isCurrent = i === 0;
-                const prefix = isCurrent ? '⏳' : '❌';
-                const suffix = isCurrent ? '(Current)' : '(Pending)';
+                const d2 = allUnprocessedDates[i + 1];
+                const pairIndex = i / 2;
+                const isWaitingPair = pairIndex === totalPairs - 1; // Last pair is always the waiting/locked pair
+                const isCurrentReady = pairIndex === 0 && totalPairs > 1; // First pair, not the only one
                 
+                let prefix: string;
+                let suffix: string;
+                if (isWaitingPair) {
+                    prefix = '⏳';
+                    suffix = '(Waiting)';
+                } else if (isCurrentReady) {
+                    prefix = '📌';
+                    suffix = '(Current)';
+                } else {
+                    prefix = '❌';
+                    suffix = '(Pending)';
+                }
+
                 if (d1 && d2) {
                     options.push(`${prefix} ${format(parseISO(d1), "MMM dd")} & ${format(parseISO(d2), "MMM dd")} ${suffix}`);
                 } else if (d1) {
@@ -695,7 +714,7 @@ export default function LedgerPage() {
         const isReadOnlyMode = showLastMaqal && !updateLastMaqal;
 
         const validEntries = isReadOnlyMode ? [] : dateEntries.filter(e => 
-            e.date && (
+            e.date && e.isReady !== false && (
                 (parseFloat(e.kg) >= 0 && parseFloat(e.pricePerKg) > 0) || 
                 (parseFloat(e.extraKg || '0') > 0 && parseFloat(e.extraPricePerKg || '0') > 0)
             )
@@ -1150,8 +1169,9 @@ export default function LedgerPage() {
                                                             }}
                                                         >
                                                             {isPriority && "⭐ "}
-                                                            {c.id === lastSavedCustomerId ? '✅ (Just Saved) ' : (c.is_target_days_done ? '✔️ ' : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? '✅ ' : '')))}
+                                                            {c.id === lastSavedCustomerId ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : (c.is_target_days_done ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : '')))}
                                                             {c.name.toUpperCase()} (ID: {c.customer_code})
+                                                            {c.id === lastSavedCustomerId && <span className="ml-1 text-[10px] text-blue-500 font-bold">(Just Saved)</span>}
                                                         </div>
                                                     );
 
@@ -1219,20 +1239,26 @@ export default function LedgerPage() {
                                             </div>
 
                                             <div className="space-y-4">
-                                                {dateEntries.map((entry, index) => (
+                                                {dateEntries.map((entry, index) => {
+                                                    const isEditable = updateLastMaqal && entry.isReady !== false;
+                                                    return (
                                                     <div key={entry.id} className="relative p-3 md:p-4 bg-background shadow-sm border border-border/60 rounded-2xl group transition-all hover:shadow-md">
                                                         <div className="flex flex-col gap-2">
                                                             {/* Date Row + Toggle */}
                                                             <div className="flex items-end gap-2">
                                                                 <div className="flex-1 space-y-1.5">
-                                                                    <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Date</Label>
+                                                                    <div className="flex items-center">
+                                                                        <Label className="text-[10px] md:text-xs uppercase font-black text-muted-foreground tracking-wider ml-1">Date</Label>
+                                                                        {entry.isReady === false && <span className="ml-2 text-[9px] uppercase font-black text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-sm border border-amber-500/20 shadow-sm animate-pulse">⏳ Waiting</span>}
+                                                                    </div>
                                                                     <div className="relative">
                                                                         {updateLastMaqal ? (
                                                                             <Input
                                                                                 type="date"
                                                                                 value={entry.date || ""}
                                                                                 onChange={e => updateDateEntry(entry.id, 'date', e.target.value)}
-                                                                                className="h-11 md:h-12 pl-10 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-background shadow-none"
+                                                                                readOnly={!isEditable}
+                                                                                className={cn("h-11 md:h-12 pl-10 font-bold text-sm md:text-base rounded-xl border border-border/80 bg-background shadow-none", !isEditable && "opacity-70 bg-muted/20 cursor-not-allowed")}
                                                                             />
                                                                         ) : (
                                                                             <select
@@ -1280,12 +1306,12 @@ export default function LedgerPage() {
                                                                             type="number"
                                                                             step="1"
                                                                             value={entry.kg}
-                                                                            readOnly={!updateLastMaqal}
+                                                                            readOnly={!isEditable}
                                                                             onChange={e => updateDateEntry(entry.id, 'kg', e.target.value)}
                                                                             inputMode="decimal"
                                                                             className={cn(
                                                                                 "h-12 pl-10 text-base font-black border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none",
-                                                                                updateLastMaqal ? "bg-background cursor-text" : "bg-muted/5 cursor-not-allowed opacity-90"
+                                                                                isEditable ? "bg-background cursor-text" : "bg-muted/5 cursor-not-allowed opacity-90"
                                                                             )}
                                                                             placeholder="0"
                                                                         />
@@ -1299,9 +1325,10 @@ export default function LedgerPage() {
                                                                             type="number"
                                                                             step="1"
                                                                             value={entry.pricePerKg}
+                                                                            readOnly={!isEditable}
                                                                             onChange={e => updateDateEntry(entry.id, 'pricePerKg', e.target.value)}
                                                                             inputMode="decimal"
-                                                                            className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
+                                                                            className={cn("h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none", !isEditable && "opacity-70 cursor-not-allowed")}
                                                                             placeholder="35"
                                                                         />
                                                                     </div>
@@ -1357,9 +1384,10 @@ export default function LedgerPage() {
                                                                                 type="number"
                                                                                 step="1"
                                                                                 value={entry.extraKg || ''}
+                                                                                readOnly={!isEditable}
                                                                                 onChange={e => updateDateEntry(entry.id, 'extraKg', e.target.value)}
                                                                                 inputMode="decimal"
-                                                                                className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none"
+                                                                                className={cn("h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl text-primary focus:bg-background transition-all shadow-none", !isEditable && "opacity-70 cursor-not-allowed")}
                                                                                 placeholder="0"
                                                                             />
                                                                         </div>
@@ -1372,9 +1400,10 @@ export default function LedgerPage() {
                                                                                 type="number"
                                                                                 step="1"
                                                                                 value={entry.extraPricePerKg || ''}
+                                                                                readOnly={!isEditable}
                                                                                 onChange={e => updateDateEntry(entry.id, 'extraPricePerKg', e.target.value)}
                                                                                 inputMode="decimal"
-                                                                                className="h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
+                                                                                className={cn("h-12 pl-10 text-base font-black bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none", !isEditable && "opacity-70 cursor-not-allowed")}
                                                                                 placeholder="36"
                                                                             />
                                                                         </div>
@@ -1386,8 +1415,9 @@ export default function LedgerPage() {
                                                                             <Input
                                                                                 type="text"
                                                                                 value={entry.extraNote !== undefined ? entry.extraNote : 'Notebook'}
+                                                                                readOnly={!isEditable}
                                                                                 onChange={e => updateDateEntry(entry.id, 'extraNote', e.target.value)}
-                                                                                className="h-12 pl-10 text-sm font-bold bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none"
+                                                                                className={cn("h-12 pl-10 text-sm font-bold bg-muted/10 border-border/80 rounded-xl focus:bg-background transition-all shadow-none", !isEditable && "opacity-70 cursor-not-allowed")}
                                                                                 placeholder="Notebook"
                                                                             />
                                                                         </div>
@@ -1405,7 +1435,8 @@ export default function LedgerPage() {
                                                             </button>
                                                         )}
                                                     </div>
-                                                ))}
+                                                );
+                                            })}
                                             </div>
                                         </div>
                                         )}
@@ -1627,7 +1658,8 @@ export default function LedgerPage() {
                                                             );
                                                         })()}
 
-                                                        {/* Reesto (Opening Balance) */}
+                                                        {/* Reesto (Opening Balance) — only show when non-zero */}
+                                                            {lastReceiptGroup.openingBalance !== 0 && (
                                                             <div className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-bold px-1 -ml-1 rounded-sm mt-1 ${
                                                                 lastReceiptGroup.openingBalance < 0
                                                                     ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/5'
@@ -1636,6 +1668,7 @@ export default function LedgerPage() {
                                                                 <span>{lastReceiptGroup.openingBalance < 0 ? 'Heyn' : 'Reesto'}</span>
                                                                 <span>{lastReceiptGroup.openingBalance > 0 ? '+' : '-'}${Math.abs(Math.round(lastReceiptGroup.openingBalance)).toLocaleString()}</span>
                                                             </div>
+                                                            )}
 
 
                                                         {/* Adjustment entries */}
@@ -1645,6 +1678,7 @@ export default function LedgerPage() {
                                                                 <span>{e.amount > 0 ? '+' : '-'}${Math.abs(Math.round(e.amount)).toLocaleString()}</span>
                                                             </div>
                                                         ))}
+
 
                                                         {/* Lacagta Guud */}
                                                         {(lastReceiptGroup.totalMaqalka > 0 || lastReceiptGroup.totalAdjustment > 0) && (() => {

@@ -404,7 +404,7 @@ export default function CustomerDetailPage() {
 
     const { data: allCustomers } = useSWR<Customer[]>('/api/customers?lite=true', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 30000,
+        dedupingInterval: 300000,
         keepPreviousData: true,
         revalidateIfStale: false,
     });
@@ -416,7 +416,7 @@ export default function CustomerDetailPage() {
     
     const { data: initialLedgerData, mutate: mutateLedger } = useSWR(baseLedgerUrl, fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 30000,
+        dedupingInterval: 300000,
         revalidateIfStale: false,
     });
 

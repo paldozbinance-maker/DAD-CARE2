@@ -63,7 +63,7 @@ export function useDailyBookDate(dateStr: string | null) {
         {
             revalidateOnFocus: false,
             keepPreviousData: true,
-            dedupingInterval: 120000, // 2 min — per-date data doesn't change often
+            dedupingInterval: 600000, // 10 min — per-date data doesn't change often
             revalidateIfStale: false,
             onError: (err) => {
                 console.error('[useDailyBookDate] SWR error:', err);
@@ -86,7 +86,7 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         fetcher,
         {
             revalidateOnFocus: false,
-            dedupingInterval: 120000, // 2 min
+            dedupingInterval: 600000, // 10 min
             revalidateIfStale: false,
             onError: (err) => {
                 console.error('[useLedgerStatusForDate] SWR error:', err);
@@ -113,7 +113,7 @@ export function useDailyBookHistory() {
         fetcher,
         {
             revalidateOnFocus: false,
-            dedupingInterval: 60000, // 1 min
+            dedupingInterval: 600000, // 10 min
             revalidateIfStale: false,
             onError: (err) => {
                 console.error('[useDailyBookHistory] SWR error:', err);

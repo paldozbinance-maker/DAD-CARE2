@@ -111,25 +111,23 @@ export default function SettingsPage() {
         const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
         const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
 
-        let activeStartOffset = 0;
-        for (let i = diffDaysToday - 1; i >= 0; i--) {
-            if (i % 2 === 0 && (i + 1) < diffDaysToday) {
-                activeStartOffset = i;
-                break;
-            }
-        }
+        let currentPairStartOffset = Math.floor(diffDaysToday / 2) * 2;
+        let prevPairStartOffset = currentPairStartOffset - 2;
 
         const pad = (n: number) => String(n).padStart(2, '0');
-        const day1Ms = epochMs + activeStartOffset * 86400000;
-        const day2Ms = epochMs + (activeStartOffset + 1) * 86400000;
-
         const toDateStr = (ms: number) => {
             const d = new Date(ms);
             return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
         };
 
-        // UI expects [newerDate, olderDate]
-        return [toDateStr(day2Ms), toDateStr(day1Ms)];
+        const dates = [
+            toDateStr(epochMs + (currentPairStartOffset + 1) * 86400000), // e.g. Jul 05
+            toDateStr(epochMs + currentPairStartOffset * 86400000),       // e.g. Jul 04
+            toDateStr(epochMs + (prevPairStartOffset + 1) * 86400000),    // e.g. Jul 03
+            toDateStr(epochMs + prevPairStartOffset * 86400000),          // e.g. Jul 02
+        ];
+        
+        return dates;
     }, []);
 
     const [newDatePrice, setNewDatePrice] = useState({ date: allowedDates[0], price: '' });
@@ -1107,7 +1105,9 @@ export default function SettingsPage() {
                                             </div>
                                             <div>
                                                 <h3 className="text-sm font-bold text-foreground">Date-Specific Pricing</h3>
-                                                <p className="text-[10px] text-muted-foreground font-semibold">{allowedDates[0]} &amp; {allowedDates[1]}</p>
+                                                <p className="text-[10px] text-muted-foreground font-semibold">
+                                                    📌 {allowedDates[3]} & {allowedDates[2]} · ⏳ {allowedDates[1]} & {allowedDates[0]}
+                                                </p>
                                             </div>
                                         </div>
                                         <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isDatePricingOpen ? 'rotate-180' : ''}`} />
@@ -1121,8 +1121,14 @@ export default function SettingsPage() {
                                                     onChange={e => setNewDatePrice({ ...newDatePrice, date: e.target.value })}
                                                     className="flex h-10 w-full items-center justify-between rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
-                                                    <option value={allowedDates[0]}>{allowedDates[0]}</option>
-                                                    <option value={allowedDates[1]}>{allowedDates[1]}</option>
+                                                    <optgroup label="⏳ Waiting Pair (Next)">
+                                                        <option value={allowedDates[0]}>{allowedDates[0]} (Day 2)</option>
+                                                        <option value={allowedDates[1]}>{allowedDates[1]} (Day 1)</option>
+                                                    </optgroup>
+                                                    <optgroup label="📌 Previous Pair (Active)">
+                                                        <option value={allowedDates[2]}>{allowedDates[2]} (Day 2)</option>
+                                                        <option value={allowedDates[3]}>{allowedDates[3]} (Day 1)</option>
+                                                    </optgroup>
                                                 </select>
                                                 <div className="relative w-24">
                                                     <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-xs">$</div>

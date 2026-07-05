@@ -11,7 +11,8 @@ const fetcher = async (url: string) => {
 export function useSession() {
     const { data, error, isLoading } = useSWR('/api/auth/verify', fetcher, {
         revalidateOnFocus: false,
-        shouldRetryOnError: false
+        shouldRetryOnError: false,
+        dedupingInterval: 300000 // 5 minutes
     });
 
     return {

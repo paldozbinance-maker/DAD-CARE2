@@ -8,24 +8,45 @@ import bcrypt from 'bcryptjs';
 
 async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) {
     const query = `
-        WITH past_dates AS (
-            SELECT date::date as db_date
-            FROM "DailyBook"
-            WHERE date::date < CURRENT_DATE AND deleted_at IS NULL
-            ORDER BY date::date ASC
+        -- ── PAIR EPOCH = 2026-06-28. offset = CURRENT_DATE - epoch ─────────────────
+        -- current pair = the pair that includes TODAY
+        -- prev pair    = the pair immediately BEFORE today's pair (always fully in past)
+        --
+        -- ✅ RULE: customer is "done" when BOTH:
+        --   1. They have Ledger PRODUCT entries for both dates of the PREVIOUS pair
+        --   2. A DailyBook record exists for TODAY (today's kg book has been entered)
+        --
+        -- Today Jul 05 (offset 7): current=Jul04+05, prev=Jul02+03
+        --   ✅ for customers who processed Jul02+03 maqal, IF Jul05 DailyBook exists
+        -- Today Jul 06 (offset 8): current=Jul06+07, prev=Jul04+05
+        --   ✅ for customers who processed Jul04+05 maqal, IF Jul06 DailyBook exists
+        -- Today Jul 08 (offset 10): current=Jul08+09, prev=Jul06+07
+        --   ✅ for customers who processed Jul06+07 maqal, IF Jul08 DailyBook exists
+        WITH target_pair AS (
+            SELECT
+                ('2026-06-28'::date + (
+                    (FLOOR(
+                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
+                    )::int / 2) * 2
+                )::int * '1 day'::interval)::date AS date1,
+                ('2026-06-28'::date + (
+                    (FLOOR(
+                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
+                    )::int / 2) * 2 + 1
+                )::int * '1 day'::interval)::date AS date2
         ),
-        numbered_dates AS (
-            SELECT db_date,
-                   ROW_NUMBER() OVER (ORDER BY db_date ASC) as rn
-            FROM past_dates
-        ),
-        target_pair AS (
-            SELECT n1.db_date as date1, n2.db_date as date2
-            FROM numbered_dates n1
-            JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
-            WHERE n1.rn % 2 = 1
-            ORDER BY n1.db_date DESC
-            LIMIT 1
+        prev_pair AS (
+            SELECT
+                ('2026-06-28'::date + (
+                    (FLOOR(
+                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
+                    )::int / 2) * 2 - 2
+                )::int * '1 day'::interval)::date AS date1,
+                ('2026-06-28'::date + (
+                    (FLOOR(
+                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
+                    )::int / 2) * 2 - 1
+                )::int * '1 day'::interval)::date AS date2
         ),
         latest_product_receipt_raw AS (
             SELECT 
@@ -134,7 +155,14 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
             COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
             COALESCE(dbk.total_books_count, 0) as total_books_count,
             CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
-            CASE WHEN COALESCE(td.target_days_count, 0) >= 2 THEN true ELSE false END as is_target_days_done,
+            -- ✅ RULE: customer is "done" when they have Ledger PRODUCT entries 
+            -- for both dates of the PREVIOUS pair (e.g. Jul 02 + Jul 03).
+            -- This means they have settled their previous maqal.
+            CASE
+                WHEN COALESCE(td.prev_pair_ledger_count, 0) >= 2
+                THEN true
+                ELSE false
+            END as is_target_days_done,
             tp.date1 as pair_date1,
             tp.date2 as pair_date2,
             CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive,
@@ -205,15 +233,19 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
             GROUP BY customer_id
         ) lk ON c.id = lk.customer_id
         LEFT JOIN (
-            SELECT 
+            -- CONDITION 1: Count how many of the PREVIOUS pair's dates this customer
+            -- has a processed Ledger PRODUCT entry for.
+            -- Both dates must be present (count = 2) to mark as done.
+            SELECT
                 customer_id,
-                COUNT(DISTINCT reference_date::date) as target_days_count
+                COUNT(DISTINCT COALESCE((reference_date AT TIME ZONE 'Africa/Mogadishu')::date, (created_at AT TIME ZONE 'Africa/Mogadishu')::date)) as prev_pair_ledger_count
             FROM "Ledger"
             WHERE type = 'PRODUCT' AND deleted_at IS NULL
-            AND reference_date::date IN (SELECT date1 FROM target_pair UNION SELECT date2 FROM target_pair)
+              AND COALESCE((reference_date AT TIME ZONE 'Africa/Mogadishu')::date, (created_at AT TIME ZONE 'Africa/Mogadishu')::date)
+                    IN (SELECT date1 FROM prev_pair UNION SELECT date2 FROM prev_pair)
             GROUP BY customer_id
         ) td ON c.id = td.customer_id
-        LEFT JOIN target_pair tp ON true
+        LEFT JOIN prev_pair tp ON true
         LEFT JOIN latest_maqal_stats lms ON c.id = lms.customer_id
         LEFT JOIN latest_payment_stats lps ON c.id = lps.customer_id
         LEFT JOIN selected_maqal_stats sms ON c.id = sms.customer_id

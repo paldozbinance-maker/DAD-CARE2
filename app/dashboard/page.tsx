@@ -48,7 +48,7 @@ export default function DashboardPage() {
 
     const { data, isLoading } = useSWR<DashboardData>('/api/dashboard', fetcher, {
         revalidateOnFocus: false,     // Don't refresh on tab focus
-        dedupingInterval: 60000,      // Cache results for 1 minute
+        dedupingInterval: 180000,     // Cache results for 3 minutes to save egress
         revalidateIfStale: false
     });
 

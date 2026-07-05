@@ -22,7 +22,7 @@ export function GlobalSearch() {
 
     const { data: customers, isLoading: loading } = useSWR<any[]>('/api/customers?lite=true', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 60000,
+        dedupingInterval: 300000,
         revalidateIfStale: false
     });
 
