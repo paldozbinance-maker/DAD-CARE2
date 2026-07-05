@@ -67,11 +67,13 @@ export async function GET(request: Request) {
         const onlineList = Array.from(uniqueOnlineMap.values()).map(sanitize);
         const allList = Array.from(uniqueAllMap.values()).map(sanitize);
 
-        return NextResponse.json({
+        const res = NextResponse.json({
             online: onlineList,
             all: allList,
             totalOnline: onlineList.length,
         });
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        return res;
     } catch (error: any) {
         console.error('Admin Sessions Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

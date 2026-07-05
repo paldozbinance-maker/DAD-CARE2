@@ -117,7 +117,7 @@ export async function GET(request: Request) {
             actions = actionRows.map(r => r.action);
         }
 
-        return NextResponse.json({
+        const res = NextResponse.json({
             logs,
             total,
             limit,
@@ -125,6 +125,8 @@ export async function GET(request: Request) {
             userStats,
             actions,
         });
+        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        return res;
     } catch (error: any) {
         console.error('Audit Log GET Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
