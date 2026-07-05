@@ -46,11 +46,24 @@ export async function GET(request: NextRequest) {
         const epochMs = new Date(`${EPOCH}T00:00:00Z`).getTime();
         const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
         const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
+        const activePairStart = Math.floor(diffDaysToday / 2) * 2;
 
-        // current pair: the pair that includes today
-        const currentPairStartOffset = Math.floor(diffDaysToday / 2) * 2;
-        // previous pair: the pair that was fully before today
-        const prevPairStartOffset = currentPairStartOffset - 2;
+        const maxDbRes = await pool.query(`
+            SELECT TO_CHAR(MAX((date AT TIME ZONE 'Africa/Mogadishu')::date), 'YYYY-MM-DD') as max_date 
+            FROM "DailyBook" 
+            WHERE deleted_at IS NULL
+        `);
+        const maxDbDateStr = maxDbRes.rows[0]?.max_date as string | null;
+
+        let maxDbPairStart = -2;
+        if (maxDbDateStr) {
+            const maxDbMs = new Date(`${maxDbDateStr}T00:00:00Z`).getTime();
+            const maxDbOffset = Math.floor((maxDbMs - epochMs) / 86400000);
+            maxDbPairStart = Math.floor(maxDbOffset / 2) * 2;
+        }
+
+        // The "ready" pair must have DailyBook entries! 
+        const readyPairStartOffset = Math.max(0, Math.min(activePairStart, maxDbPairStart));
 
         const toDateStr = (offsetDays: number): string => {
             const d = new Date(epochMs + offsetDays * 86400000);
@@ -60,27 +73,10 @@ export async function GET(request: NextRequest) {
             return `${y}-${m}-${day}`;
         };
 
-        // PREVIOUS (active) pair dates — this is what users should have completed
-        const prevDate1 = prevPairStartOffset >= 0 ? toDateStr(prevPairStartOffset) : null;
-        const prevDate2 = prevPairStartOffset >= 0 ? toDateStr(prevPairStartOffset + 1) : null;
-
-        // CURRENT (waiting) pair dates
-        const waitingDate1 = toDateStr(currentPairStartOffset);
-        const waitingDate2 = toDateStr(currentPairStartOffset + 1);
-
-        // AUTO-RESET CHECK: Does a DailyBook entry exist for the day AFTER the waiting pair?
-        // If yes → the waiting pair has "unlocked" and becomes the new active pair.
-        const unlockDate = toDateStr(currentPairStartOffset + 2);
-        const { rows: unlockCheck } = await pool.query(`
-            SELECT 1 FROM "DailyBook"
-            WHERE date = $1::date AND deleted_at IS NULL
-            LIMIT 1
-        `, [unlockDate]);
-        const waitingPairIsActive = unlockCheck.length > 0;
-
-        // Decide which pair to show in the tracker
-        const date1 = waitingPairIsActive ? waitingDate1 : prevDate1;
-        const date2 = waitingPairIsActive ? waitingDate2 : prevDate2;
+        const date1 = toDateStr(readyPairStartOffset);
+        const date2 = toDateStr(readyPairStartOffset + 1);
+        const waitingDate1 = toDateStr(readyPairStartOffset + 2);
+        const waitingDate2 = toDateStr(readyPairStartOffset + 3);
 
         if (!date1 || !date2) {
             return NextResponse.json({ users: [], date1: null, date2: null });
@@ -138,7 +134,8 @@ export async function GET(request: NextRequest) {
             users: perUserData,
             date1,
             date2,
-            isWaitingPairActive: waitingPairIsActive,
+            waitingDate1,
+            waitingDate2,
         });
         res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
         return res;

@@ -52,8 +52,6 @@ export async function GET(request: Request) {
 
         // Active pair: the pair that includes today
         const activePairStart = Math.floor(todayOffset / 2) * 2;
-        // Waiting pair: the next pair (not yet unlocked)
-        const waitingPairStart = activePairStart + 2;
 
         // ── STEP 2: Find the latest date in DailyBook (globally) ──
         const maxDbRes = await pool.query(`
@@ -64,16 +62,19 @@ export async function GET(request: Request) {
         const maxDbDateStr = maxDbRes.rows[0]?.max_date as string | null;
 
         // Calculate which pair is the latest recorded in the global DailyBook
-        let maxDbPairStart = activePairStart; // fallback to active pair
+        let maxDbPairStart = -2; // fallback to before epoch if no books
         if (maxDbDateStr) {
             const maxDbMs = new Date(`${maxDbDateStr}T00:00:00Z`).getTime();
             const maxDbOffset = Math.floor((maxDbMs - epochMs) / 86400000);
             maxDbPairStart = Math.floor(maxDbOffset / 2) * 2;
         }
 
-        // The "ready" pair is the active pair (since today is in it, we can process it)
-        // Older pairs (before activePairStart) are also ready
-        const readyPairStartOffset = activePairStart;
+        // The "ready" pair must have DailyBook entries! 
+        // We cannot process a pair if the notebook hasn't been entered yet.
+        const readyPairStartOffset = Math.max(0, Math.min(activePairStart, maxDbPairStart));
+        
+        // Waiting pair is the one IMMEDIATELY AFTER the ready pair
+        const waitingPairStart = readyPairStartOffset + 2;
 
         // ── STEP 3: Find Customer's Earliest Activity Date ──
         const startQuery = `
@@ -155,7 +156,7 @@ export async function GET(request: Request) {
             const res = NextResponse.json(waitingResult, {
                 headers: { 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates) }
             });
-            res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+            res.headers.set('Cache-Control', 'no-store, max-age=0');
             return res;
         }
 
@@ -203,7 +204,7 @@ export async function GET(request: Request) {
                 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates),
             }
         });
-        res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+        res.headers.set('Cache-Control', 'no-store, max-age=0');
         return res;
     } catch (error: any) {
         console.error('Fetch Customer Daily Entries Error:', error);

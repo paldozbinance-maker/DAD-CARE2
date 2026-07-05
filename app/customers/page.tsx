@@ -126,7 +126,7 @@ export default function CustomersPage() {
     const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
         customersUrl,
         fetcher,
-        { revalidateOnFocus: false, dedupingInterval: 300000, revalidateIfStale: false }
+        { revalidateOnFocus: false, dedupingInterval: 30000, revalidateIfStale: true }
     );
     const customers = customersData || [];
 
@@ -139,7 +139,35 @@ export default function CustomersPage() {
                 console.error('Failed to parse current user session', e);
             }
         }
-    }, []);
+
+        // Listen for cross-page invalidation signal (e.g. from Ledger saves)
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'dadwork_customers_stale') {
+                mutateCustomers(undefined, { revalidate: true });
+            }
+        };
+
+        // Also check on window focus just in case
+        const handleFocus = () => {
+            const staleSignal = localStorage.getItem('dadwork_customers_stale');
+            const lastCheck = sessionStorage.getItem('customers_last_check');
+            if (staleSignal && staleSignal !== lastCheck) {
+                sessionStorage.setItem('customers_last_check', staleSignal);
+                mutateCustomers(undefined, { revalidate: true });
+            }
+        };
+
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('focus', handleFocus);
+        
+        // Check immediately on mount too
+        handleFocus();
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('focus', handleFocus);
+        };
+    }, [mutateCustomers]);
 
     const activeCustomers = customers.filter(c => !(c as any).is_inactive);
     const inactiveCustomers = customers.filter(c => (c as any).is_inactive);
@@ -148,6 +176,8 @@ export default function CustomersPage() {
     const baseList = debouncedSearch.trim() !== '' ? customers : (activeTab === 'active' ? activeCustomers : inactiveCustomers);
 
     const filteredCustomers = baseList.filter(c => {
+        if (filterType === 'priority' && !currentUser?.assigned_customer_ids?.includes(c.id)) return false;
+
         const term = debouncedSearch.toLowerCase().trim();
         const cleanTerm = term.replace(/[^a-z0-9]/g, '');
         const cleanPhoneQuery = debouncedSearch.replace(/[^0-9]/g, '');
@@ -256,6 +286,12 @@ export default function CustomersPage() {
                                 <DropdownMenuItem onClick={() => setFilterType('default')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'default' ? 'bg-primary/10 text-primary' : ''}`}>
                                     ⚙️ Caadi (Default) {filterType === 'default' && <Check className="w-3 h-3 ml-auto" />}
                                 </DropdownMenuItem>
+
+                                {currentUser?.assigned_customer_ids?.length > 0 && (
+                                    <DropdownMenuItem onClick={() => setFilterType('priority')} className={`text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl ${filterType === 'priority' ? 'bg-amber-500/10 text-amber-500' : ''}`}>
+                                        ⭐ My Priority {filterType === 'priority' && <Check className="w-3 h-3 ml-auto" />}
+                                    </DropdownMenuItem>
+                                )}
 
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger className="text-[10px] sm:text-xs font-bold cursor-pointer rounded-xl text-emerald-500 focus:text-emerald-600 focus:bg-emerald-500/10">
@@ -411,7 +447,7 @@ export default function CustomersPage() {
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <AddCustomerDialog onSuccess={() => mutateCustomers()} />
+                        <AddCustomerDialog onSuccess={() => mutateCustomers(undefined, { revalidate: true })} />
                     </div>
                 </div>
             </div>
@@ -439,7 +475,7 @@ export default function CustomersPage() {
                         </p>
                         {!searchTerm && (
                             <div className="mt-4">
-                                <AddCustomerDialog onSuccess={() => mutateCustomers()} />
+                                <AddCustomerDialog onSuccess={() => mutateCustomers(undefined, { revalidate: true })} />
                             </div>
                         )}
                     </div>

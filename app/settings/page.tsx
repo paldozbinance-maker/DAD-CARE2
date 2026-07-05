@@ -101,10 +101,19 @@ export default function SettingsPage() {
         return {};
     });
     const [isDatePricingOpen, setIsDatePricingOpen] = useState(false);
+    const [maqalPairDates, setMaqalPairDates] = useState<{ date1: string | null; date2: string | null; waitingDate1: string | null; waitingDate2: string | null }>({ date1: null, date2: null, waitingDate1: null, waitingDate2: null });
     
     const allowedDates = useMemo(() => {
-        // Compute the Global Active Pair dynamically based on Mogadishu time
-        // Matches exact logic from api/maqal-per-user/route.ts
+        if (maqalPairDates.date1 && maqalPairDates.waitingDate1) {
+            return [
+                maqalPairDates.waitingDate2 || '',
+                maqalPairDates.waitingDate1 || '',
+                maqalPairDates.date2 || '',
+                maqalPairDates.date1 || '',
+            ];
+        }
+
+        // Compute fallback dynamically based on Mogadishu time
         const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
         const todayStr = formatter.format(new Date());
         const epochMs = new Date('2026-06-28T00:00:00Z').getTime();
@@ -128,7 +137,7 @@ export default function SettingsPage() {
         ];
         
         return dates;
-    }, []);
+    }, [maqalPairDates]);
 
     const [newDatePrice, setNewDatePrice] = useState({ date: allowedDates[0], price: '' });
     const [loading, setLoading] = useState(false);
@@ -142,7 +151,6 @@ export default function SettingsPage() {
     const [allCustomers, setAllCustomers] = useState<any[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
     const [perUserMaqal, setPerUserMaqal] = useState<PerUserMaqal[]>([]);
-    const [maqalPairDates, setMaqalPairDates] = useState<{ date1: string | null; date2: string | null; isWaiting?: boolean }>({ date1: null, date2: null });
     const [searchUser, setSearchUser] = useState('');
     const [searchCustomer, setSearchCustomer] = useState('');
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -392,7 +400,7 @@ export default function SettingsPage() {
                         const data = await res.json();
                         setPerUserMaqal(data.users || []);
                         if (data.date1 && data.date2) {
-                            setMaqalPairDates({ date1: data.date1, date2: data.date2, isWaiting: data.isWaitingPairActive });
+                            setMaqalPairDates({ date1: data.date1, date2: data.date2, waitingDate1: data.waitingDate1, waitingDate2: data.waitingDate2 });
                         }
                     }
                 } catch (e) { console.error('Failed to load per-user maqal:', e); }
@@ -1254,8 +1262,8 @@ export default function SettingsPage() {
                                             {maqalPairDates.date1 && maqalPairDates.date2 && (() => {
                                                 const fmt = (d: string) => { const dt = new Date(d + 'T00:00:00Z'); return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' }); };
                                                 return (
-                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border ${maqalPairDates.isWaiting ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400'}`}>
-                                                        {maqalPairDates.isWaiting ? '⏳' : '📌'} {fmt(maqalPairDates.date1)} & {fmt(maqalPairDates.date2)}
+                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400`}>
+                                                        📌 {fmt(maqalPairDates.date1)} & {fmt(maqalPairDates.date2)}
                                                     </span>
                                                 );
                                             })()}

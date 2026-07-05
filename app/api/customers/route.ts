@@ -25,27 +25,19 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
         WITH target_pair AS (
             SELECT
                 ('2026-06-28'::date + (
-                    (FLOOR(
-                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
-                    )::int / 2) * 2
+                    ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2
                 )::int * '1 day'::interval)::date AS date1,
                 ('2026-06-28'::date + (
-                    (FLOOR(
-                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
-                    )::int / 2) * 2 + 1
+                    ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2 + 1
                 )::int * '1 day'::interval)::date AS date2
         ),
         prev_pair AS (
             SELECT
                 ('2026-06-28'::date + (
-                    (FLOOR(
-                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
-                    )::int / 2) * 2 - 2
+                    ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2 - 2
                 )::int * '1 day'::interval)::date AS date1,
                 ('2026-06-28'::date + (
-                    (FLOOR(
-                        EXTRACT(EPOCH FROM (CURRENT_DATE AT TIME ZONE 'Africa/Mogadishu' - '2026-06-28'::date)) / 86400
-                    )::int / 2) * 2 - 1
+                    ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2 - 1
                 )::int * '1 day'::interval)::date AS date2
         ),
         latest_product_receipt_raw AS (
@@ -155,16 +147,16 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
             COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
             COALESCE(dbk.total_books_count, 0) as total_books_count,
             CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
-            -- ✅ RULE: customer is "done" when they have Ledger PRODUCT entries 
-            -- for both dates of the PREVIOUS pair (e.g. Jul 02 + Jul 03).
-            -- This means they have settled their previous maqal.
+            -- ✅ RULE: customer is "done" when EITHER:
+            --   1. They have Ledger PRODUCT entries for both dates of the PREVIOUS pair (e.g. Jul 02 + Jul 03).
+            --   2. They were created AFTER the prev_pair.date2 (new customers have no obligation for past pairs).
             CASE
-                WHEN COALESCE(td.prev_pair_ledger_count, 0) >= 2
-                THEN true
+                WHEN COALESCE(td.prev_pair_ledger_count, 0) >= 2 THEN true
+                WHEN (c.created_at AT TIME ZONE 'Africa/Mogadishu')::date > (SELECT date2 FROM prev_pair) THEN true
                 ELSE false
             END as is_target_days_done,
-            tp.date1 as pair_date1,
-            tp.date2 as pair_date2,
+            tp.date1::text as pair_date1,
+            tp.date2::text as pair_date2,
             CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive,
             
             -- Latest Maqal
@@ -281,14 +273,14 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+            res.headers.set('Cache-Control', 'no-store, max-age=0');
             return res;
         }
 
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+        res.headers.set('Cache-Control', 'no-store, max-age=0');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

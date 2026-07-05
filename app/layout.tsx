@@ -6,6 +6,7 @@ import { LayoutWrapper } from '@/components/layout-wrapper';
 import { ThemeProvider } from '@/components/theme-provider';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
 import { FetchInterceptor } from '@/components/fetch-interceptor';
+import { SWRProvider } from '@/components/swr-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -52,9 +53,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <LayoutWrapper>
-            {children}
-          </LayoutWrapper>
+          <SWRProvider>
+            <LayoutWrapper>
+              {children}
+            </LayoutWrapper>
+          </SWRProvider>
           <Toaster />
           <ServiceWorkerRegistration />
           <FetchInterceptor />

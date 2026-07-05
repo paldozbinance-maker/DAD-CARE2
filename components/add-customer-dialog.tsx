@@ -42,9 +42,13 @@ export function AddCustomerDialog({ onSuccess, trigger, nextId }: AddCustomerPro
         e.preventDefault();
         setLoading(true);
         try {
+            const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
             const res = await fetch('/api/customers', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'x-session-token': token } : {})
+                },
                 body: JSON.stringify({
                     customer_code: customerId,
                     name,

@@ -11,7 +11,7 @@ import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import useSWR from 'swr';
+import useSWR, { mutate as globalMutate } from 'swr';
 
 const fetcher = async (url: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
@@ -205,8 +205,8 @@ export default function LedgerPage() {
     // Data state
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 600000,  // 10 min — customer list rarely changes
-        revalidateIfStale: false,
+        dedupingInterval: 60000,   // 1 min — allow fresh revalidation after saves
+        revalidateIfStale: true,
         revalidateOnReconnect: false,
     });
     const allCustomers = (rawCustomers || []).filter((c: any) => !c.is_inactive);
@@ -827,9 +827,12 @@ export default function LedgerPage() {
                 setFreshBalance(data.finalDebt);
             }
 
-            // 4. Refresh data (fast sync) - await these to ensure they finish before removing blink
+            // 4. Refresh data (fast sync) - force revalidate so balance + checkmark update immediately
+            // globalMutate busts ALL /api/customers keys (customers page uses URL params like ?maqal_d1=...)
+            // Also write a stale signal to localStorage so customers page refreshes even after navigation
+            localStorage.setItem('dadwork_customers_stale', Date.now().toString());
             await Promise.all([
-                mutateCustomers(),
+                globalMutate((key: any) => typeof key === 'string' && key.startsWith('/api/customers'), undefined, { revalidate: true }),
                 mutateLedger()
             ]);
             
