@@ -16,7 +16,7 @@ const getDashboardData = async (today: string) => {
             recentTransactionsResult
         ] = await Promise.all([
             // 1. Total customers count
-            pool.query('SELECT count(*)::int as count FROM "Customer"'),
+            pool.query('SELECT count(*)::int as count FROM "Customer" WHERE deleted_at IS NULL'),
             
             // 2. Total Current Debt (Lacagta Guud)
             pool.query(`

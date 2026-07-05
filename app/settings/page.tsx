@@ -142,6 +142,7 @@ export default function SettingsPage() {
     const [allCustomers, setAllCustomers] = useState<any[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
     const [perUserMaqal, setPerUserMaqal] = useState<PerUserMaqal[]>([]);
+    const [maqalPairDates, setMaqalPairDates] = useState<{ date1: string | null; date2: string | null; isWaiting?: boolean }>({ date1: null, date2: null });
     const [searchUser, setSearchUser] = useState('');
     const [searchCustomer, setSearchCustomer] = useState('');
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -390,6 +391,9 @@ export default function SettingsPage() {
                     if (res.ok) {
                         const data = await res.json();
                         setPerUserMaqal(data.users || []);
+                        if (data.date1 && data.date2) {
+                            setMaqalPairDates({ date1: data.date1, date2: data.date2, isWaiting: data.isWaitingPairActive });
+                        }
                     }
                 } catch (e) { console.error('Failed to load per-user maqal:', e); }
             };
@@ -1247,6 +1251,14 @@ export default function SettingsPage() {
                                         <div className="flex items-center gap-2">
                                             <Users className="w-4 h-4 text-blue-500" />
                                             <span className="text-xs font-bold text-foreground">Team Members</span>
+                                            {maqalPairDates.date1 && maqalPairDates.date2 && (() => {
+                                                const fmt = (d: string) => { const dt = new Date(d + 'T00:00:00Z'); return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' }); };
+                                                return (
+                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border ${maqalPairDates.isWaiting ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400'}`}>
+                                                        {maqalPairDates.isWaiting ? '⏳' : '📌'} {fmt(maqalPairDates.date1)} & {fmt(maqalPairDates.date2)}
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                                             {filteredUsers.length}

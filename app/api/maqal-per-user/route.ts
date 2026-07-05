@@ -2,7 +2,12 @@ import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
 
-// Returns per-user maqal progress based on assigned_customer_ids
+// Returns per-user maqal progress based on assigned_customer_ids.
+// SMART PAIR LOGIC:
+//   - The ACTIVE pair is the most recent fully-past pair that customers should have been processed for.
+//   - The WAITING pair is the next pair after the active one (unlocked when its next-day DailyBook exists).
+//   - When the waiting pair becomes unlocked (i.e. a DailyBook entry exists for the day AFTER the waiting pair),
+//     the tracker automatically resets to that new pair.
 export async function GET(request: NextRequest) {
     try {
         const sessionRes = await requireSession(request);
@@ -20,70 +25,104 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ users: [] });
         }
 
-        // 2. Compute the Global Active Pair from today
-        const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
+        // 2. Compute the ACTIVE pair using the same epoch + timezone logic as the rest of the system.
+        //
+        //    EPOCH = 2026-06-28. Each pair is 2 days.
+        //    offset = days since epoch in Africa/Mogadishu time.
+        //    current pair offset = floor(offset / 2) * 2  → the pair that INCLUDES today
+        //    prev pair offset    = current pair offset - 2  → the pair BEFORE today (fully in the past)
+        //
+        //    WAITING PAIR = the pair AFTER prev pair (= current pair for today)
+        //    ACTIVE (display) pair = prev pair — this is what users should have processed.
+        //
+        //    AUTO-RESET: When a DailyBook entry exists for (waiting_pair_date2 + 1 day),
+        //    the waiting pair becomes the new active pair and starts its own tracker.
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Africa/Mogadishu',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
         const todayStr = formatter.format(new Date());
-        const epochMs = new Date('2026-06-28T00:00:00Z').getTime();
+        const EPOCH = '2026-06-28';
+        const epochMs = new Date(`${EPOCH}T00:00:00Z`).getTime();
         const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
         const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
 
-        let activeStartOffset = 0;
-        for (let i = diffDaysToday - 1; i >= 0; i--) {
-            if (i % 2 === 0 && (i + 1) < diffDaysToday) {
-                activeStartOffset = i;
-                break;
-            }
-        }
+        // current pair: the pair that includes today
+        const currentPairStartOffset = Math.floor(diffDaysToday / 2) * 2;
+        // previous pair: the pair that was fully before today
+        const prevPairStartOffset = currentPairStartOffset - 2;
 
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const day1Ms = epochMs + activeStartOffset * 86400000;
-        const day2Ms = epochMs + (activeStartOffset + 1) * 86400000;
-
-        const toDateStr = (ms: number) => {
-            const d = new Date(ms);
-            return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+        const toDateStr = (offsetDays: number): string => {
+            const d = new Date(epochMs + offsetDays * 86400000);
+            const y = d.getUTCFullYear();
+            const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
         };
 
-        const date1 = toDateStr(day1Ms);
-        const date2 = toDateStr(day2Ms);
+        // PREVIOUS (active) pair dates — this is what users should have completed
+        const prevDate1 = prevPairStartOffset >= 0 ? toDateStr(prevPairStartOffset) : null;
+        const prevDate2 = prevPairStartOffset >= 0 ? toDateStr(prevPairStartOffset + 1) : null;
+
+        // CURRENT (waiting) pair dates
+        const waitingDate1 = toDateStr(currentPairStartOffset);
+        const waitingDate2 = toDateStr(currentPairStartOffset + 1);
+
+        // AUTO-RESET CHECK: Does a DailyBook entry exist for the day AFTER the waiting pair?
+        // If yes → the waiting pair has "unlocked" and becomes the new active pair.
+        const unlockDate = toDateStr(currentPairStartOffset + 2);
+        const { rows: unlockCheck } = await pool.query(`
+            SELECT 1 FROM "DailyBook"
+            WHERE date = $1::date AND deleted_at IS NULL
+            LIMIT 1
+        `, [unlockDate]);
+        const waitingPairIsActive = unlockCheck.length > 0;
+
+        // Decide which pair to show in the tracker
+        const date1 = waitingPairIsActive ? waitingDate1 : prevDate1;
+        const date2 = waitingPairIsActive ? waitingDate2 : prevDate2;
+
+        if (!date1 || !date2) {
+            return NextResponse.json({ users: [], date1: null, date2: null });
+        }
 
         // 3. Get all assigned customer IDs across all users
         const allAssignedIds = [...new Set(users.flatMap((u: any) => u.assigned_customer_ids || []))];
 
-        // 4. Get customer details + payment status for all assigned customers in the latest pair
+        // 4. For each assigned customer, check if they have a PRODUCT ledger entry for BOTH dates in the active pair
         const { rows: customerData } = await pool.query(`
             SELECT 
                 c.id,
                 c.name,
                 c.customer_code,
                 c.avatar_url,
-                EXISTS (
-                    SELECT 1
+                (
+                    SELECT COUNT(DISTINCT COALESCE(prod.reference_date::date, prod.created_at::date))
                     FROM "Ledger" prod
                     WHERE prod.customer_id = c.id
                       AND prod.type = 'PRODUCT'
                       AND prod.deleted_at IS NULL
                       AND COALESCE(prod.reference_date::date, prod.created_at::date) IN ($1::date, $2::date)
-                ) as is_processed
+                ) >= 2 as is_processed
             FROM "Customer" c
             WHERE c.id = ANY($3::uuid[])
               AND c.deleted_at IS NULL
         `, [date1, date2, allAssignedIds]);
 
         // 5. Build per-user response
-        const customerMap = new Map(customerData.map(c => [c.id, c]));
+        const customerMap = new Map(customerData.map((c: any) => [c.id, c]));
 
         const perUserData = users.map((user: any) => {
             const assignedIds: string[] = user.assigned_customer_ids || [];
             const customers = assignedIds
-                .map(id => customerMap.get(id))
+                .map((id: string) => customerMap.get(id))
                 .filter(Boolean)
                 .map((c: any) => ({
                     id: c.id,
                     name: c.name,
                     customer_code: c.customer_code,
                     avatar_url: c.avatar_url,
-                    has_payment: c.is_processed // Rename in mapping to avoid changing frontend logic for now
+                    has_payment: c.is_processed
                 }));
 
             return {
@@ -91,14 +130,15 @@ export async function GET(request: NextRequest) {
                 username: user.username,
                 total: customers.length,
                 solved: customers.filter((c: any) => c.has_payment).length,
-                customers
+                customers,
             };
         });
 
         const res = NextResponse.json({
             users: perUserData,
-            date1: date1?.toString() || null,
-            date2: date2?.toString() || null,
+            date1,
+            date2,
+            isWaitingPairActive: waitingPairIsActive,
         });
         res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
         return res;

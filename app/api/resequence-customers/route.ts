@@ -22,10 +22,18 @@ export async function POST(request: Request) {
     try {
         await client.query('BEGIN');
 
+        // 0. Free up codes from soft-deleted customers to avoid UNIQUE constraint conflicts
+        await client.query(`
+            UPDATE "Customer"
+            SET customer_code = 'del_' || id
+            WHERE deleted_at IS NOT NULL AND customer_code NOT LIKE 'del_%'
+        `);
+
         // 1. Get all customers sorted by current numeric customer_code
         const { rows } = await client.query(`
             SELECT id, name, customer_code
             FROM "Customer"
+            WHERE deleted_at IS NULL
             ORDER BY REGEXP_REPLACE(customer_code, '[^0-9]', '', 'g')::int ASC NULLS LAST,
                      customer_code ASC
         `);
@@ -39,6 +47,7 @@ export async function POST(request: Request) {
         await client.query(`
             UPDATE "Customer"
             SET customer_code = '-' || id
+            WHERE deleted_at IS NULL
         `);
 
         // 3. Assign sequential codes 1, 2, 3, ...
