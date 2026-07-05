@@ -58,7 +58,7 @@ export async function GET(request: Request) {
         });
 
         const response = NextResponse.json(history);
-        response.headers.set('Cache-Control', 'private, max-age=600, stale-while-revalidate=1200');
+        response.headers.set('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
         return response;
     } catch (error: any) {
         console.error('Fetch Daily Book History Error:', error);

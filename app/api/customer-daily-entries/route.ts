@@ -156,7 +156,7 @@ export async function GET(request: Request) {
             const res = NextResponse.json(waitingResult, {
                 headers: { 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates) }
             });
-            res.headers.set('Cache-Control', 'private, max-age=10, stale-while-revalidate=30');
+            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
             return res;
         }
 
@@ -204,7 +204,7 @@ export async function GET(request: Request) {
                 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates),
             }
         });
-        res.headers.set('Cache-Control', 'private, max-age=10, stale-while-revalidate=30');
+        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
         return res;
     } catch (error: any) {
         console.error('Fetch Customer Daily Entries Error:', error);
