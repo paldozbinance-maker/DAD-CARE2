@@ -448,41 +448,13 @@ export default function LedgerPage() {
     };
 
     const sortedCustomers = useMemo(() => {
-        if (!currentUser?.assigned_customer_ids?.length) return allCustomers;
-
-        const priorityIds = currentUser.assigned_customer_ids;
-        const priorityCustomers: typeof allCustomers = [];
-        const otherCustomers: typeof allCustomers = [];
-
-        const customerMap = new Map(allCustomers.map(c => [c.id, c]));
-
-        for (const id of priorityIds) {
-            if (customerMap.has(id)) {
-                priorityCustomers.push(customerMap.get(id)!);
-                customerMap.delete(id);
-            }
-        }
-
-        for (const c of allCustomers) {
-            if (customerMap.has(c.id)) {
-                otherCustomers.push(c);
-            }
-        }
-
-        priorityCustomers.sort((a, b) => {
+        if (!allCustomers) return [];
+        return [...allCustomers].sort((a, b) => {
             const numA = parseInt(a.customer_code.replace(/[^0-9]/g, '')) || 0;
             const numB = parseInt(b.customer_code.replace(/[^0-9]/g, '')) || 0;
             return numA - numB;
         });
-
-        otherCustomers.sort((a, b) => {
-            const numA = parseInt(a.customer_code.replace(/[^0-9]/g, '')) || 0;
-            const numB = parseInt(b.customer_code.replace(/[^0-9]/g, '')) || 0;
-            return numA - numB;
-        });
-
-        return [...priorityCustomers, ...otherCustomers];
-    }, [allCustomers, currentUser]);
+    }, [allCustomers]);
 
     const lastReceiptGroup = useMemo(() => {
         if (!history || history.length === 0) return null;

@@ -49,7 +49,9 @@ export async function GET(request: Request) {
             [book.id, pageSize, offset]
         );
 
-        return NextResponse.json({ ...book, items, totalCount, page, pageSize });
+        const res = NextResponse.json({ ...book, items, totalCount, page, pageSize });
+        res.headers.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
+        return res;
     } catch (error: any) {
         console.error('Fetch Book Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

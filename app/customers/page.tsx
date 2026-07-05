@@ -188,12 +188,7 @@ export default function CustomersPage() {
         }
 
         // default behavior
-        const assignedIds = currentUser?.assigned_customer_ids || [];
-        const isAAssigned = assignedIds.includes(a.id);
-        const isBAssigned = assignedIds.includes(b.id);
 
-        if (isAAssigned && !isBAssigned) return -1;
-        if (!isAAssigned && isBAssigned) return 1;
 
         const idA = parseInt(a.customer_code.replace(/\D/g, ''), 10) || 0;
         const idB = parseInt(b.customer_code.replace(/\D/g, ''), 10) || 0;
