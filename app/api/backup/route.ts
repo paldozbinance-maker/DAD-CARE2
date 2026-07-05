@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import fs from 'fs';
 import path from 'path';
 import { requireSuperAdmin } from '@/lib/require-session';
+import pool from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
