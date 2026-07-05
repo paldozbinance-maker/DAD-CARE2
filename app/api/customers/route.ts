@@ -276,18 +276,19 @@ export async function GET(request: Request) {
                     0)::float as current_balance,
                     CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive
                 FROM "Customer" c
+                WHERE c.deleted_at IS NULL
                 ORDER BY c.customer_code ASC;
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+            res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
             return res;
         }
 
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);
