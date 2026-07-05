@@ -8,6 +8,7 @@ import { LogOut, ChevronDown } from 'lucide-react';
 import { logout } from '@/lib/session';
 import { createClient } from '@/lib/supabase/client';
 import { subscribeToDailyDates } from '@/lib/hijri-date';
+import { IdleMonitor } from './idle-monitor';
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -186,9 +187,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                             </div>
                         </div>
 
-
                     </div>
                 )}
+                <IdleMonitor />
                 {children}
             </main>
 
