@@ -42,7 +42,6 @@ export default function CustomersPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
-    const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
     const [visibleCount, setVisibleCount] = useState(20);
     const [rankingMode, setRankingMode] = useState<'maqalka' | 'lacagta'>('maqalka');
@@ -129,17 +128,6 @@ export default function CustomersPage() {
         { revalidateOnFocus: false, dedupingInterval: 30000, revalidateIfStale: false }
     );
     const customers = customersData || [];
-
-    useEffect(() => {
-        const userStr = localStorage.getItem('currentUser');
-        if (userStr) {
-            try {
-                setCurrentUser(JSON.parse(userStr));
-            } catch (e) {
-                console.error('Failed to parse current user session', e);
-            }
-        }
-    }, []);
 
     const activeCustomers = customers.filter(c => !(c as any).is_inactive);
     const inactiveCustomers = customers.filter(c => (c as any).is_inactive);
