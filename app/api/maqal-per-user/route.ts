@@ -22,41 +22,32 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ users: [] });
         }
 
-        // 2. Get the latest maqal pair dates
-        const { rows: pairRows } = await pool.query(`
-            WITH past_dates AS (
-                SELECT DISTINCT date::date as db_date
-                FROM "DailyBook"
-                WHERE deleted_at IS NULL
-            ),
-            numbered_dates AS (
-                SELECT db_date,
-                       ROW_NUMBER() OVER (ORDER BY db_date DESC) as rn
-                FROM past_dates
-            )
-            SELECT n2.db_date::date as date1, n1.db_date::date as date2
-            FROM numbered_dates n1
-            JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
-            WHERE n1.rn % 2 = 1
-            ORDER BY n2.db_date DESC
-            LIMIT 1
-        `);
+        // 2. Compute the Global Active Pair from today
+        const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const todayStr = formatter.format(new Date());
+        const epochMs = new Date('2026-06-28T00:00:00Z').getTime();
+        const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
+        const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
 
-        if (pairRows.length === 0) {
-            return NextResponse.json({ 
-                users: users.map(u => ({
-                    user_id: u.id,
-                    username: u.username,
-                    total: u.assigned_customer_ids?.length || 0,
-                    solved: 0,
-                    customers: []
-                })),
-                date1: null,
-                date2: null 
-            });
+        let activeStartOffset = 0;
+        for (let i = diffDaysToday - 1; i >= 0; i--) {
+            if (i % 2 === 0 && (i + 1) < diffDaysToday) {
+                activeStartOffset = i;
+                break;
+            }
         }
 
-        const { date1, date2 } = pairRows[0];
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const day1Ms = epochMs + activeStartOffset * 86400000;
+        const day2Ms = epochMs + (activeStartOffset + 1) * 86400000;
+
+        const toDateStr = (ms: number) => {
+            const d = new Date(ms);
+            return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+        };
+
+        const date1 = toDateStr(day1Ms);
+        const date2 = toDateStr(day2Ms);
 
         // 3. Get all assigned customer IDs across all users
         const allAssignedIds = [...new Set(users.flatMap((u: any) => u.assigned_customer_ids || []))];
@@ -75,24 +66,7 @@ export async function GET(request: NextRequest) {
                       AND prod.type = 'PRODUCT'
                       AND prod.deleted_at IS NULL
                       AND COALESCE(prod.reference_date::date, prod.created_at::date) IN ($1::date, $2::date)
-                      AND EXISTS (
-                          SELECT 1
-                          FROM "Ledger" pay
-                          WHERE pay.customer_id = prod.customer_id
-                            AND pay.type = 'PAYMENT'
-                            AND pay.deleted_at IS NULL
-                            AND pay.created_at >= prod.created_at
-                            AND pay.created_at < COALESCE(
-                                (SELECT MIN(created_at) FROM "Ledger" next_prod
-                                 WHERE next_prod.customer_id = prod.customer_id
-                                   AND next_prod.type = 'PRODUCT'
-                                   AND next_prod.deleted_at IS NULL
-                                   AND next_prod.created_at > prod.created_at
-                                ),
-                                'infinity'::timestamp
-                            )
-                      )
-                ) as has_payment
+                ) as is_processed
             FROM "Customer" c
             WHERE c.id = ANY($3::uuid[])
               AND c.deleted_at IS NULL
@@ -111,7 +85,7 @@ export async function GET(request: NextRequest) {
                     name: c.name,
                     customer_code: c.customer_code,
                     avatar_url: c.avatar_url,
-                    has_payment: c.has_payment
+                    has_payment: c.is_processed // Rename in mapping to avoid changing frontend logic for now
                 }));
 
             return {

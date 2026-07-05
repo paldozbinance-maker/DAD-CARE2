@@ -188,23 +188,29 @@ export default function LedgerPage() {
     const [loading, setLoading] = useState(false);
     const [fetchingDetails, setFetchingDetails] = useState(false);
     const [defaultPrice, setDefaultPrice] = useState('35');
-    const [dateSpecificPrices, setDateSpecificPrices] = useState<Record<string, string>>({});
+    const [dateSpecificPrices, setDateSpecificPrices] = useState<Record<string, string>>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('dadwork_date_specific_prices');
+            if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+        }
+        return {};
+    });
     const [isRestored, setIsRestored] = useState(false);
     const LOCAL_STORAGE_KEY = 'dadwork_ledger_draft';
     const SESSION_KEY = 'dadwork_ledger_session_active';
 
     // Data state
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
-        revalidateOnFocus: true,
-        dedupingInterval: 2000,
-        revalidateIfStale: true
+        revalidateOnFocus: false,
+        dedupingInterval: 120000,
+        revalidateIfStale: false
     });
     const allCustomers = (rawCustomers || []).filter((c: any) => !c.is_inactive);
     
     // Form state
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     
-    const ledgerUrl = selectedCustomerId ? `/api/ledger?customerId=${selectedCustomerId}&limit=200` : null;
+    const ledgerUrl = selectedCustomerId ? `/api/ledger?customerId=${selectedCustomerId}&limit=50` : null;
     const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 30000,    // 30s — per-customer ledger can change after a save
@@ -870,7 +876,7 @@ export default function LedgerPage() {
                         if (dailyData && dailyData.length > 0) {
                             newEntries = dailyData.map((d: any, idx: number) => {
                                 const entryId = (Date.now() + idx).toString();
-                                const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice);
+                                const { entry, shouldExpandExtra } = buildEntryFromDailyRecord(entryId, d, defaultPrice, dateSpecificPrices);
                                 if (shouldExpandExtra) {
                                     newExpandedIds.add(entryId);
                                 }

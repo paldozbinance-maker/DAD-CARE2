@@ -93,22 +93,45 @@ export default function SettingsPage() {
 
     // Price per KG
     const [pricePerKg, setPricePerKg] = useState('35');
-    const [dateSpecificPrices, setDateSpecificPrices] = useState<Record<string, string>>({});
+    const [dateSpecificPrices, setDateSpecificPrices] = useState<Record<string, string>>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('dadwork_date_specific_prices');
+            if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+        }
+        return {};
+    });
     const [isDatePricingOpen, setIsDatePricingOpen] = useState(false);
     
     const allowedDates = useMemo(() => {
         const today = new Date();
-        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-        const dayBefore = new Date(today); dayBefore.setDate(dayBefore.getDate() - 2);
+        const y = today.getFullYear();
+        const m = today.getMonth() + 1; // 0-indexed, so 7 is July
+        const d = today.getDate();
         
-        const formatLocal = (d: Date) => {
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
+        let date1, date2;
+
+        if (y === 2026 && m === 7 && d <= 5) {
+            // Until July 5th, we are solving July 2 and July 3
+            date1 = new Date(2026, 6, 2); // Month is 0-indexed (6 = July)
+            date2 = new Date(2026, 6, 3);
+        } else if (y === 2026 && m === 7 && d >= 6) {
+            // Starting July 6th, we solve July 4 and July 5
+            date1 = new Date(2026, 6, 4);
+            date2 = new Date(2026, 6, 5);
+        } else {
+            // Fallback just in case
+            date1 = new Date(today); date1.setDate(today.getDate() - 3);
+            date2 = new Date(today); date2.setDate(today.getDate() - 2);
+        }
+        
+        const formatLocal = (dt: Date) => {
+            const yyyy = dt.getFullYear();
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
             return `${yyyy}-${mm}-${dd}`;
         };
         
-        return [formatLocal(yesterday), formatLocal(dayBefore)];
+        return [formatLocal(date2), formatLocal(date1)];
     }, []);
 
     const [newDatePrice, setNewDatePrice] = useState({ date: allowedDates[0], price: '' });
@@ -338,6 +361,7 @@ export default function SettingsPage() {
                         const rawVal = data.dadwork_date_specific_prices;
                         const parsed = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
                         setDateSpecificPrices(parsed);
+                        localStorage.setItem('dadwork_date_specific_prices', JSON.stringify(parsed)); // cache for refresh
                     } catch(e) {
                         console.error('Failed to parse date prices:', e);
                     }
@@ -391,24 +415,8 @@ export default function SettingsPage() {
                     }
                 }, 300_000);
 
-                // ── Supabase Realtime for INSTANT updates ──
-                const supabase = createClient();
-                const channel = supabase
-                    .channel('audit_log_changes')
-                    .on(
-                        'postgres_changes',
-                        { event: 'INSERT', schema: 'public', table: 'AuditLog' },
-                        () => {
-                            // Instant silent reload when an action happens (no heavy stats fetch)
-                            loadOnlineSessions();
-                            loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true, false);
-                        }
-                    )
-                    .subscribe();
-
                 return () => {
                     clearInterval(heartbeat);
-                    supabase.removeChannel(channel);
                 };
             }
         }
@@ -418,7 +426,7 @@ export default function SettingsPage() {
         if (!silent) setAuditLoading(true);
         try {
             const token = localStorage.getItem('dadwork_session_token') || '';
-            const params = new URLSearchParams({ limit: '200', stats: includeStats ? 'true' : 'false' });
+            const params = new URLSearchParams({ limit: '50', stats: includeStats ? 'true' : 'false' });
             if (userFilter) params.set('user', userFilter);
             if (actionFilter) params.set('action', actionFilter);
             const res = await fetch(`/api/audit-logs?${params}`, {
@@ -561,6 +569,7 @@ export default function SettingsPage() {
                 body: JSON.stringify({ key: 'dadwork_date_specific_prices', value: JSON.stringify(newPrices) })
             });
             if (res.ok) {
+                localStorage.setItem('dadwork_date_specific_prices', JSON.stringify(newPrices)); // persist for refresh
                 toast.success('Date-specific prices updated');
             } else {
                 setDateSpecificPrices(previousPrices); // Rollback
@@ -580,7 +589,7 @@ export default function SettingsPage() {
             return;
         }
         if (!allowedDates.includes(newDatePrice.date)) {
-            toast.error('You can only set prices for the last two days');
+            toast.error('You can only set prices for recent days');
             return;
         }
         if (dateSpecificPrices[newDatePrice.date]) {
@@ -595,7 +604,7 @@ export default function SettingsPage() {
         
         let updated = { ...dateSpecificPrices, [newDatePrice.date]: newDatePrice.price };
         
-        // Prune older dates so it's strictly limited to the allowed two dates
+        // Prune older dates so it's strictly limited to the allowed dates
         const pruned: Record<string, string> = {};
         allowedDates.forEach(d => {
              if (updated[d]) pruned[d] = updated[d];
@@ -1100,7 +1109,7 @@ export default function SettingsPage() {
                                             </div>
                                             <div>
                                                 <h3 className="text-sm font-bold text-foreground">Date-Specific Pricing</h3>
-                                                <p className="text-[10px] text-muted-foreground">Override price for specific days</p>
+                                                <p className="text-[10px] text-muted-foreground font-semibold">{allowedDates[0]} &amp; {allowedDates[1]}</p>
                                             </div>
                                         </div>
                                         <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isDatePricingOpen ? 'rotate-180' : ''}`} />
@@ -1114,8 +1123,8 @@ export default function SettingsPage() {
                                                     onChange={e => setNewDatePrice({ ...newDatePrice, date: e.target.value })}
                                                     className="flex h-10 w-full items-center justify-between rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
-                                                    <option value={allowedDates[0]}>{allowedDates[0]} (Yesterday)</option>
-                                                    <option value={allowedDates[1]}>{allowedDates[1]} (Day Before)</option>
+                                                    <option value={allowedDates[0]}>{allowedDates[0]}</option>
+                                                    <option value={allowedDates[1]}>{allowedDates[1]}</option>
                                                 </select>
                                                 <div className="relative w-24">
                                                     <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-xs">$</div>
@@ -1363,15 +1372,12 @@ export default function SettingsPage() {
                                                                                                 <Circle className="w-2.5 h-2.5 text-amber-400 shrink-0" />
                                                                                             </div>
                                                                                         ))}
-                                                                                        {customers.filter(c => c.has_payment).map(c => (
-                                                                                            <div key={c.id} className="flex items-center gap-1.5 p-1 rounded-lg bg-muted/30 border border-transparent opacity-50">
-                                                                                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500 text-white text-[7px] font-black shrink-0">
-                                                                                                    {c.avatar_url ? <img src={c.avatar_url} className="w-full h-full rounded-full object-cover" alt={c.name} /> : c.name.charAt(0).toUpperCase()}
-                                                                                                </span>
-                                                                                                <span className="text-[10px] font-semibold text-muted-foreground line-through truncate flex-1">{c.name}</span>
-                                                                                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                                                                                        {customers.filter(c => !c.has_payment).length === 0 && (
+                                                                                            <div className="p-3 text-center">
+                                                                                                <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto mb-1 opacity-50" />
+                                                                                                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">All Done</p>
                                                                                             </div>
-                                                                                        ))}
+                                                                                        )}
                                                                                     </div>
                                                                                 </PopoverContent>
                                                                             </Popover>

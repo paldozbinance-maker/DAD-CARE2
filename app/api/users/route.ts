@@ -1,7 +1,7 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
-import { requireSuperAdmin } from '@/lib/require-session';
+import { requireSuperAdmin, evictSessionCache } from '@/lib/require-session';
 import bcrypt from 'bcryptjs';
 
 export async function GET(request: Request) {
@@ -105,7 +105,11 @@ export async function PATCH(request: Request) {
             // Kill all their sessions immediately
             const { rows: userRows } = await pool.query('SELECT username FROM "User" WHERE id = $1', [id]);
             if (userRows.length > 0) {
+                // Get the tokens before deleting so we can evict cache
+                const { rows: sessionRows } = await pool.query('SELECT token FROM "AdminSession" WHERE username = $1', [userRows[0].username]);
                 await pool.query('DELETE FROM "AdminSession" WHERE username = $1', [userRows[0].username]);
+                // Evict all their tokens from the in-memory session cache
+                sessionRows.forEach((s: any) => evictSessionCache(s.token));
             }
 
             await logAudit(request, 'KICKOUT_USER', `Kicked out user ID: ${id}`);

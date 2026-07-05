@@ -248,16 +248,14 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            // Disable cache so the UI updates instantly after saving a receipt
-            res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.headers.set('Cache-Control', 'no-store, max-age=0');
             return res;
         }
 
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        // Disable cache so the UI updates instantly after saving a receipt
-        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.headers.set('Cache-Control', 'no-store, max-age=0');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

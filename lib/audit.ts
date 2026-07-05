@@ -5,8 +5,8 @@ let isAuditLogTableEnsured = false;
 
 /**
  * Ensures the AuditLog table exists with all required columns.
- * Safe to call repeatedly — uses CREATE TABLE IF NOT EXISTS + ALTER TABLE for migrations.
- * Optimized: Only runs ONCE per serverless instance lifecycle to prevent DDL bottlenecks.
+ * Also runs automatic cleanup to delete logs older than 7 days.
+ * Safe to call repeatedly — only runs ONCE per serverless instance lifecycle.
  */
 export async function ensureAuditLogTable() {
     if (isAuditLogTableEnsured) return;
@@ -36,6 +36,31 @@ export async function ensureAuditLogTable() {
         for (const sql of migrations) {
             try { await pool.query(sql); } catch (_) { /* column may already exist */ }
         }
+
+        // ── AUTO-CLEANUP: Delete audit logs older than 7 days ──────────────────
+        // This is the key to preventing database bloat. Without this, audit logs
+        // grow forever and can fill the 5 GB Supabase free tier in hours.
+        const { rowCount: deletedAuditRows } = await pool.query(
+            `DELETE FROM "AuditLog" WHERE created_at < NOW() - INTERVAL '30 days'`
+        );
+        if ((deletedAuditRows ?? 0) > 0) {
+            console.log(`[AuditLog Cleanup] Deleted ${deletedAuditRows} old audit log entries (>7 days).`);
+        }
+
+        // ── AUTO-CLEANUP: Delete expired admin sessions ─────────────────────────
+        const { rowCount: deletedSessions } = await pool.query(
+            `DELETE FROM "AdminSession" WHERE expires_at < NOW()`
+        );
+        if ((deletedSessions ?? 0) > 0) {
+            console.log(`[Session Cleanup] Deleted ${deletedSessions} expired admin sessions.`);
+        }
+
+        // ── AUTO-CLEANUP: Empty Trash older than 30 days ────────────────────────
+        // Permanently delete soft-deleted records older than 30 days to free space
+        await pool.query(`DELETE FROM "DailyBookItem" WHERE deleted_at < NOW() - INTERVAL '30 days'`);
+        await pool.query(`DELETE FROM "DailyBook" WHERE deleted_at < NOW() - INTERVAL '30 days'`);
+        await pool.query(`DELETE FROM "Ledger" WHERE deleted_at < NOW() - INTERVAL '30 days'`);
+
         isAuditLogTableEnsured = true;
     } catch (e) {
         console.error("Failed to ensure AuditLog table", e);

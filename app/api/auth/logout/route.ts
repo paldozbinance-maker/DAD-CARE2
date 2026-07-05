@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { validateSession, deleteSession } from '@/lib/sessions-store';
 import { logAuditDirect } from '@/lib/audit';
+import { evictSessionCache } from '@/lib/require-session';
 
 export async function POST(request: Request) {
     try {
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
         }
 
         await deleteSession(token);
+        evictSessionCache(token); // Immediately invalidate in-memory cache
         return response;
     } catch (error: any) {
         console.error('Logout API Error:', error);

@@ -18,9 +18,47 @@ type SessionResult =
     | { session: { userId: string; username: string; role: string }; errorResponse: null }
     | { session: null; errorResponse: NextResponse };
 
+// ── In-memory session cache ──────────────────────────────────────────────────
+// Caches validated sessions for 60 seconds per serverless instance.
+// This prevents a database roundtrip on EVERY API call, which is the #1
+// cause of excessive Supabase connection/query usage.
+// The cache is intentionally short-lived (60s) to respect logouts and
+// kicked users within a reasonable window.
+const SESSION_CACHE_TTL_MS = 60_000; // 60 seconds
+
+interface CachedSession {
+    session: { userId: string; username: string; role: string };
+    expiresAt: number;
+}
+
+const sessionCache = new Map<string, CachedSession>();
+
+// Periodically purge expired cache entries to avoid memory leaks (every 5 min)
+setInterval(() => {
+    const now = Date.now();
+    for (const [token, cached] of sessionCache.entries()) {
+        if (cached.expiresAt < now) sessionCache.delete(token);
+    }
+}, 300_000);
+
+async function getCachedSession(token: string) {
+    const cached = sessionCache.get(token);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.session; // Cache hit — no DB call needed
+    }
+    // Cache miss — validate against DB
+    const session = await validateSession(token);
+    if (session) {
+        sessionCache.set(token, { session, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+    } else {
+        sessionCache.delete(token); // Remove stale entry
+    }
+    return session;
+}
+
 /**
  * Reads the session token from the request (httpOnly cookie first, then x-session-token header)
- * and validates it against the database.
+ * and validates it — using an in-memory cache to avoid a database hit on every single request.
  *
  * Returns either a valid session object or a ready-to-return 401 NextResponse.
  */
@@ -36,7 +74,7 @@ export async function requireSession(request: Request): Promise<SessionResult> {
         };
     }
 
-    const session = await validateSession(token);
+    const session = await getCachedSession(token);
     if (!session) {
         return {
             session: null,
@@ -62,4 +100,12 @@ export async function requireSuperAdmin(request: Request): Promise<SessionResult
     }
 
     return result;
+}
+
+/**
+ * Immediately evict a token from the session cache.
+ * Call this on logout or when kicking a user so they are denied access instantly.
+ */
+export function evictSessionCache(token: string) {
+    sessionCache.delete(token);
 }
