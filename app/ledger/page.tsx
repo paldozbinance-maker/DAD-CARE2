@@ -1691,12 +1691,12 @@ export default function LedgerPage() {
                                                         })()}
 
                                                         {/* Products */}
-                                                        {lastReceiptGroup.entries.filter(e => e.type === 'PRODUCT').filter((e, idx, arr) => {
+                                                        {lastReceiptGroup.entries.filter((e: any) => e.type === 'PRODUCT').filter((e: any, idx: number, arr: any[]) => {
                                                             if (Math.round(e.kg || 0) > 0) return true;
-                                                            const hasOther = arr.some(other => other.reference_date === e.reference_date && other.id !== e.id && Math.round(other.kg || 0) > 0);
+                                                            const hasOther = arr.some((other: any) => other.reference_date === e.reference_date && other.id !== e.id && Math.round(other.kg || 0) > 0);
                                                             return !hasOther;
-                                                        }).map((e, idx, arr) => {
-                                                            const hasMain = arr.some(other => other.reference_date === e.reference_date && !other.note && Math.round(other.kg || 0) > 0);
+                                                        }).map((e: any, idx: number, arr: any[]) => {
+                                                            const hasMain = arr.some((other: any) => other.reference_date === e.reference_date && !other.note && Math.round(other.kg || 0) > 0);
                                                             return (
                                                             <div key={e.id} className={`flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 font-medium ${Math.round(e.kg || 0) === 0 ? 'opacity-60' : ''}`}>
                                                                 <span>
@@ -1709,8 +1709,8 @@ export default function LedgerPage() {
                                                         )})}
 
                                                         {/* Maqalka Total */}
-                                                        {lastReceiptGroup.entries.some(e => e.type === 'PRODUCT') && (() => {
-                                                            const paymentsInReceipt = lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                                                        {lastReceiptGroup.entries.some((e: any) => e.type === 'PRODUCT') && (() => {
+                                                            const paymentsInReceipt = lastReceiptGroup.entries.filter((e: any) => e.type === 'PAYMENT').reduce((sum: number, e: any) => sum + Math.abs(e.amount), 0);
                                                             const pct = lastReceiptGroup.totalMaqalka > 0 ? Math.min(100, Math.round((paymentsInReceipt / lastReceiptGroup.totalMaqalka) * 100)) : 100;
                                                             return (
                                                                 <div className="flex justify-between py-1.5 border-b border-blue-300 dark:border-blue-800/60 font-bold text-slate-900 dark:text-slate-100">
@@ -1739,7 +1739,7 @@ export default function LedgerPage() {
 
 
                                                         {/* Adjustment entries */}
-                                                        {lastReceiptGroup.entries.filter(e => e.type === 'ADJUSTMENT').map(e => (
+                                                        {lastReceiptGroup.entries.filter((e: any) => e.type === 'ADJUSTMENT').map((e: any) => (
                                                             <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-amber-700 dark:text-amber-500 font-bold bg-amber-500/5 px-1 -ml-1 rounded-sm mt-1">
                                                                 <span>{e.note || (e.amount < 0 ? 'Heyn' : 'Reesto')}</span>
                                                                 <span>{e.amount > 0 ? '+' : '-'}${Math.abs(Math.round(e.amount)).toLocaleString()}</span>
@@ -1759,10 +1759,10 @@ export default function LedgerPage() {
                                                         })()}
 
                                                         {/* Saved payments from last receipt */}
-                                                        {lastReceiptGroup.entries.some(e => e.type === 'PAYMENT') && (
+                                                        {lastReceiptGroup.entries.some((e: any) => e.type === 'PAYMENT') && (
                                                             <>
                                                                 <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
-                                                                {lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').map(e => (
+                                                                {lastReceiptGroup.entries.filter((e: any) => e.type === 'PAYMENT').map((e: any) => (
                                                                     <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
                                                                         <span>{format(new Date(e.reference_date), 'MMM dd')} {e.note && e.note !== 'Lacagta' ? e.note : 'Payment'}</span>
                                                                         <span>-${Math.round(e.amount).toLocaleString()}</span>
