@@ -67,37 +67,48 @@ interface DailyBookRecord {
     isReady?: boolean;
 }
 
-const parseVipEntries = (note: string) => {
+/**
+ * Generic note entry parser.
+ * Supports any pattern: "{count} {label} {price}"
+ * Examples:
+ *   "5 vip 36"      → { kg: 5, label: 'vip', price: 36 }
+ *   "5 heshiish 30" → { kg: 5, label: 'heshiish', price: 30 }
+ *   "5 lafaha 30"   → { kg: 5, label: 'lafaha', price: 30 }
+ *   "10 vip"        → { kg: 10, label: 'vip', price: null }
+ * The label word is used as the display badge. Any Somali/custom word works.
+ */
+const parseNoteEntries = (note: string): { kg: number; label: string; price: number | null }[] => {
     if (!note) return [];
     const n = note.trim();
-    const pattern = /(\d+(?:\.\d+)?)\s*vip(?:(?:\s*\*|\s*x|\s*@)?\s*(\d+(?:\.\d+)?))?/gi;
-    const results: { kg: number; price: number | null }[] = [];
-    let match;
-    while ((match = pattern.exec(n)) !== null) {
-        results.push({
-            kg: parseFloat(match[1]),
-            price: match[2] ? parseFloat(match[2]) : null
-        });
-    }
-    return results;
-};
+    const results: { kg: number; label: string; price: number | null }[] = [];
 
-const parseHeshiish = (note: string) => {
-    const fullMatch = note.match(/(\d+(?:\.\d+)?)\s*(?:heshiish|heshish)\s*(?:\*|x|@)?\s*(\d+(?:\.\d+)?)/i);
-    if (fullMatch) {
-        return {
-            kg: parseFloat(fullMatch[1]),
-            price: parseFloat(fullMatch[2])
-        };
+    // Pattern: {count} {word(s)} {price} — e.g. "5 vip 36", "10 heshiish 30", "7 lafaha 25"
+    // Also handles comma-separated: "5 vip 36, 3 notebook 32"
+    const fullPattern = /(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z\s]{0,20}?)\s+(\d+(?:\.\d+)?)/g;
+    let match;
+    while ((match = fullPattern.exec(n)) !== null) {
+        const kg = parseFloat(match[1]);
+        const label = match[2].trim();
+        const price = parseFloat(match[3]);
+        // Skip if the label is just 'vip' captured with trailing spaces — handled anyway
+        if (kg > 0 && price > 0) {
+            results.push({ kg, label, price });
+        }
     }
-    const simpleMatch = note.match(/(\d+(?:\.\d+)?)\s*(?:heshiish|heshish)/i);
-    if (simpleMatch) {
-        return {
-            kg: parseFloat(simpleMatch[1]),
-            price: null
-        };
+
+    // If no full matches, try {count} {word} without a price (e.g. "5 vip")
+    if (results.length === 0) {
+        const simplePattern = /(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z]{1,20})/g;
+        while ((match = simplePattern.exec(n)) !== null) {
+            const kg = parseFloat(match[1]);
+            const label = match[2].trim();
+            if (kg > 0) {
+                results.push({ kg, label, price: null });
+            }
+        }
     }
-    return null;
+
+    return results;
 };
 
 const buildEntryFromDailyRecord = (
@@ -122,13 +133,13 @@ const buildEntryFromDailyRecord = (
 
     if (record.note) {
         const noteText = record.note.trim();
-        const vipEntries = parseVipEntries(noteText);
-        const heshiishData = parseHeshiish(noteText);
+        const noteEntries = parseNoteEntries(noteText);
 
-        // Notebook Pricing Override — ONLY apply if there is NO date-specific price for this date.
-        // This ensures date-specific prices set in Settings always win over notebook numbers.
+        // Notebook Pricing Override — ONLY apply if there is NO date-specific price for this date
+        // AND no specific entries were found.
+        // This ensures date-specific prices set in Settings always win.
         const hasDateSpecificPrice = dateSpecificPrices && dateSpecificPrices[entryDateKey];
-        if (!hasDateSpecificPrice) {
+        if (!hasDateSpecificPrice && noteEntries.length === 0) {
             const priceMatch = noteText.match(/(?:^|\s)\$?(\d+(?:\.\d+)?)(?:\s|$)/);
             if (priceMatch) {
                 pricePerKg = priceMatch[1];
@@ -136,37 +147,33 @@ const buildEntryFromDailyRecord = (
             }
         }
 
-        if (vipEntries.length > 0) {
-            const firstVip = vipEntries[0];
-            extraKg = firstVip.kg.toString();
-            if (firstVip.price !== null) {
-                extraPricePerKg = firstVip.price.toString();
-            }
-            extraNote = 'VIP';
-            shouldExpandExtra = true;
+        if (noteEntries.length > 0) {
+            const firstEntry = noteEntries[0];
+            const labelUpper = firstEntry.label.charAt(0).toUpperCase() + firstEntry.label.slice(1);
 
-            if (vipEntries.length > 1) {
-                const secondVip = vipEntries[1];
-                kg = secondVip.kg.toString();
-                if (secondVip.price !== null) {
-                    pricePerKg = secondVip.price.toString();
-                }
-                mainNote = 'VIP';
+            if (noteEntries.length > 1) {
+                // Two entries: e.g. "10 vip 38, 5 notebook 32" → extraKg=10@38, mainKg=5@32
+                const secondEntry = noteEntries[1];
+                extraKg = firstEntry.kg.toString();
+                if (firstEntry.price !== null) extraPricePerKg = firstEntry.price.toString();
+                extraNote = labelUpper;
+                shouldExpandExtra = true;
+
+                kg = secondEntry.kg.toString();
+                if (secondEntry.price !== null) pricePerKg = secondEntry.price.toString();
+                const secondLabel = secondEntry.label.charAt(0).toUpperCase() + secondEntry.label.slice(1);
+                mainNote = secondLabel;
             } else {
-                // Subtract VIP KG from main KG and cap at 0
-                const mainKgNum = Math.max(0, (record.kg || 0) - firstVip.kg);
+                // Single entry: e.g. "5 vip 36" → extraKg=5@36, mainKg=rest at default
+                extraKg = firstEntry.kg.toString();
+                if (firstEntry.price !== null) extraPricePerKg = firstEntry.price.toString();
+                extraNote = labelUpper;
+                shouldExpandExtra = true;
+
+                // Subtract special KG from main KG and cap at 0
+                const mainKgNum = Math.max(0, (record.kg || 0) - firstEntry.kg);
                 kg = mainKgNum.toString();
             }
-        } else if (heshiishData) {
-            extraKg = heshiishData.kg.toString();
-            if (heshiishData.price !== null) {
-                extraPricePerKg = heshiishData.price.toString();
-            }
-            extraNote = 'Heshiish';
-            shouldExpandExtra = true;
-            // Subtract Heshiish KG from main KG and cap at 0
-            const mainKgNum = Math.max(0, (record.kg || 0) - heshiishData.kg);
-            kg = mainKgNum.toString();
         }
     }
 
@@ -185,6 +192,7 @@ const buildEntryFromDailyRecord = (
         shouldExpandExtra
     };
 };
+
 
 
 export default function LedgerPage() {

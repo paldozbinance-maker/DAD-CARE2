@@ -185,33 +185,42 @@ export async function DELETE(request: Request) {
     if (!dateStr) return NextResponse.json({ error: 'Date required' }, { status: 400 });
 
     try {
-        // First get the book ID
+        // Get ALL active books for this date (handles duplicate entries gracefully)
         const { rows: books } = await pool.query(
             `SELECT id FROM "DailyBook" WHERE date::date = $1::date AND deleted_at IS NULL`,
             [dateStr]
         );
 
         if (books.length === 0) {
+            // Also check if there are soft-deleted books — if so, return success (already deleted)
+            const { rows: anyBooks } = await pool.query(
+                `SELECT id FROM "DailyBook" WHERE date::date = $1::date`,
+                [dateStr]
+            );
+            if (anyBooks.length > 0) {
+                return NextResponse.json({ success: true, alreadyDeleted: true });
+            }
             return NextResponse.json({ error: 'Book not found' }, { status: 404 });
         }
 
-        const bookId = books[0].id;
         const username = session?.username || 'unknown';
 
-        // Soft delete items
-        await pool.query(
-            `UPDATE "DailyBookItem" SET deleted_at = NOW() WHERE daily_book_id = $1 AND deleted_at IS NULL`,
-            [bookId]
-        );
+        // Soft-delete ALL matching books (handles duplicates - loop through each one)
+        for (const book of books) {
+            // Soft delete items for this book
+            await pool.query(
+                `UPDATE "DailyBookItem" SET deleted_at = NOW() WHERE daily_book_id = $1 AND deleted_at IS NULL`,
+                [book.id]
+            );
+            // Soft delete the book itself
+            await pool.query(
+                `UPDATE "DailyBook" SET deleted_at = NOW(), deleted_by = $1 WHERE id = $2`,
+                [username, book.id]
+            );
+        }
 
-        // Soft delete the main book
-        await pool.query(
-            `UPDATE "DailyBook" SET deleted_at = NOW(), deleted_by = $1 WHERE id = $2`,
-            [username, bookId]
-        );
-
-        await logAudit(request, 'DELETE_DAILY_BOOK', `Moved daily book entry for ${dateStr} to Trash`);
-        return NextResponse.json({ success: true });
+        await logAudit(request, 'DELETE_DAILY_BOOK', `Moved daily book entry for ${dateStr} to Trash (deleted ${books.length} record(s))`);
+        return NextResponse.json({ success: true, deletedCount: books.length });
     } catch (error: any) {
         console.error('Delete DailyBook Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

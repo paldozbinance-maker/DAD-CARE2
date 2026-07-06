@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
             waitingDate2: nextDate2,
             autoAdvanced: hasAutoAdvanceTrigger,
         });
-        res.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
         return res;
 
     } catch (error: any) {

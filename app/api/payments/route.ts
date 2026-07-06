@@ -57,7 +57,7 @@ export async function GET(request: Request) {
             totalAllTime,
             count: payments.length,
         });
-        response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
         return response;
     } catch (error: any) {
         console.error('Payments Fetch Error:', error);

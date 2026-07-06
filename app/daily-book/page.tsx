@@ -47,28 +47,48 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
-// Parse ALL VIP segments from a note.
-// Supports: "10 vip 38, 10 vip 37" → [{count:10, price:'38', text:'10 VIP @38'}, {count:10, price:'37', text:'10 VIP @37'}]
-// Also supports plain "5 vip" or "vip" with no number/price.
+// Parse ALL note entries from a note — generic: supports any label.
+// Pattern: "{count} {label} {price}" e.g. "5 vip 36", "10 heshiish 30", "7 lafaha 25"
+// Also supports "10 vip 38, 10 vip 37" for multiple splits.
 function parseVipEntries(note?: string): { count: number; price?: string; text: string }[] {
     if (!note) return [];
     const n = note.trim();
-    // Match all patterns of: [number] vip [price_number]
-    const pattern = /(\d+(?:\.\d+)?)\s*vip(?:\s+(\d+(?:\.\d+)?))?/gi;
     const results: { count: number; price?: string; text: string }[] = [];
+
+    // Full pattern: {count} {label} {price}
+    const fullPattern = /(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z\s]{0,20}?)\s+(\d+(?:\.\d+)?)/g;
     let match;
-    while ((match = pattern.exec(n)) !== null) {
+    while ((match = fullPattern.exec(n)) !== null) {
         const count = parseFloat(match[1]);
-        const price = match[2] ? match[2] : undefined;
-        const text = price ? `${match[1]} VIP @${price}` : `${match[1]} VIP`;
-        results.push({ count, price, text });
+        const label = match[2].trim();
+        const price = match[3];
+        if (count > 0 && parseFloat(price) > 0) {
+            const labelDisplay = label.charAt(0).toUpperCase() + label.slice(1);
+            results.push({ count, price, text: `${match[1]} ${labelDisplay} @${price}` });
+        }
     }
-    // If no number but plain 'vip' exists
+
+    // Fallback: {count} {label} without price (e.g. "5 vip")
+    if (results.length === 0) {
+        const simplePattern = /(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z]{1,20})/g;
+        while ((match = simplePattern.exec(n)) !== null) {
+            const count = parseFloat(match[1]);
+            const label = match[2].trim();
+            if (count > 0) {
+                const labelDisplay = label.charAt(0).toUpperCase() + label.slice(1);
+                results.push({ count, text: `${match[1]} ${labelDisplay}` });
+            }
+        }
+    }
+
+    // Legacy: plain 'vip' with no number (kept for backward compat)
     if (results.length === 0 && n.toLowerCase().includes('vip')) {
         results.push({ count: 0, text: 'VIP' });
     }
+
     return results;
 }
+
 
 // Legacy helper — returns first VIP entry (used for backward compat display)
 function getVipInfo(note?: string) {
