@@ -213,7 +213,7 @@ export default function LedgerPage() {
     // Data state
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers?mode=ledger', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 300000,   // 5 min — customers list barely changes
+        dedupingInterval: 60000,    // 1 min — balances egress vs. freshness after save
         revalidateIfStale: false,
         revalidateOnReconnect: false,
     });
@@ -1045,7 +1045,7 @@ export default function LedgerPage() {
                     }
                     
                     setFetchingDetails(false);
-                    await Promise.all([mutateCustomers(), mutateLedger()]);
+                    await mutateCustomers(undefined, { revalidate: true });
                 } else {
                     // Normal non-absent save → clear and go to next customer
                     setFetchingDetails(false);
@@ -1060,8 +1060,9 @@ export default function LedgerPage() {
                     setAllUnprocessedDates([]);
                     setCustomerPopoverOpen(true);
                     
-                    // Refresh data instantly to show new profile details
-                    await Promise.all([mutateCustomers(), mutateLedger()]);
+                    // Refresh customer list to show updated checkmark, THEN open popover
+                    await mutateCustomers(undefined, { revalidate: true });
+                    setCustomerPopoverOpen(true);
                     return;
                 }
             }

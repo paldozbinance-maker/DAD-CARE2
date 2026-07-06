@@ -29,7 +29,7 @@ export async function GET(request: Request) {
             WHERE db.deleted_at IS NULL
             GROUP BY db.id, db.date
             ORDER BY db.date DESC
-            LIMIT 60
+            LIMIT 14
         `);
 
         const history = (historyResult || []).map((book: any) => {
@@ -52,8 +52,7 @@ export async function GET(request: Request) {
         });
 
         const response = NextResponse.json(history);
-        // No server-side cache — history must always be fresh after saves
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
         return response;
     } catch (error: any) {
         console.error('Fetch Daily Book History Error:', error);
