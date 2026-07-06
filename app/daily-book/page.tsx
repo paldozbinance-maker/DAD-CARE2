@@ -215,24 +215,7 @@ function DailyBookPageInner() {
         }
     }, [historyData, customers]);
 
-    // Force load history on mount to guarantee it loads
-    useEffect(() => {
-        async function fetchHistoryDirectly() {
-            try {
-                const res = await fetch('/api/daily-book-history');
-                if (res.ok) {
-                    const data = await res.json();
-                    if (Array.isArray(data)) {
-                        setSavedEntries(populateHistoryWithCustomers(data));
-                    }
-                }
-            } catch (err) {
-                console.error('Failed to load history on mount:', err);
-            }
-        }
-        fetchHistoryDirectly();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [customers]);
+
 
     // Sync SWR Ledger Status to Local State
     useEffect(() => {
@@ -257,17 +240,6 @@ function DailyBookPageInner() {
         }
     };
 
-    const loadSavedEntries = async () => {
-        try {
-            const res = await fetch('/api/daily-book-history');
-            const data = await res.json();
-            if (res.ok && Array.isArray(data)) {
-                setSavedEntries(populateHistoryWithCustomers(data));
-            }
-        } catch (e) {
-            console.error('Failed to load history', e);
-        }
-    };
 
 
     const handleSave = async () => {

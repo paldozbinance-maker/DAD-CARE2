@@ -61,8 +61,7 @@ export async function GET(request: Request) {
                 "AuditLog".details, 
                 "AuditLog".ip_address, 
                 "AuditLog".user_agent, 
-                "AuditLog".created_at,
-                "User".avatar_url
+                "AuditLog".created_at
             FROM "AuditLog"
             LEFT JOIN "User" ON "AuditLog".username = "User".username
             ${where}
@@ -93,7 +92,6 @@ export async function GET(request: Request) {
                     a.username,
                     COALESCE(MAX(u.name), MAX(a.name)) as name,
                     COALESCE(MAX(u.role)::text, MAX(a.role)) as role,
-                    MAX(u.avatar_url) as avatar_url,
                     COUNT(a.id) as total_actions,
                     MAX(a.created_at) as last_activity,
                     MIN(CASE WHEN a.action = 'LOGIN' THEN a.created_at END) as first_login,
