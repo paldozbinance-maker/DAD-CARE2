@@ -211,7 +211,7 @@ export default function LedgerPage() {
     const SESSION_KEY = 'dadwork_ledger_session_active';
 
     // Data state
-    const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
+    const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers?mode=ledger', fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 300000,   // 5 min — customers list barely changes
         revalidateIfStale: false,

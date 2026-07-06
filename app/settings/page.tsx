@@ -414,8 +414,7 @@ export default function SettingsPage() {
             loadPerUserMaqal();
 
             if (parsedUser.role === 'SUPER_ADMIN') {
-                loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true, false);
-                loadAuditStats();
+                loadAuditLogs(auditFiltersRef.current.user, auditFiltersRef.current.action, true, true);
                 loadOnlineSessions();
 
                 // ── Heartbeat every 5 minutes (300s) to stay marked ONLINE in the DB ──
