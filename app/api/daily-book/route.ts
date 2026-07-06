@@ -27,7 +27,7 @@ export async function GET(request: Request) {
         // Get Items with Customer data
         // Pagination parameters
         const page = parseInt(searchParams.get('page') || '1', 10);
-        const pageSize = parseInt(searchParams.get('pageSize') || '50', 10);
+        const pageSize = parseInt(searchParams.get('pageSize') || '5000', 10);
         const offset = (page - 1) * pageSize;
 
         // Get total count for pagination UI

@@ -47,36 +47,32 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
-// Parse ALL note entries from a note — generic: supports any label.
-// Pattern: "{count} {label} {price}" e.g. "5 vip 36", "10 heshiish 30", "7 lafaha 25"
+// Parse ALL note entries from a note (restricted to VIP only)
+// Pattern: "{count} vip {price}" e.g. "5 vip 36"
 // Also supports "10 vip 38, 10 vip 37" for multiple splits.
 function parseVipEntries(note?: string): { count: number; price?: string; text: string }[] {
     if (!note) return [];
     const n = note.trim();
     const results: { count: number; price?: string; text: string }[] = [];
 
-    // Full pattern: {count} {label} {price}
-    const fullPattern = /(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z\s]{0,20}?)\s+(\d+(?:\.\d+)?)/g;
+    // Full pattern: {count} vip {price}
+    const fullPattern = /(\d+(?:\.\d+)?)\s+(vip)\s+(\d+(?:\.\d+)?)/gi;
     let match;
     while ((match = fullPattern.exec(n)) !== null) {
         const count = parseFloat(match[1]);
-        const label = match[2].trim();
         const price = match[3];
         if (count > 0 && parseFloat(price) > 0) {
-            const labelDisplay = label.charAt(0).toUpperCase() + label.slice(1);
-            results.push({ count, price, text: `${match[1]} ${labelDisplay} @${price}` });
+            results.push({ count, price, text: `${match[1]} VIP @${price}` });
         }
     }
 
-    // Fallback: {count} {label} without price (e.g. "5 vip")
+    // Fallback: {count} vip without price (e.g. "5 vip")
     if (results.length === 0) {
-        const simplePattern = /(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z]{1,20})/g;
+        const simplePattern = /(\d+(?:\.\d+)?)\s+(vip)\b/gi;
         while ((match = simplePattern.exec(n)) !== null) {
             const count = parseFloat(match[1]);
-            const label = match[2].trim();
             if (count > 0) {
-                const labelDisplay = label.charAt(0).toUpperCase() + label.slice(1);
-                results.push({ count, text: `${match[1]} ${labelDisplay}` });
+                results.push({ count, text: `${match[1]} VIP` });
             }
         }
     }
