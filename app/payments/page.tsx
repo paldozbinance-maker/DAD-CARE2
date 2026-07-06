@@ -60,7 +60,7 @@ const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
 ];
 
 export default function PaymentsPage() {
-    const { data: rawCustomers } = useSWR<{ id: string; name: string; customer_code: string }[]>('/api/customers', fetcher, {
+    const { data: rawCustomers } = useSWR<{ id: string; name: string; customer_code: string }[]>('/api/customers?lite=true', fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 300000,
         keepPreviousData: true,
