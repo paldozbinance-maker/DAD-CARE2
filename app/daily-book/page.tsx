@@ -154,7 +154,7 @@ function DailyBookPageInner() {
     const { data: initData, mutate: mutateInit } = useDailyBookInit();
     const loadInit = () => mutateInit(); // Used by AddCustomerDialog to refresh after adding a customer
     const dateStr = format(date, 'yyyy-MM-dd');
-    const { data: bookData } = useDailyBookDate(isInitialized && !editingDate ? dateStr : null);
+    const { data: bookData } = useDailyBookDate(isInitialized ? dateStr : null);
     const { processedCustomerIds: swrLedgerIds, isLoading: swrLedgerLoading, mutate: mutateLedger } = useLedgerStatusForDate(dateStr);
     const { data: historyData, mutate: mutateHistory } = useDailyBookHistory();
 
@@ -329,11 +329,7 @@ function DailyBookPageInner() {
     const handleEditEntry = (entry: SavedEntry) => {
         const selectedDate = parseISO(entry.date);
         setDate(selectedDate);
-        const loadedEntries: { [key: string]: { kg: number, present: boolean, note: string } } = {};
-        entry.items.forEach(item => {
-            loadedEntries[item.customer_id] = { kg: item.kg || 0, present: item.present ?? true, note: item.note || '' };
-        });
-        setEntries(loadedEntries);
+        setEntries({}); // Clear entries while it fetches the specific day
         setEditingDate(entry.date);
         setViewMode('edit');
     };
@@ -385,11 +381,17 @@ function DailyBookPageInner() {
 
     const handleExportBackup = async () => {
         try {
+            toast.loading('Fetching full history for backup...', { id: 'pdf-export' });
+            const res = await fetch('/api/daily-book-history-full');
+            if (!res.ok) throw new Error('Failed to fetch full history');
+            const fullHistory = await res.json();
+            
             const { downloadDailyBookBackupPDF } = await import('@/lib/export-pdf');
-            downloadDailyBookBackupPDF(savedEntries);
-            toast.success('Buuga Maalinlaha PDF backup downloaded successfully');
+            const populatedHistory = populateHistoryWithCustomers(fullHistory);
+            downloadDailyBookBackupPDF(populatedHistory);
+            toast.success('Buuga Maalinlaha PDF backup downloaded successfully', { id: 'pdf-export' });
         } catch (e) {
-            toast.error('Failed to generate PDF backup');
+            toast.error('Failed to generate PDF backup', { id: 'pdf-export' });
             console.error(e);
         }
     };

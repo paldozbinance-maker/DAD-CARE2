@@ -11,8 +11,18 @@ export async function GET(request: Request) {
             SELECT 
                 db.id, 
                 db.date,
-                COALESCE(SUM(dbi.kg), 0)::float as total_kg,
-                COUNT(dbi.id) as item_count
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', dbi.id,
+                            'kg', dbi.kg,
+                            'present', dbi.present,
+                            'note', dbi.note,
+                            'customer_id', dbi.customer_id
+                        )
+                    ) FILTER (WHERE dbi.id IS NOT NULL), 
+                    '[]'::json
+                ) as items
             FROM "DailyBook" db
             LEFT JOIN "DailyBookItem" dbi ON dbi.daily_book_id = db.id AND dbi.deleted_at IS NULL
             WHERE db.deleted_at IS NULL
@@ -23,12 +33,19 @@ export async function GET(request: Request) {
 
         // Transform data to match the SavedEntry format expected by the frontend
         const history = (historyResult || []).map((book: any) => {
+            const itemsList = typeof book.items === 'string' ? JSON.parse(book.items) : (book.items || []);
+            const totalKg = itemsList.reduce((sum: number, item: any) => sum + (item.kg || 0), 0);
             return {
                 id: book.id,
                 date: book.date,
-                totalKg: parseFloat(book.total_kg) || 0,
-                itemCount: parseInt(book.item_count) || 0,
-                items: [] // Empty array to satisfy frontend types initially, loaded lazily on edit
+                totalKg: totalKg,
+                items: itemsList.map((item: any) => ({
+                    customer_id: item.customer_id,
+                    kg: item.kg,
+                    present: item.present,
+                    note: item.note,
+                    customer: item.customer
+                }))
             };
         });
 
@@ -36,7 +53,7 @@ export async function GET(request: Request) {
         response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
         return response;
     } catch (error: any) {
-        console.error('Fetch Daily Book History Error:', error);
+        console.error('Fetch Daily Book Full History Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
