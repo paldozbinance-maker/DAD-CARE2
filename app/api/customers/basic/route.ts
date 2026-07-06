@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     try {
         const query = `
             SELECT 
-                id, name, customer_code, gender, avatar_url, phone
+                id, name, customer_code, gender, phone
             FROM "Customer"
             ORDER BY name ASC;
         `;

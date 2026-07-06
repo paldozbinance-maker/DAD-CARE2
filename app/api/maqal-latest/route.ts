@@ -31,8 +31,7 @@ export async function GET(request: NextRequest) {
                 SELECT DISTINCT
                     c.id,
                     c.name,
-                    c.customer_code,
-                    c.avatar_url
+                    c.customer_code
                 FROM "Customer" c
                 JOIN "Ledger" l ON l.customer_id = c.id
                 CROSS JOIN latest_pair lp
@@ -80,7 +79,6 @@ export async function GET(request: NextRequest) {
                         'id', pc.id,
                         'name', pc.name,
                         'customer_code', pc.customer_code,
-                        'avatar_url', pc.avatar_url,
                         'has_payment', cp.has_payment
                     ) ORDER BY pc.customer_code ASC
                 ) as customers
