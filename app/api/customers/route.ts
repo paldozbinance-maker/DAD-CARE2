@@ -275,7 +275,7 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
             return res;
         }
 
@@ -324,14 +324,14 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
             return res;
         }
 
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);
@@ -387,7 +387,8 @@ export async function POST(request: Request) {
         await logAudit(request, 'CREATE_CUSTOMER', `Created customer ${name} (${customer_code})`);
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
-        revalidateTag('customers');
+        // @ts-ignore
+        revalidateTag('customers', 'max');
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Create Customer Error:', error);
@@ -422,7 +423,8 @@ export async function DELETE(request: Request) {
         await logAudit(request, 'DELETE_CUSTOMER', `Soft deleted customer ID: ${id}`);
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
-        revalidateTag('customers');
+        // @ts-ignore
+        revalidateTag('customers', 'max');
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Delete Customer Error:', error);
@@ -456,7 +458,8 @@ export async function PATCH(request: Request) {
         await logAudit(request, 'UPDATE_CUSTOMER', `Updated customer ${name} (${customer_code})`);
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
-        revalidateTag('customers');
+        // @ts-ignore
+        revalidateTag('customers', 'max');
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Update Customer Error:', error);

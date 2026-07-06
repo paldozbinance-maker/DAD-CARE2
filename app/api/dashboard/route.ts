@@ -119,7 +119,7 @@ export async function GET(request: Request) {
 
         const response = NextResponse.json(data);
         // Cache dashboard data for 10 minutes to save egress (dashboard data is not real-time critical)
-        response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+        response.headers.set('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
         return response;
 
     } catch (error: any) {

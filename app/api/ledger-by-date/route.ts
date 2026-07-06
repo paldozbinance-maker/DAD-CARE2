@@ -19,7 +19,7 @@ export async function GET(request: Request) {
             [date]
         );
         const res = NextResponse.json(rows.map((r: any) => r.customer_id));
-        res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+        res.headers.set('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=30');
         return res;
     } catch (error: any) {
         console.error('Ledger by date error:', error);

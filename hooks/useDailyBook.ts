@@ -45,10 +45,10 @@ export function useDailyBookInit() {
         '/api/daily-book-init',
         fetcher,
         {
-            revalidateOnFocus: true,
+            revalidateOnFocus: false,
             keepPreviousData: true,
-            dedupingInterval: 2000,
-            revalidateIfStale: true,
+            dedupingInterval: 300000,
+            revalidateIfStale: false,
             shouldRetryOnError: false,
         }
     );
@@ -62,10 +62,10 @@ export function useDailyBookDate(dateStr: string | null) {
         dateStr ? `/api/daily-book?date=${dateStr}` : null,
         fetcher,
         {
-            revalidateOnFocus: true,
+            revalidateOnFocus: false,
             keepPreviousData: true,
-            dedupingInterval: 2000,
-            revalidateIfStale: true,
+            dedupingInterval: 60000,
+            revalidateIfStale: false,
             shouldRetryOnError: false,
         }
     );
@@ -79,9 +79,9 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         dateStr ? `/api/ledger-by-date?date=${dateStr}` : null,
         fetcher,
         {
-            revalidateOnFocus: true,
-            dedupingInterval: 2000,
-            revalidateIfStale: true,
+            revalidateOnFocus: false,
+            dedupingInterval: 300000,
+            revalidateIfStale: false,
             shouldRetryOnError: false,
         }
     );
@@ -99,9 +99,9 @@ export function useDailyBookHistory() {
         '/api/daily-book-history',
         fetcher,
         {
-            revalidateOnFocus: true,
-            dedupingInterval: 2000,
-            revalidateIfStale: true,
+            revalidateOnFocus: false,
+            dedupingInterval: 30000,
+            revalidateIfStale: false,
             shouldRetryOnError: false,
         }
     );

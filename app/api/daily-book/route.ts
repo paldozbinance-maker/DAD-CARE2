@@ -51,7 +51,7 @@ export async function GET(request: Request) {
         );
 
         const res = NextResponse.json({ ...book, items, totalCount, page, pageSize });
-        res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+        res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
         return res;
     } catch (error: any) {
         console.error('Fetch Book Error:', error);
@@ -189,6 +189,7 @@ export async function POST(request: Request) {
         
         // Force Next.js CDN to purge cache instantly so the UI doesn't require multiple refreshes!
         try {
+            revalidatePath('/api/daily-book');
             revalidatePath('/api/daily-book-history');
             revalidatePath('/api/daily-book-history-full');
             revalidatePath('/api/daily-book-init');
