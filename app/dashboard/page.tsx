@@ -46,7 +46,7 @@ export default function DashboardPage() {
     const [isExpanded, setIsExpanded] = useState(false);
     const [dates, setDates] = useState({ standard: '', hijri: '' });
 
-    const { data, isLoading } = useSWR<DashboardData>('/api/dashboard', fetcher, {
+    const { data, isLoading, mutate: mutateDashboard } = useSWR<DashboardData>('/api/dashboard', fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 600000,     // 10 min — matches server cache; saves egress
         revalidateOnReconnect: false,
@@ -62,7 +62,32 @@ export default function DashboardPage() {
             standard: standardDate,
             hijri: hijriDateFull.replace(/ AH$/, '').replace(/,/, '')
         });
-    }, []);
+
+        // Listen for cross-page invalidation signal (e.g. from Ledger saves)
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'dadwork_customers_stale') {
+                mutateDashboard(undefined, { revalidate: true });
+            }
+        };
+
+        const handleFocus = () => {
+            const staleSignal = localStorage.getItem('dadwork_customers_stale');
+            const lastCheck = sessionStorage.getItem('dashboard_last_check');
+            if (staleSignal && staleSignal !== lastCheck) {
+                sessionStorage.setItem('dashboard_last_check', staleSignal);
+                mutateDashboard(undefined, { revalidate: true });
+            }
+        };
+
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('focus', handleFocus);
+        handleFocus();
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('focus', handleFocus);
+        };
+    }, [mutateDashboard]);
 
     // Only show the full-page spinner on the very first load (no cached data yet)
     if (isLoading && !data) {

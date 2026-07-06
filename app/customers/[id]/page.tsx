@@ -205,6 +205,7 @@ export default function CustomerDetailPage() {
             if (!res.ok) throw new Error(data.error || 'Failed to update');
             toast.success(`Updated successfully! Remaining edits: ${data.remaining_edits}`);
             setTransactionToEdit(null);
+            localStorage.setItem('dadwork_customers_stale', Date.now().toString());
             loadCustomerData(true);
         } catch (err: any) {
             toast.error(err.message);
@@ -223,6 +224,7 @@ export default function CustomerDetailPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to undo');
             toast.success('Entry successfully undone.');
+            localStorage.setItem('dadwork_customers_stale', Date.now().toString());
             loadCustomerData(true);
         } catch (err: any) {
             toast.error(err.message);
@@ -252,6 +254,7 @@ export default function CustomerDetailPage() {
             setReceipts(groupTransactionsInfoReceipts(remainingTxns));
             
             toast.success('Receipt successfully deleted and balance recalculated.');
+            localStorage.setItem('dadwork_customers_stale', Date.now().toString());
             loadCustomerData(true);
         } catch (err: any) {
             toast.error(err.message);
@@ -548,6 +551,7 @@ export default function CustomerDetailPage() {
 
             toast.success('Customer updated successfully');
             setIsEditDialogOpen(false);
+            localStorage.setItem('dadwork_customers_stale', Date.now().toString());
             loadCustomerData(); // Refresh info
         } catch (err) {
             toast.error('Failed to update customer');
@@ -570,6 +574,7 @@ export default function CustomerDetailPage() {
             });
             if (!res.ok) throw new Error('Failed to clear history');
             toast.success('All history cleared. Balance is now $0.');
+            localStorage.setItem('dadwork_customers_stale', Date.now().toString());
             loadCustomerData();
         } catch (e) {
             toast.error('Failed to clear history');
@@ -589,6 +594,7 @@ export default function CustomerDetailPage() {
             const res = await fetch(`/api/customers?id=${customerId}`, { method: 'DELETE' });
             if (res.ok) {
                 toast.success(`${customer.name} deleted`);
+                localStorage.setItem('dadwork_customers_stale', Date.now().toString());
                 router.push('/customers');
             }
         } catch {
