@@ -205,7 +205,7 @@ export default function LedgerPage() {
     // Data state
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 60000,   // 1 min — allow fresh revalidation after saves
+        dedupingInterval: 300000,   // 5 min — customers list barely changes
         revalidateIfStale: false,
         revalidateOnReconnect: false,
     });
@@ -217,7 +217,7 @@ export default function LedgerPage() {
     const ledgerUrl = selectedCustomerId ? `/api/ledger?customerId=${selectedCustomerId}&limit=50` : null;
     const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 120000,   // 2 min — per-customer ledger
+        dedupingInterval: 600000,   // 10 min — per-customer ledger, re-fetch on explicit mutate
         revalidateOnReconnect: false,
     });
     
@@ -464,71 +464,135 @@ export default function LedgerPage() {
     const lastReceiptGroup = useMemo(() => {
         if (!history || history.length === 0) return null;
 
-        const sortedHistory = [...history].sort((a, b) => {
+        const sortedTxns = [...history].sort((a, b) => {
             const timeA = new Date(a.created_at || 0).getTime();
             const timeB = new Date(b.created_at || 0).getTime();
-            return timeB - timeA;
+            if (timeA !== timeB) return timeB - timeA;
+            return a.id.localeCompare(b.id);
         });
 
-        const latestTxn = sortedHistory[0];
-        if (!latestTxn) return null;
+        const normalizedTxns = sortedTxns.map(t => {
+            if (t.type === 'PAYMENT') {
+                return { ...t, receipt_id: `PAYMENT-${t.id}` };
+            }
+            return t;
+        });
+        const withReceiptId = normalizedTxns.filter(t => t.receipt_id);
+        const withoutReceiptId = normalizedTxns.filter(t => !t.receipt_id);
 
-        const latestReceiptId = latestTxn.receipt_id;
+        const receiptGroups: any[][] = [];
+        const groupedByReceiptId = withReceiptId.reduce((acc, t) => {
+            const rid = t.receipt_id!;
+            if (!acc[rid]) acc[rid] = [];
+            acc[rid].push(t);
+            return acc;
+        }, {} as Record<string, any[]>);
 
-        let lastGroupTxns: Transaction[] = [];
-        if (latestReceiptId) {
-            lastGroupTxns = sortedHistory.filter(t => t.receipt_id === latestReceiptId);
-        } else {
-            lastGroupTxns = [latestTxn];
-            for (let i = 1; i < sortedHistory.length; i++) {
-                const txn = sortedHistory[i];
-                if (txn.receipt_id) break;
-                const diff = Math.abs(new Date(txn.created_at || '').getTime() - new Date(latestTxn.created_at || '').getTime());
-                if (diff < 15000) {
-                    lastGroupTxns.push(txn);
+        Object.values(groupedByReceiptId).forEach(group => receiptGroups.push(group));
+
+        if (withoutReceiptId.length > 0) {
+            let currentGroup: any[] = [];
+            withoutReceiptId.forEach((txn, i) => {
+                if (i === 0) {
+                    currentGroup.push(txn);
                 } else {
-                    break;
+                    const prev = withoutReceiptId[i - 1];
+                    const diff = Math.abs(new Date(txn.created_at || 0).getTime() - new Date(prev.created_at || 0).getTime());
+                    if (diff < 15000) {
+                        currentGroup.push(txn);
+                    } else {
+                        receiptGroups.push(currentGroup);
+                        currentGroup = [txn];
+                    }
+                }
+            });
+            if (currentGroup.length > 0) receiptGroups.push(currentGroup);
+        }
+
+        const processedReceipts = receiptGroups.map((group, idx) => {
+            const last = group[0]; 
+            let titleString = format(new Date(last.created_at || new Date()), 'EEEE, MMMM dd, yyyy');
+            const productDates = group.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
+            if (productDates.length > 0) {
+                productDates.sort((a, b) => a.getTime() - b.getTime());
+                const uniqueDates = Array.from(new Set(productDates.map(d => format(d, 'dd MMM'))));
+                if (uniqueDates.length === 1) titleString = `Maqalka Taariikhda ${uniqueDates[0]}`;
+                else if (uniqueDates.length === 2) titleString = `Maqalka Taariikhda ${uniqueDates[0]} iyo ${uniqueDates[1]}`;
+                else titleString = `Maqalka Taariikhda ${uniqueDates[0]} ila ${uniqueDates[uniqueDates.length - 1]}`;
+            }
+
+            const totalKilos = group.reduce((sum, t) => sum + (t.kg || 0), 0);
+            const totalMaqalka = group.filter(t => t.type === 'PRODUCT').reduce((sum, t) => sum + (t.amount || 0), 0);
+            const totalPaid = group.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+            const totalAdjustment = group.filter(t => t.type === 'ADJUSTMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+
+            return {
+                id: `group-${idx}-${last.id}`,
+                titleString,
+                entries: [...group].reverse(), 
+                totalKilos,
+                totalMaqalka,
+                totalPaid,
+                totalAdjustment,
+                openingBalance: group[group.length - 1].previous_debt || 0,
+                closingBalance: last.new_debt,
+            };
+        });
+
+        const merged: any[] = [];
+        const oldestFirst = [...processedReceipts].sort((a, b) =>
+            new Date(a.entries[0].created_at).getTime() - new Date(b.entries[0].created_at).getTime()
+        );
+
+        for (const current of oldestFirst) {
+            const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
+
+            if (isPaymentOnly && merged.length > 0) {
+                let targetIdx = -1;
+                for (let k = 0; k < merged.length; k++) {
+                    const m = merged[k];
+                    const owed = m.totalMaqalka + m.totalAdjustment;
+                    if ((m.totalMaqalka > 0 || m.totalAdjustment > 0) && m.totalPaid < owed) {
+                        targetIdx = k;
+                        break;
+                    }
+                }
+                if (targetIdx === -1) {
+                    for (let k = merged.length - 1; k >= 0; k--) {
+                        if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
+                            targetIdx = k;
+                            break;
+                        }
+                    }
+                }
+
+                if (targetIdx !== -1) {
+                    const target = merged[targetIdx];
+                    const mergedEntries = [...target.entries, ...current.entries].sort(
+                        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    );
+                    const latestEntry = mergedEntries[mergedEntries.length - 1];
+                    merged[targetIdx] = {
+                        ...target,
+                        entries: mergedEntries,
+                        totalPaid: target.totalPaid + current.totalPaid,
+                        closingBalance: latestEntry.new_debt,
+                    };
+                    continue;
                 }
             }
+            merged.push(current);
         }
 
-        if (lastGroupTxns.length === 0) return null;
-
-        const sortedGroup = [...lastGroupTxns].reverse();
-
-        const totalKilos = lastGroupTxns.reduce((sum, t) => sum + (t.kg || 0), 0);
-        const totalMaqalka = lastGroupTxns.filter(t => t.type === 'PRODUCT').reduce((sum, t) => sum + (t.amount || 0), 0);
-        const totalPaid = lastGroupTxns.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
-        const totalAdjustment = lastGroupTxns.filter(t => t.type === 'ADJUSTMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
-
-        const firstTxn = sortedGroup[0];
-        const lastTxnInGroup = sortedGroup[sortedGroup.length - 1];
-        const openingBalance = firstTxn.previous_debt || 0;
-        const closingBalance = lastTxnInGroup.new_debt;
-
-        const productDates = sortedGroup.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
-        let titleString = format(new Date(lastTxnInGroup.created_at || new Date()), 'EEEE, MMMM dd, yyyy');
-
-        if (productDates.length > 0) {
-            productDates.sort((a, b) => a.getTime() - b.getTime());
-            const uniqueDates = Array.from(new Set(productDates.map(d => format(d, 'dd MMM'))));
-            if (uniqueDates.length === 1) titleString = `Maqalka Taariikhda ${uniqueDates[0]}`;
-            else if (uniqueDates.length === 2) titleString = `Maqalka Taariikhda ${uniqueDates[0]} iyo ${uniqueDates[1]}`;
-            else titleString = `Maqalka Taariikhda ${uniqueDates[0]} ila ${uniqueDates[uniqueDates.length - 1]}`;
+        if (merged.length === 0) return null;
+        
+        for (let i = merged.length - 1; i >= 0; i--) {
+            if (merged[i].totalMaqalka > 0 || merged[i].totalAdjustment > 0) {
+                return merged[i];
+            }
         }
-
-        return {
-            id: latestReceiptId || `orphan-latest`,
-            titleString,
-            entries: sortedGroup,
-            totalKilos,
-            totalMaqalka,
-            totalPaid,
-            totalAdjustment,
-            openingBalance,
-            closingBalance,
-            receiptId: latestReceiptId
-        };
+        
+        return merged[merged.length - 1];
     }, [history]);
 
     const timelineOptions = useMemo(() => {

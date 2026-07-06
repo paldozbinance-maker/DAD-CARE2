@@ -47,8 +47,9 @@ export default function DashboardPage() {
     const [dates, setDates] = useState({ standard: '', hijri: '' });
 
     const { data, isLoading } = useSWR<DashboardData>('/api/dashboard', fetcher, {
-        revalidateOnFocus: false,     // Don't refresh on tab focus
-        dedupingInterval: 180000,     // Cache results for 3 minutes to save egress
+        revalidateOnFocus: false,
+        dedupingInterval: 600000,     // 10 min — matches server cache; saves egress
+        revalidateOnReconnect: false,
         revalidateIfStale: false
     });
 

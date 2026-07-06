@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
         const { rows } = await pool.query(
             `SELECT
-                l.*,
+                l.id, l.customer_id, l.type, l.reference_date, l.amount, l.previous_debt, l.new_debt, l.note, l.created_at, l.receipt_id,
                 json_build_object(
                     'id', c.id,
                     'name', c.name,

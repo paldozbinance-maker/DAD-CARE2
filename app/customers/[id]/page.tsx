@@ -280,15 +280,21 @@ export default function CustomerDetailPage() {
             return a.id.localeCompare(b.id); // Tie-breaker for batch entries
         });
 
-        // 2. Separate into receipt-id and orphans
-        const withReceiptId = sortedTxns.filter(t => t.receipt_id);
-        const withoutReceiptId = sortedTxns.filter(t => !t.receipt_id);
+        // 2. Separate into receipt-id and orphans, forcing payments to have a unique receipt ID
+        const normalizedTxns = sortedTxns.map(t => {
+            if (t.type === 'PAYMENT') {
+                return { ...t, receipt_id: `PAYMENT-${t.id}` };
+            }
+            return t;
+        });
+        const withReceiptId = normalizedTxns.filter(t => t.receipt_id);
+        const withoutReceiptId = normalizedTxns.filter(t => !t.receipt_id);
 
         const receiptGroups: Transaction[][] = [];
 
         // 3. Group by Receipt ID
         const groupedByReceiptId = withReceiptId.reduce((acc, t) => {
-            const rid = t.receipt_id!;
+            const rid = t.type === 'PAYMENT' ? `PAYMENT-${t.receipt_id}` : t.receipt_id!;
             if (!acc[rid]) acc[rid] = [];
             acc[rid].push(t);
             return acc;
@@ -367,12 +373,24 @@ export default function CustomerDetailPage() {
             const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
 
             if (isPaymentOnly && merged.length > 0) {
-                // Find the most recent product/adjustment receipt in merged (look backward)
+                // Find the OLDEST product/adjustment receipt in merged that is not fully paid (FIFO)
                 let targetIdx = -1;
-                for (let k = merged.length - 1; k >= 0; k--) {
-                    if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
+                for (let k = 0; k < merged.length; k++) {
+                    const m = merged[k];
+                    const owed = m.totalMaqalka + m.totalAdjustment;
+                    if ((m.totalMaqalka > 0 || m.totalAdjustment > 0) && m.totalPaid < owed) {
                         targetIdx = k;
                         break;
+                    }
+                }
+
+                // If all previous receipts are fully paid, fallback to the most recent receipt
+                if (targetIdx === -1) {
+                    for (let k = merged.length - 1; k >= 0; k--) {
+                        if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
+                            targetIdx = k;
+                            break;
+                        }
                     }
                 }
 
@@ -458,7 +476,7 @@ export default function CustomerDetailPage() {
             setLoading(true);
         }
         // Pass a timestamp to the base url via SWR cache busting
-        const cacheBusterUrl = baseLedgerUrl;
+        const cacheBusterUrl = `${baseLedgerUrl}&t=${Date.now()}`;
         const freshData = await fetcher(cacheBusterUrl);
         mutateLedger(freshData);
     };

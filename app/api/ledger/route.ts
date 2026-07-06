@@ -43,11 +43,20 @@ export async function POST(request: Request) {
                 [customerId]
             );
             
-            runningDebt = lastEntries[0]?.new_debt || 0;
+            runningDebt = lastEntries[0]?.new_debt ? parseFloat(lastEntries[0].new_debt) : 0;
 
             // 3. PROCESS ENTRIES
             entriesToInsert = [];
-            const entriesToProcess = isBatch ? items : [body];
+            let entriesToProcess = isBatch ? items : [body];
+
+            // Re-order so Payments are processed FIRST
+            // This ensures they apply to the old debt before new product debt is added,
+            // and allows the frontend to group them backward into the previous receipt.
+            entriesToProcess = [...entriesToProcess].sort((a, b) => {
+                if (a.type === 'PAYMENT' && b.type !== 'PAYMENT') return -1;
+                if (a.type !== 'PAYMENT' && b.type === 'PAYMENT') return 1;
+                return 0;
+            });
 
             const hasReset = entriesToProcess.some((item: any) => {
                 const lowerNote = (item.note || '').toLowerCase();
@@ -100,7 +109,7 @@ export async function POST(request: Request) {
                     previous_debt: prevDebt,
                     new_debt: runningDebt,
                     note: note || body.note || null,
-                    receipt_id: receipt_id,
+                    receipt_id: type === 'PAYMENT' ? crypto.randomUUID() : receipt_id,
                     created_at: new Date(now.getTime() + (i * 1000)).toISOString()
                 });
             }
@@ -206,7 +215,7 @@ export async function GET(request: Request) {
                 lastTransactionType: s.last_transaction_type || null,
             }
         });
-        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+        response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
         return response;
     } catch (error: any) {
         console.error('Fetch Ledger Error:', error);

@@ -104,46 +104,45 @@ export default function SettingsPage() {
     const [maqalPairDates, setMaqalPairDates] = useState<{ date1: string | null; date2: string | null; waitingDate1: string | null; waitingDate2: string | null }>({ date1: null, date2: null, waitingDate1: null, waitingDate2: null });
     
     const allowedDates = useMemo(() => {
-        if (maqalPairDates.date1 && maqalPairDates.waitingDate1) {
-            return [
-                maqalPairDates.waitingDate2 || '',
-                maqalPairDates.waitingDate1 || '',
-                maqalPairDates.date2 || '',
-                maqalPairDates.date1 || '',
-            ];
-        }
-
-        // Compute fallback dynamically based on Mogadishu time
-        // ACTIVE pair = currentPair - 2 (users should be working on this)
-        // WAITING pair = currentPair (upcoming pair)
-        const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
-        const todayStr = formatter.format(new Date());
-        const epochMs = new Date('2026-06-28T00:00:00Z').getTime();
-        const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
-        const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
-
-        // currentPairOffset = the pair that includes today (e.g., Jul 4 & 5 when today=Jul 5)
-        const currentPairOffset = Math.floor(diffDaysToday / 2) * 2;
-        // activePairOffset = the pair BEFORE today (e.g., Jul 2 & 3 when today=Jul 5)
-        const activePairOffset = Math.max(0, currentPairOffset - 2);
-        // waitingPairOffset = the pair that includes today (e.g., Jul 4 & 5)
-        const waitingPairOffset = activePairOffset + 2;
-
         const pad = (n: number) => String(n).padStart(2, '0');
         const toDateStr = (ms: number) => {
             const d = new Date(ms);
             return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
         };
 
-        // Order: [waitingDay2, waitingDay1, activeDay2, activeDay1]
-        const dates = [
-            toDateStr(epochMs + (waitingPairOffset + 1) * 86400000), // e.g. Jul 05 (waiting day 2)
-            toDateStr(epochMs + waitingPairOffset * 86400000),       // e.g. Jul 04 (waiting day 1)
-            toDateStr(epochMs + (activePairOffset + 1) * 86400000),  // e.g. Jul 03 (active day 2)
-            toDateStr(epochMs + activePairOffset * 86400000),        // e.g. Jul 02 (active day 1)
+        if (maqalPairDates.date1) {
+            // Focus on ACTIVE (New) and PREVIOUS (Old) pairs
+            const activeDay1Ms = new Date(maqalPairDates.date1).getTime();
+            const activeDay2Ms = maqalPairDates.date2 ? new Date(maqalPairDates.date2).getTime() : activeDay1Ms + 86400000;
+            
+            const prevDay1Ms = activeDay1Ms - 2 * 86400000;
+            const prevDay2Ms = activeDay2Ms - 2 * 86400000;
+
+            return [
+                toDateStr(activeDay2Ms), // New Day 2
+                toDateStr(activeDay1Ms), // New Day 1
+                toDateStr(prevDay2Ms),   // Old Day 2
+                toDateStr(prevDay1Ms),   // Old Day 1
+            ];
+        }
+
+        // Fallback
+        const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Mogadishu', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const todayStr = formatter.format(new Date());
+        const epochMs = new Date('2026-06-28T00:00:00Z').getTime();
+        const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
+        const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
+
+        const currentPairOffset = Math.floor(diffDaysToday / 2) * 2;
+        const activePairOffset = Math.max(0, currentPairOffset - 2);
+        const prevPairOffset = Math.max(0, activePairOffset - 2);
+
+        return [
+            toDateStr(epochMs + (activePairOffset + 1) * 86400000),
+            toDateStr(epochMs + activePairOffset * 86400000),
+            toDateStr(epochMs + (prevPairOffset + 1) * 86400000),
+            toDateStr(epochMs + prevPairOffset * 86400000),
         ];
-        
-        return dates;
     }, [maqalPairDates]);
 
     const [newDatePrice, setNewDatePrice] = useState({ date: allowedDates[0], price: '' });
@@ -1112,7 +1111,7 @@ export default function SettingsPage() {
                                             <div>
                                                 <h3 className="text-sm font-bold text-foreground">Date-Specific Pricing</h3>
                                                 <p className="text-[10px] text-muted-foreground font-semibold">
-                                                    📌 {allowedDates[3]} & {allowedDates[2]} · ⏳ {allowedDates[1]} & {allowedDates[0]}
+                                                    📌 {allowedDates[3]} & {allowedDates[2]} (Old) · ⚡ {allowedDates[1]} & {allowedDates[0]} (New)
                                                 </p>
                                             </div>
                                         </div>
@@ -1127,11 +1126,11 @@ export default function SettingsPage() {
                                                     onChange={e => setNewDatePrice({ ...newDatePrice, date: e.target.value })}
                                                     className="flex h-10 w-full items-center justify-between rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
-                                                    <optgroup label="⏳ Waiting Pair (Next)">
+                                                    <optgroup label="⚡ New Pair (Current)">
                                                         <option value={allowedDates[0]}>{allowedDates[0]} (Day 2)</option>
                                                         <option value={allowedDates[1]}>{allowedDates[1]} (Day 1)</option>
                                                     </optgroup>
-                                                    <optgroup label="📌 Previous Pair (Active)">
+                                                    <optgroup label="📌 Old Pair (Previous)">
                                                         <option value={allowedDates[2]}>{allowedDates[2]} (Day 2)</option>
                                                         <option value={allowedDates[3]}>{allowedDates[3]} (Day 1)</option>
                                                     </optgroup>
