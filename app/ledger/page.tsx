@@ -1045,7 +1045,15 @@ export default function LedgerPage() {
                     }
                     
                     setFetchingDetails(false);
-                    await mutateCustomers(undefined, { revalidate: true });
+                    // Optimistic update: mark this customer as done instantly in local cache
+                    mutateCustomers(
+                        (prev: any) => prev ? prev.map((c: any) =>
+                            c.id === selectedCustomerId ? { ...c, is_target_days_done: true, unprocessed_books_count: 0 } : c
+                        ) : prev,
+                        { revalidate: false } // update local cache instantly, revalidate in background later
+                    );
+                    // Background revalidate so server data eventually syncs
+                    setTimeout(() => mutateCustomers(undefined, { revalidate: true }), 3000);
                 } else {
                     // Normal non-absent save → clear and go to next customer
                     setFetchingDetails(false);
@@ -1060,9 +1068,18 @@ export default function LedgerPage() {
                     setAllUnprocessedDates([]);
                     setCustomerPopoverOpen(true);
                     
-                    // Refresh customer list to show updated checkmark, THEN open popover
-                    await mutateCustomers(undefined, { revalidate: true });
+                    // Optimistic update: instantly mark customer as done in local cache
+                    // This shows the blue checkmark IMMEDIATELY when popover opens
+                    const savedId = selectedCustomerId;
+                    mutateCustomers(
+                        (prev: any) => prev ? prev.map((c: any) =>
+                            c.id === savedId ? { ...c, is_target_days_done: true, unprocessed_books_count: 0 } : c
+                        ) : prev,
+                        { revalidate: false } // instant local update, no network wait
+                    );
                     setCustomerPopoverOpen(true);
+                    // Background revalidate after 3 seconds so server data eventually syncs
+                    setTimeout(() => mutateCustomers(undefined, { revalidate: true }), 3000);
                     return;
                 }
             }
