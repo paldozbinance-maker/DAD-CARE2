@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import bcrypt from 'bcryptjs';
 
 
@@ -274,7 +275,7 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
             return res;
         }
 
@@ -323,14 +324,14 @@ export async function GET(request: Request) {
             `;
             const { rows } = await pool.query(query);
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
             return res;
         }
 
         const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);
@@ -384,6 +385,9 @@ export async function POST(request: Request) {
 
         if (error) throw error;
         await logAudit(request, 'CREATE_CUSTOMER', `Created customer ${name} (${customer_code})`);
+        revalidatePath('/api/customers');
+        revalidatePath('/api/daily-book-init');
+        revalidateTag('customers');
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Create Customer Error:', error);
@@ -416,6 +420,9 @@ export async function DELETE(request: Request) {
         await pool.query('UPDATE "User" SET assigned_customer_ids = array_remove(assigned_customer_ids, $1) WHERE $1 = ANY(assigned_customer_ids)', [id]);
 
         await logAudit(request, 'DELETE_CUSTOMER', `Soft deleted customer ID: ${id}`);
+        revalidatePath('/api/customers');
+        revalidatePath('/api/daily-book-init');
+        revalidateTag('customers');
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Delete Customer Error:', error);
@@ -447,6 +454,9 @@ export async function PATCH(request: Request) {
         const data = rows[0];
 
         await logAudit(request, 'UPDATE_CUSTOMER', `Updated customer ${name} (${customer_code})`);
+        revalidatePath('/api/customers');
+        revalidatePath('/api/daily-book-init');
+        revalidateTag('customers');
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Update Customer Error:', error);

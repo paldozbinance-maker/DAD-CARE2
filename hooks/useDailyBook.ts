@@ -45,11 +45,11 @@ export function useDailyBookInit() {
         '/api/daily-book-init',
         fetcher,
         {
-            revalidateOnFocus: false,
+            revalidateOnFocus: true,
             keepPreviousData: true,
-            dedupingInterval: 300000,   // 5 min — heavy payload, refresh explicitly
-            revalidateIfStale: false,
-            shouldRetryOnError: false,  // don't loop on 401 / timeouts
+            dedupingInterval: 2000,
+            revalidateIfStale: true,
+            shouldRetryOnError: false,
         }
     );
 
@@ -62,10 +62,10 @@ export function useDailyBookDate(dateStr: string | null) {
         dateStr ? `/api/daily-book?date=${dateStr}` : null,
         fetcher,
         {
-            revalidateOnFocus: false,
+            revalidateOnFocus: true,
             keepPreviousData: true,
-            dedupingInterval: 60000,    // 1 min — short enough that edits load fresh data
-            revalidateIfStale: false,
+            dedupingInterval: 2000,
+            revalidateIfStale: true,
             shouldRetryOnError: false,
         }
     );
@@ -79,9 +79,9 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         dateStr ? `/api/ledger-by-date?date=${dateStr}` : null,
         fetcher,
         {
-            revalidateOnFocus: false,
-            dedupingInterval: 300000,   // 5 min — rarely changes mid-session
-            revalidateIfStale: false,
+            revalidateOnFocus: true,
+            dedupingInterval: 2000,
+            revalidateIfStale: true,
             shouldRetryOnError: false,
         }
     );
@@ -99,9 +99,9 @@ export function useDailyBookHistory() {
         '/api/daily-book-history',
         fetcher,
         {
-            revalidateOnFocus: false,
-            dedupingInterval: 30000,    // 30 sec — fresh after saves (mutate forces re-fetch anyway)
-            revalidateIfStale: false,   // don't auto-revalidate — we call mutate() explicitly after saves
+            revalidateOnFocus: true,
+            dedupingInterval: 2000,
+            revalidateIfStale: true,
             shouldRetryOnError: false,
         }
     );

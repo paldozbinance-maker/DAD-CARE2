@@ -16,7 +16,7 @@ export async function GET(request: Request) {
         `);
 
         const res = NextResponse.json(rows || []);
-        res.headers.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
+        res.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
         return res;
     } catch (error: any) {
         console.error('Fetch Daily Book Dates Error:', error);

@@ -33,7 +33,7 @@ export async function GET(request: Request) {
         const data = await getDailyBookInit();
         const response = NextResponse.json(data);
         // Added Cache-Control so the Daily Book page loads instantly on repeat visits.
-        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
         return response;
     } catch (error: any) {
         console.error('Daily Book Init Error:', error);

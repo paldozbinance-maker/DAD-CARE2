@@ -151,6 +151,9 @@ export async function POST(request: Request) {
             revalidatePath('/api/reports');
             revalidatePath('/api/daily-book-history');
             revalidatePath('/api/daily-book-history-full');
+            revalidatePath('/api/customers');
+            revalidatePath('/api/ledger-by-date');
+            revalidatePath('/api/daily-book-init');
         } catch (cacheErr) {
             console.error('Failed to revalidate cache:', cacheErr);
         }
@@ -219,7 +222,7 @@ export async function GET(request: Request) {
                 lastTransactionType: s.last_transaction_type || null,
             }
         });
-        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
         return response;
     } catch (error: any) {
         console.error('Fetch Ledger Error:', error);
@@ -254,6 +257,9 @@ export async function DELETE(request: Request) {
 
         try {
             revalidateTag('customers', 'max');
+            revalidatePath('/api/customers');
+            revalidatePath('/api/ledger-by-date');
+            revalidatePath('/api/daily-book-init');
         } catch (cacheErr) {
             console.error('Failed to revalidate customers tag:', cacheErr);
         }
