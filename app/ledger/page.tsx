@@ -260,6 +260,28 @@ export default function LedgerPage() {
     const [showUnprocessedOnly, setShowUnprocessedOnly] = useState(false);
     const [lastSavedCustomerId, setLastSavedCustomerId] = useState('');
 
+    // Persist processed customer IDs in localStorage so the blue checkmark
+    // appears INSTANTLY and PERMANENTLY — even after page refresh.
+    const DONE_CUSTOMERS_KEY = 'dadwork_done_customer_ids';
+    const [doneCustomerIds, setDoneCustomerIds] = useState<Set<string>>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem(DONE_CUSTOMERS_KEY);
+                if (saved) return new Set<string>(JSON.parse(saved));
+            } catch (e) {}
+        }
+        return new Set<string>();
+    });
+
+    const markCustomerDone = (customerId: string) => {
+        setDoneCustomerIds(prev => {
+            const next = new Set(prev);
+            next.add(customerId);
+            try { localStorage.setItem(DONE_CUSTOMERS_KEY, JSON.stringify(Array.from(next))); } catch (e) {}
+            return next;
+        });
+    };
+
     const unprocessedCustomersCount = useMemo(() => {
         return allCustomers.filter(c => !c.is_target_days_done && (c.unprocessed_books_count || c.total_books_count)).length;
     }, [allCustomers]);
@@ -1045,15 +1067,15 @@ export default function LedgerPage() {
                     }
                     
                     setFetchingDetails(false);
-                    // Optimistic update: mark this customer as done instantly in local cache
+                    // Persist done state in localStorage — shows checkmark instantly on next open
+                    markCustomerDone(selectedCustomerId);
+                    // Optimistic update in SWR cache too
                     mutateCustomers(
                         (prev: any) => prev ? prev.map((c: any) =>
                             c.id === selectedCustomerId ? { ...c, is_target_days_done: true, unprocessed_books_count: 0 } : c
                         ) : prev,
-                        { revalidate: false } // update local cache instantly, revalidate in background later
+                        { revalidate: false }
                     );
-                    // Background revalidate so server data eventually syncs
-                    setTimeout(() => mutateCustomers(undefined, { revalidate: true }), 3000);
                 } else {
                     // Normal non-absent save → clear and go to next customer
                     setFetchingDetails(false);
@@ -1071,15 +1093,16 @@ export default function LedgerPage() {
                     // Optimistic update: instantly mark customer as done in local cache
                     // This shows the blue checkmark IMMEDIATELY when popover opens
                     const savedId = selectedCustomerId;
+                    // Persist done state in localStorage — shows checkmark instantly, even after refresh
+                    markCustomerDone(savedId);
+                    // Optimistic update in SWR cache
                     mutateCustomers(
                         (prev: any) => prev ? prev.map((c: any) =>
                             c.id === savedId ? { ...c, is_target_days_done: true, unprocessed_books_count: 0 } : c
                         ) : prev,
-                        { revalidate: false } // instant local update, no network wait
+                        { revalidate: false }
                     );
                     setCustomerPopoverOpen(true);
-                    // Background revalidate after 3 seconds so server data eventually syncs
-                    setTimeout(() => mutateCustomers(undefined, { revalidate: true }), 3000);
                     return;
                 }
             }
@@ -1262,7 +1285,7 @@ export default function LedgerPage() {
                                                             }}
                                                         >
                                                             {isPriority && "⭐ "}
-                                                            {c.id === lastSavedCustomerId ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : (c.is_target_days_done ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : '')))}
+                                                            {c.id === lastSavedCustomerId ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : (doneCustomerIds.has(c.id) || c.is_target_days_done ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : (c.unprocessed_books_count ? '⚠️ ' : (c.total_books_count ? <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 mr-1.5" /> : '')))}
                                                             {c.name.toUpperCase()} (ID: {c.customer_code})
                                                             {c.id === lastSavedCustomerId && <span className="ml-1 text-[10px] text-blue-500 font-bold">(Just Saved)</span>}
                                                         </div>
