@@ -3,6 +3,7 @@ import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import pool from '@/lib/db';
 import { recalculateCustomerLedger } from '@/lib/ledger-utils';
+import { revalidatePath } from 'next/cache';
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
@@ -64,9 +65,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { date: dateStr, items } = body;
 
+    const client = await pool.connect();
+
     try {
+        await client.query('BEGIN');
+
         let bookId;
-        const { rows: existing } = await pool.query(
+        const { rows: existing } = await client.query(
             `SELECT id, deleted_at FROM "DailyBook" WHERE date = $1::date`,
             [dateStr]
         );
@@ -75,13 +80,13 @@ export async function POST(request: Request) {
             bookId = existing[0].id;
             if (existing[0].deleted_at !== null) {
                 // Restore the soft-deleted book if they are saving over it
-                await pool.query(
+                await client.query(
                     `UPDATE "DailyBook" SET deleted_at = NULL, deleted_by = NULL WHERE id = $1`,
                     [bookId]
                 );
             }
         } else {
-            const { rows: newBook } = await pool.query(
+            const { rows: newBook } = await client.query(
                 `INSERT INTO "DailyBook" (id, date, created_at) VALUES (gen_random_uuid(), $1::date, NOW())
                  ON CONFLICT (date) DO UPDATE SET deleted_at = NULL, deleted_by = NULL
                  RETURNING id`,
@@ -91,7 +96,7 @@ export async function POST(request: Request) {
         }
 
         // 2. Delete existing items for this book (Draft mode overwrite - HARD delete is fine here to clean up old draft items)
-        await pool.query(`DELETE FROM "DailyBookItem" WHERE daily_book_id = $1`, [bookId]);
+        await client.query(`DELETE FROM "DailyBookItem" WHERE daily_book_id = $1`, [bookId]);
 
         // 3. Insert new items
         if (items && items.length > 0) {
@@ -107,7 +112,7 @@ export async function POST(request: Request) {
 
             if (itemsToInsert.length > 0) {
                 // Bulk insert using unnest
-                await pool.query(
+                await client.query(
                     `INSERT INTO "DailyBookItem" (id, daily_book_id, customer_id, kg, present, note)
                      SELECT gen_random_uuid(), * FROM UNNEST($1::uuid[], $2::uuid[], $3::float8[], $4::boolean[], $5::text[])`,
                     [
@@ -122,8 +127,8 @@ export async function POST(request: Request) {
         }
 
         // 4. Sync updates to existing Ledger entries for this date
-        const { rows: ledgerEntries } = await pool.query(
-            `SELECT id, customer_id, kg, price_per_kg 
+        const { rows: ledgerEntries } = await client.query(
+            `SELECT id, customer_id, kg, amount, price_per_kg 
              FROM "Ledger" 
              WHERE reference_date = $1::date AND type = 'PRODUCT' AND deleted_at IS NULL`,
             [dateStr]
@@ -152,9 +157,18 @@ export async function POST(request: Request) {
 
                 // Compare rounded to 2 decimal places to avoid tiny float diffs
                 if (Math.abs((ledger.kg || 0) - newKg) > 0.001) {
-                    const newAmount = Math.round(newKg * parseFloat(ledger.price_per_kg));
+                    
+                    let effectivePrice = parseFloat(ledger.price_per_kg);
+                    // If price_per_kg is null or invalid (like for a manual VIP entry), deduce it from amount / kg
+                    if (isNaN(effectivePrice)) {
+                        const oldKg = parseFloat(ledger.kg) || 0;
+                        const oldAmt = parseFloat(ledger.amount) || 0;
+                        effectivePrice = oldKg > 0 ? (oldAmt / oldKg) : 0;
+                    }
 
-                    await pool.query(
+                    const newAmount = Math.round(newKg * effectivePrice);
+
+                    await client.query(
                         `UPDATE "Ledger" SET kg = $1, amount = $2 WHERE id = $3`,
                         [newKg, newAmount, ledger.id]
                     );
@@ -162,18 +176,34 @@ export async function POST(request: Request) {
                     customersToRecalculate.add(ledger.customer_id);
                 }
             }
+        }
 
-            // 5. Trigger the cascade recalculation for any affected customers
-            for (const customerId of customersToRecalculate) {
-                await recalculateCustomerLedger(customerId);
-            }
+        await client.query('COMMIT');
+
+        // 5. Trigger the cascade recalculation for any affected customers (AFTER commit)
+        for (const customerId of customersToRecalculate) {
+            await recalculateCustomerLedger(customerId);
         }
 
         await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${items?.length || 0} items. Synced ${customersToRecalculate.size} ledger records.`);
+        
+        // Force Next.js CDN to purge cache instantly so the UI doesn't require multiple refreshes!
+        try {
+            revalidatePath('/api/daily-book-history');
+            revalidatePath('/api/daily-book-history-full');
+            revalidatePath('/api/daily-book-init');
+            revalidatePath('/api/reports');
+        } catch (e) {
+            console.error('Failed to revalidate paths:', e);
+        }
+
         return NextResponse.json({ success: true, bookId, syncedLedgers: customersToRecalculate.size });
     } catch (error: any) {
+        await client.query('ROLLBACK');
         console.error('Save DailyBook Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
+    } finally {
+        client.release();
     }
 }
 
@@ -220,10 +250,18 @@ export async function DELETE(request: Request) {
         }
 
         await logAudit(request, 'DELETE_DAILY_BOOK', `Moved daily book entry for ${dateStr} to Trash (deleted ${books.length} record(s))`);
+        
+        try {
+            revalidatePath('/api/daily-book-history');
+            revalidatePath('/api/daily-book-history-full');
+            revalidatePath('/api/reports');
+        } catch (e) {
+            console.error('Failed to revalidate paths:', e);
+        }
+
         return NextResponse.json({ success: true, deletedCount: books.length });
     } catch (error: any) {
         console.error('Delete DailyBook Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
-

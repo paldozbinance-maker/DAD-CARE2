@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
-import { revalidateTag } from 'next/cache';
+import { revalidateTag, revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 
 export async function POST(request: Request) {
@@ -147,8 +147,12 @@ export async function POST(request: Request) {
 
         try {
             revalidateTag('customers', 'max');
+            revalidatePath('/api/dashboard');
+            revalidatePath('/api/reports');
+            revalidatePath('/api/daily-book-history');
+            revalidatePath('/api/daily-book-history-full');
         } catch (cacheErr) {
-            console.error('Failed to revalidate customers tag:', cacheErr);
+            console.error('Failed to revalidate cache:', cacheErr);
         }
 
         return NextResponse.json({ success: true, finalDebt: runningDebt, count: entriesToInsert.length });
