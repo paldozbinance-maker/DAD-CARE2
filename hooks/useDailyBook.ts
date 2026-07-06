@@ -2,27 +2,35 @@ import useSWR from 'swr';
 import { useMemo } from 'react';
 import { Customer, SavedEntry, DailyBookItem } from '@/types';
 
-// Generic fetcher for SWR — returns null on error instead of throwing
-// so the page doesn't crash with "Application error"
+// Generic fetcher — silently returns null on 401/403 (session expired),
+// throws on other errors so SWR can retry them once.
 export const fetcher = async (url: string) => {
-    try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
-        const headers: HeadersInit = {};
-        if (token) headers['x-session-token'] = token;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+    const headers: HeadersInit = {};
+    if (token) headers['x-session-token'] = token;
 
-        const res = await fetch(url, { headers });
-        if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}));
-            console.error(`[SWR] Fetch error for ${url}:`, errorData.error || res.status);
-            // Optionally throw an error if you want SWR to retry or trigger onError, 
-            // but for graceful degradation we return null
-            throw new Error(errorData.error || 'Unauthorized – session expired or invalid');
-        }
-        return res.json();
-    } catch (err) {
-        console.error(`[SWR] Network error for ${url}:`, err);
-        throw err;
+    let res: Response;
+    try {
+        res = await fetch(url, { headers });
+    } catch (networkErr: any) {
+        // Network / timeout — log quietly, don't spam
+        console.warn(`[SWR] Network error for ${url}:`, networkErr?.message || networkErr);
+        throw networkErr;
     }
+
+    if (!res.ok) {
+        // 401 / 403 — session gone, return null gracefully (no throw = no SWR retry loop)
+        if (res.status === 401 || res.status === 403) {
+            console.warn(`[SWR] Session expired for ${url} — will retry on next user action`);
+            return null;
+        }
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData.error || `HTTP ${res.status}`;
+        console.warn(`[SWR] Fetch error for ${url}:`, msg);
+        throw new Error(msg);
+    }
+
+    return res.json();
 };
 
 export interface DailyBookInitData {
@@ -39,20 +47,13 @@ export function useDailyBookInit() {
         {
             revalidateOnFocus: false,
             keepPreviousData: true,
-            dedupingInterval: 300000, // 5 min — init data is heavy, don't re-fetch unless user explicitly refreshes
-            revalidateIfStale: false, // don't auto-revalidate stale data in background
-            onError: (err) => {
-                console.error('[useDailyBookInit] SWR error:', err);
-            },
+            dedupingInterval: 300000,   // 5 min — heavy payload, refresh explicitly
+            revalidateIfStale: false,
+            shouldRetryOnError: false,  // don't loop on 401 / timeouts
         }
     );
 
-    return {
-        data,
-        isLoading,
-        isError: error,
-        mutate
-    };
+    return { data, isLoading, isError: error, mutate };
 }
 
 // Hook for fetching a specific date's entries
@@ -63,20 +64,13 @@ export function useDailyBookDate(dateStr: string | null) {
         {
             revalidateOnFocus: false,
             keepPreviousData: true,
-            dedupingInterval: 600000, // 10 min — per-date data doesn't change often
+            dedupingInterval: 60000,    // 1 min — short enough that edits load fresh data
             revalidateIfStale: false,
-            onError: (err) => {
-                console.error('[useDailyBookDate] SWR error:', err);
-            },
+            shouldRetryOnError: false,
         }
     );
 
-    return {
-        data,
-        isLoading,
-        isError: error,
-        mutate
-    };
+    return { data, isLoading, isError: error, mutate };
 }
 
 // Hook for fetching ledger status for a date
@@ -86,11 +80,9 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         fetcher,
         {
             revalidateOnFocus: false,
-            dedupingInterval: 600000, // 10 min
+            dedupingInterval: 300000,   // 5 min — rarely changes mid-session
             revalidateIfStale: false,
-            onError: (err) => {
-                console.error('[useLedgerStatusForDate] SWR error:', err);
-            },
+            shouldRetryOnError: false,
         }
     );
 
@@ -98,12 +90,7 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         return Array.isArray(data) ? new Set(data) : new Set<string>();
     }, [data]);
 
-    return {
-        processedCustomerIds,
-        isLoading,
-        isError: error,
-        mutate
-    };
+    return { processedCustomerIds, isLoading, isError: error, mutate };
 }
 
 // Hook for fetching the full daily book history list
@@ -113,18 +100,11 @@ export function useDailyBookHistory() {
         fetcher,
         {
             revalidateOnFocus: false,
-            dedupingInterval: 600000, // 10 min
-            revalidateIfStale: false,
-            onError: (err) => {
-                console.error('[useDailyBookHistory] SWR error:', err);
-            },
+            dedupingInterval: 30000,    // 30 sec — fresh after saves (mutate forces re-fetch anyway)
+            revalidateIfStale: false,   // don't auto-revalidate — we call mutate() explicitly after saves
+            shouldRetryOnError: false,
         }
     );
 
-    return {
-        data,
-        isLoading,
-        isError: error,
-        mutate
-    };
+    return { data, isLoading, isError: error, mutate };
 }

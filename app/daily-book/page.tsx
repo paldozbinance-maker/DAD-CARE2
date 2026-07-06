@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { mutate as swrMutate } from 'swr';
 import { format, addDays, parseISO, isSameDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -179,8 +180,9 @@ function DailyBookPageInner() {
         }
     }, [initData, editingDate, isInitialized]);
 
-    // Sync SWR Book Data to Local Entries
+    // Sync SWR Book Data to Local Entries — only while in edit mode to avoid overwriting optimistic UI
     useEffect(() => {
+        if (!editingDate && viewMode !== 'edit') return; // only sync when actively editing
         if (bookData && bookData.items) {
             const loadedEntries: { [key: string]: { kg: number, present: boolean, note: string } } = {};
             bookData.items.forEach((item: DailyBookItem) => {
@@ -190,7 +192,7 @@ function DailyBookPageInner() {
         } else if (bookData === null) {
             setEntries({});
         }
-    }, [bookData]);
+    }, [bookData, editingDate, viewMode]);
 
     // Helper to attach customer objects locally to save massive API bandwidth
     const populateHistoryWithCustomers = (historyArray: any[]) => {
@@ -317,17 +319,21 @@ function DailyBookPageInner() {
             setSaving(false);
             fetchLatestDate(); // Refresh sequence after save
             mutateLedger(); // Refresh ledger indicators after save via SWR
-            mutateHistory(); // Refresh history list after save
+            // Force a fresh fetch of history (bypass SWR cache) so the list always reflects the save
+            mutateHistory(undefined, { revalidate: true });
             loadInit(); // REFRESH customers/latestDate so it doesn't revert to old data!
         }
     };
 
     const handleEditEntry = (entry: SavedEntry) => {
         const selectedDate = parseISO(entry.date);
+        const editDateStr = entry.date.substring(0, 10);
         setDate(selectedDate);
         setEntries({}); // Clear entries while it fetches the specific day
         setEditingDate(entry.date);
         setViewMode('edit');
+        // Force-revalidate the exact date key in SWR global cache so edit always loads fresh data
+        swrMutate(`/api/daily-book?date=${editDateStr}`);
     };
 
     const handleDeleteEntry = async () => {
@@ -339,7 +345,7 @@ function DailyBookPageInner() {
             setSavedEntries(prev => prev.filter(e => e.date !== deleteConfirmDate));
             toast.success('Moved to Recycle Bin');
             setDeleteConfirmDate(null);
-            mutateHistory(); // Sync SWR cache after delete
+            mutateHistory(undefined, { revalidate: true }); // Force fresh fetch after delete
         } catch (err: any) {
             toast.error('Failed to move to trash: ' + (err.message || 'Server error'));
         } finally {
@@ -422,9 +428,8 @@ function DailyBookPageInner() {
     };
 
     const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
-    const totalVip = Object.values(entries).reduce((sum, entry) => {
-        return sum + getTotalVipCount(entry.note);
-    }, 0);
+    // Sum ALL vip quantities across all customers (e.g. 10+5+5+5 = 25)
+    const totalVip = Object.values(entries).reduce((sum, entry) => sum + getTotalVipCount(entry.note), 0);
     const filteredEntries = searchDate
         ? savedEntries.filter(e => e.date && e.date.substring(0, 10) === format(searchDate, 'yyyy-MM-dd'))
         : savedEntries;
@@ -907,6 +912,7 @@ return (
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase">Total KG</span>
                                 </div>
                                 {(() => {
+                                    // Sum all VIP quantities (e.g. 10+5+5+5 = 25)
                                     const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
                                     if (entryVipCount > 0) {
                                         return (
@@ -982,6 +988,7 @@ return (
                                     <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Quantity</span>
                                     <div className="flex items-center gap-4">
                                         {(() => {
+                                            // Sum all VIP quantities (e.g. 10+5+5+5 = 25)
                                             const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
                                             return entryVipCount > 0 ? (
                                                 <span className="font-black text-amber-600 text-xl">{entryVipCount} <span className="text-xs opacity-60">VIP</span></span>
@@ -1119,8 +1126,9 @@ return (
                                                                         ⚡ {Math.round(entry.totalKg)} KG
                                                                     </span>
                                                                     {(() => {
+                                                                        // Sum all VIP quantities (e.g. 10+5+5+5 = 25)
+                                                                        const vipItems = entry.items.filter(i => i.note && i.note.toLowerCase().includes('vip'));
                                                                         const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
-                                                                        const vipItems = entry.items.filter(i => getTotalVipCount(i.note) > 0);
                                                                         return entryVipCount > 0 ? (
                                                                             <button
                                                                                 type="button"

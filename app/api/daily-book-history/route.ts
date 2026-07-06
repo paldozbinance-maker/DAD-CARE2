@@ -12,28 +12,48 @@ export async function GET(request: Request) {
                 db.id, 
                 db.date,
                 COALESCE(SUM(dbi.kg), 0)::float as total_kg,
-                COUNT(dbi.id) as item_count
+                COUNT(dbi.id) as item_count,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'customer_id', dbi.customer_id,
+                            'kg',          dbi.kg,
+                            'present',     dbi.present,
+                            'note',        dbi.note
+                        )
+                    ) FILTER (WHERE dbi.id IS NOT NULL),
+                    '[]'::json
+                ) as items
             FROM "DailyBook" db
             LEFT JOIN "DailyBookItem" dbi ON dbi.daily_book_id = db.id AND dbi.deleted_at IS NULL
             WHERE db.deleted_at IS NULL
             GROUP BY db.id, db.date
             ORDER BY db.date DESC
-            LIMIT 15
+            LIMIT 60
         `);
 
-        // Transform data to match the SavedEntry format expected by the frontend
         const history = (historyResult || []).map((book: any) => {
+            const itemsList: any[] = typeof book.items === 'string'
+                ? JSON.parse(book.items)
+                : (book.items || []);
+
             return {
                 id: book.id,
                 date: book.date,
                 totalKg: parseFloat(book.total_kg) || 0,
                 itemCount: parseInt(book.item_count) || 0,
-                items: [] // Empty array to satisfy frontend types initially, loaded lazily on edit
+                items: itemsList.map((item: any) => ({
+                    customer_id: item.customer_id,
+                    kg:          item.kg,
+                    present:     item.present,
+                    note:        item.note,
+                }))
             };
         });
 
         const response = NextResponse.json(history);
-        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        // No server-side cache — history must always be fresh after saves
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         return response;
     } catch (error: any) {
         console.error('Fetch Daily Book History Error:', error);
