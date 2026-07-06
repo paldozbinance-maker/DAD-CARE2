@@ -122,7 +122,6 @@ export async function GET(request: NextRequest) {
                 c.id,
                 c.name,
                 c.customer_code,
-                c.avatar_url,
                 (
                     SELECT COUNT(DISTINCT COALESCE(prod.reference_date::date, prod.created_at::date))
                     FROM "Ledger" prod
@@ -148,7 +147,6 @@ export async function GET(request: NextRequest) {
                     id: c.id,
                     name: c.name,
                     customer_code: c.customer_code,
-                    avatar_url: c.avatar_url,
                     has_payment: c.is_processed
                 }));
 
