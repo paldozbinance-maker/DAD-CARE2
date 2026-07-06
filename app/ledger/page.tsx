@@ -1674,7 +1674,7 @@ export default function LedgerPage() {
                                                 {(showLastMaqal && !updateLastMaqal && lastReceiptGroup) ? (
                                                     <>
                                                         {(() => {
-                                                            const paymentsInReceipt = lastReceiptGroup.entries.filter(e => e.type === 'PAYMENT').reduce((sum, e) => sum + Math.abs(e.amount), 0);
+                                                            const paymentsInReceipt = lastReceiptGroup.entries.filter((e: any) => e.type === 'PAYMENT').reduce((sum: number, e: any) => sum + Math.abs(e.amount), 0);
                                                             const pct = lastReceiptGroup.totalMaqalka > 0 ? Math.min(100, Math.round((paymentsInReceipt / lastReceiptGroup.totalMaqalka) * 100)) : 100;
                                                             return (
                                                                 <div className="flex flex-col items-center justify-center gap-1 mb-3 mt-1">
