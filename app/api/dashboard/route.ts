@@ -11,9 +11,7 @@ const getDashboardData = async (today: string) => {
             totalReestoResult,
             totalPaidResult,
             totalKgResult,
-            todayStatsResult,
-            topDebtorsResult,
-            recentTransactionsResult
+            todayStatsResult
         ] = await Promise.all([
             // 1. Total customers count
             pool.query('SELECT count(*)::int as count FROM "Customer" WHERE deleted_at IS NULL'),
@@ -70,78 +68,8 @@ const getDashboardData = async (today: string) => {
                 WHERE db.date = $1 AND dbi.deleted_at IS NULL AND db.deleted_at IS NULL
             `, [today]),
 
-            // 6. Top Debtors — percentage_paid based on LATEST receipt only (not all-time)
-            pool.query(`
-                WITH LatestProductReceipt AS (
-                    SELECT DISTINCT ON (customer_id)
-                        customer_id,
-                        receipt_id,
-                        created_at as receipt_created_at
-                    FROM "Ledger"
-                    WHERE type = 'PRODUCT' AND deleted_at IS NULL AND receipt_id IS NOT NULL
-                    ORDER BY customer_id, created_at DESC
-                ),
-                LatestMaqal AS (
-                    SELECT 
-                        lpr.customer_id,
-                        SUM(l.amount)::float as latest_maqal
-                    FROM LatestProductReceipt lpr
-                    JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
-                        AND l.receipt_id = lpr.receipt_id 
-                        AND l.type = 'PRODUCT' 
-                        AND l.deleted_at IS NULL
-                    GROUP BY lpr.customer_id
-                ),
-                LatestPayments AS (
-                    SELECT 
-                        lpr.customer_id,
-                        SUM(l.amount)::float as latest_payments
-                    FROM LatestProductReceipt lpr
-                    JOIN "Ledger" l ON l.customer_id = lpr.customer_id 
-                        AND l.type = 'PAYMENT' 
-                        AND l.deleted_at IS NULL
-                        AND l.created_at >= lpr.receipt_created_at
-                    GROUP BY lpr.customer_id
-                )
-                SELECT 
-                    l.customer_id as id, 
-                    c.name, 
-                    c.customer_code as code, 
-                    l.new_debt::float as debt,
-                    l.is_reesto,
-                    COALESCE(lp.latest_payments, 0) as total_payments,
-                    COALESCE(lm.latest_maqal, 0) as total_maqal,
-                    CASE 
-                        WHEN COALESCE(lm.latest_maqal, 0) = 0 THEN 0
-                        ELSE LEAST(100, ROUND((COALESCE(lp.latest_payments, 0) / lm.latest_maqal) * 100))
-                    END as percentage_paid
-                FROM (
-                    SELECT DISTINCT ON (customer_id) 
-                        customer_id, 
-                        new_debt,
-                        (type = 'PAYMENT') as is_reesto
-                    FROM "Ledger"
-                    WHERE deleted_at IS NULL
-                    ORDER BY customer_id, created_at DESC, id DESC
-                ) l
-                JOIN "Customer" c ON l.customer_id = c.id
-                LEFT JOIN LatestMaqal lm ON l.customer_id = lm.customer_id
-                LEFT JOIN LatestPayments lp ON l.customer_id = lp.customer_id
-                WHERE l.new_debt != 0 OR COALESCE(lm.latest_maqal, 0) > 0
-            `),
-
-            // 7. Recent transactions (last 5)
-            pool.query(`
-                SELECT 
-                    l.id, l.customer_id, l.type, l.reference_date, l.kg, l.price_per_kg,
-                    l.amount, l.previous_debt, l.new_debt, l.note, l.created_at,
-                    c.name as "customerName"
-                FROM "Ledger" l
-                JOIN "Customer" c ON l.customer_id = c.id
-                WHERE l.deleted_at IS NULL
-                ORDER BY l.created_at DESC
-                LIMIT 5
-            `)
+            // Removed topDebtors and recentTransactions to save massive egress bandwidth, 
+            // since the dashboard UI no longer renders them (moved to reports).
         ]);
 
         const totalCustomers = totalCustomersResult.rows[0]?.count || 0;
@@ -151,25 +79,8 @@ const getDashboardData = async (today: string) => {
         const totalKg = totalKgResult.rows[0]?.total_kg || 0;
         const todayKg = todayStatsResult.rows[0]?.today_kg || 0;
         const todayCustomerCount = todayStatsResult.rows[0]?.today_customer_count || 0;
-        const topDebtors = topDebtorsResult.rows || [];
-
-        // Map recent transactions format back to what the frontend expects
-        const recentTransactions = recentTransactionsResult.rows.map(row => ({
-            id: row.id,
-            customer_id: row.customer_id,
-            type: row.type,
-            reference_date: row.reference_date,
-            kg: row.kg,
-            price_per_kg: row.price_per_kg,
-            amount: row.amount,
-            previous_debt: row.previous_debt,
-            new_debt: row.new_debt,
-            note: row.note,
-            created_at: row.created_at,
-            customer: {
-                name: row.customerName
-            }
-        }));
+        const topDebtors: any[] = [];
+        const recentTransactions: any[] = [];
 
         return {
             totalCustomers,
