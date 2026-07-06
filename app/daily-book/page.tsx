@@ -296,7 +296,10 @@ function DailyBookPageInner() {
 
         const previousEntries = [...savedEntries];
         setSavedEntries(prev => {
-            const filtered = prev.filter(e => e.date !== dateStr);
+            const filtered = prev.filter(e => {
+                const existingDate = e.date.substring(0, 10);
+                return existingDate !== dateStr;
+            });
             return [newEntry, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         });
         toast.success('Book saved successfully!', { description: 'Updated instantly' });
