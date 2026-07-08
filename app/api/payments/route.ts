@@ -36,7 +36,7 @@ export async function GET(request: Request) {
                 ) as customer,
                 -- Window aggregates computed in DB (zero extra round-trips)
                 SUM(l.amount) OVER () AS _total_all_time,
-                SUM(CASE WHEN l.reference_date::date = ${todayParam}::date THEN l.amount ELSE 0 END) OVER () AS _today_total
+                SUM(CASE WHEN COALESCE(l.reference_date, l.created_at)::date = ${todayParam}::date THEN l.amount ELSE 0 END) OVER () AS _today_total
              FROM "Ledger" l
              LEFT JOIN "Customer" c ON c.id = l.customer_id
              WHERE ${whereClause}
