@@ -181,7 +181,7 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
                 // Find the new KG from the daily book items payload
                 const dailyItem = items?.find((i: any) => i.customer_id === ledger.customer_id);
                 // If the customer was removed from the daily book, new KG is 0.
-                const newKg = dailyItem ? (parseFloat(dailyItem.kg) || 0) : 0;
+                const newKg = dailyItem ? (Number(dailyItem.kg) || 0) : 0;
 
                 // Compare rounded to 2 decimal places to avoid tiny float diffs
                 if (Math.abs((ledger.kg || 0) - newKg) > 0.001) {
