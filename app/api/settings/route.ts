@@ -37,7 +37,7 @@ export const POST = trackApiRoute('/api/settings', async (request: Request) => {
         const body = await request.json();
         const result = settingSchema.safeParse(body);
         if (!result.success) {
-            return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+            return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
         }
         const { key, value } = result.data;
 

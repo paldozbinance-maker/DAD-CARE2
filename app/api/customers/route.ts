@@ -378,7 +378,7 @@ export const POST = trackApiRoute('/api/customers', async (request: Request) => 
     const body = await request.json();
     const result = customerSchema.safeParse(body);
     if (!result.success) {
-        return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+        return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
     const { name, gender, phone, customer_code } = result.data;
     const supabase = await createClient();
@@ -474,7 +474,7 @@ export const PATCH = trackApiRoute('/api/customers', async (request: Request) =>
     const body = await request.json();
     const result = customerSchema.safeParse(body);
     if (!result.success) {
-        return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+        return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
     const { name, gender, phone, customer_code } = result.data;
 

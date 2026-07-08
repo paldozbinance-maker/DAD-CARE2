@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const result = userSchema.safeParse(body);
     if (!result.success) {
-        return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+        return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
     const { username, name, password, role, gender, phone, avatar_url, assigned_customer_ids } = result.data;
 
