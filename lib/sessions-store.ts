@@ -94,9 +94,9 @@ export async function validateSession(token: string): Promise<{ userId: string; 
                 UPDATE "AdminSession"
                 SET last_seen_at = NOW()
                 WHERE token = $1 AND expires_at > NOW()
-                RETURNING *
+                RETURNING user_id, username, role
              )
-             SELECT updated.*, u.is_active 
+             SELECT updated.user_id, updated.username, updated.role, u.is_active 
              FROM updated 
              JOIN "User" u ON u.username = updated.username 
              LIMIT 1`,
@@ -145,7 +145,7 @@ export async function getOnlineSessions(): Promise<SessionData[]> {
         await ensureTable();
         const cutoff = new Date(Date.now() - ONLINE_THRESHOLD_MS);
         const { rows } = await pool.query(
-            `SELECT * FROM "AdminSession"
+            `SELECT user_id, username, name, role, avatar_url, login_at, last_seen_at, ip_address, user_agent FROM "AdminSession"
              WHERE expires_at > NOW() AND last_seen_at >= $1
              ORDER BY last_seen_at DESC`,
             [cutoff]
@@ -159,7 +159,7 @@ export async function getAllSessions(): Promise<SessionData[]> {
     try {
         await ensureTable();
         const { rows } = await pool.query(
-            `SELECT * FROM "AdminSession" WHERE expires_at > NOW() ORDER BY last_seen_at DESC`
+            `SELECT user_id, username, name, role, avatar_url, login_at, last_seen_at, ip_address, user_agent FROM "AdminSession" WHERE expires_at > NOW() ORDER BY last_seen_at DESC`
         );
         return rows.map(rowToSession);
     } catch { return []; }

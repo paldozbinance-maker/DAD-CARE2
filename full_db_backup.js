@@ -1,7 +1,6 @@
 const { Client } = require('pg');
 const fs = require('fs');
-require('dotenv').config({ path: '.env.local' });
-require('dotenv').config(); // fallback to .env if .env.local doesn't exist
+require('dotenv').config(); 
 
 async function backup() {
     console.log('Connecting to database...');

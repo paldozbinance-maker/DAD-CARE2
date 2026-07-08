@@ -1,13 +1,15 @@
 const { Client } = require('pg');
 const fs = require('fs');
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config(); // fallback to .env if .env.local missing
 
 async function restore() {
     console.log('Reading backups...');
     const schemaDump = JSON.parse(fs.readFileSync('schema_dump.json', 'utf8'));
     const dataDump = JSON.parse(fs.readFileSync('full_database_backup.json', 'utf8'));
 
-    // NEW DATABASE CREDENTIALS (provided by user)
-    const newDbUrl = 'postgresql://postgres.sydbsvaoppoyrajphlhk:kSRGT0AYXHHpoP8d@aws-0-eu-west-3.pooler.supabase.com:6543/postgres';
+    // NEW DATABASE CREDENTIALS (reads from .env)
+    const newDbUrl = process.env.DATABASE_URL;
 
     console.log('Connecting to NEW database...');
     const client = new Client({

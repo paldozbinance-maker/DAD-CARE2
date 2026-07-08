@@ -37,7 +37,7 @@ export async function PUT(
         }
 
         values.push(id);
-        const query = `UPDATE "User" SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = $${index} RETURNING *`;
+        const query = `UPDATE "User" SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = $${index} RETURNING id, username, role, name, is_active, avatar_url, created_at, assigned_customer_ids`;
         
         const { rows } = await pool.query(query, values);
 
@@ -60,7 +60,7 @@ export async function GET(
     const { id } = await params;
 
     try {
-        const { rows } = await pool.query('SELECT * FROM "User" WHERE id = $1', [id]);
+        const { rows } = await pool.query('SELECT id, username, role, name, is_active, avatar_url, created_at, assigned_customer_ids FROM "User" WHERE id = $1', [id]);
         if (rows.length === 0) throw new Error('User not found');
         return NextResponse.json(rows[0]);
     } catch (error: any) {

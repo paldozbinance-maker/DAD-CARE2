@@ -250,7 +250,13 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
 
-
+            {/* Admin Egress Monitor (System Link) */}
+            <div className="flex justify-center mt-6 mb-8">
+                <Link href="/api/egress-stats" target="_blank" className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors bg-secondary/30 px-3 py-1.5 rounded-full border border-border/50">
+                    <Activity className="h-3 w-3" />
+                    <span>View Live Egress Monitor</span>
+                </Link>
+            </div>
         </div>
     );
 }

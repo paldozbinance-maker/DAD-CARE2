@@ -48,12 +48,12 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
         if (isBatch) {
             const parsed = LedgerBatchSchema.safeParse(body);
             if (!parsed.success) {
-                return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+                return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
             }
         } else {
             const parsed = LedgerSingleSchema.safeParse(body);
             if (!parsed.success) {
-                return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+                return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
             }
         }
 

@@ -7,6 +7,14 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { unstable_cache } from 'next/cache';
 import { trackApiRoute } from '@/lib/egress-tracker';
+import { z } from 'zod';
+
+const customerSchema = z.object({
+    name: z.string().min(1, 'Name is required'),
+    customer_code: z.string().min(1, 'Code is required'),
+    gender: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+});
 
 async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) {
     const query = `
@@ -368,7 +376,11 @@ export const POST = trackApiRoute('/api/customers', async (request: Request) => 
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const body = await request.json();
-    const { name, gender, phone, customer_code } = body;
+    const result = customerSchema.safeParse(body);
+    if (!result.success) {
+        return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+    }
+    const { name, gender, phone, customer_code } = result.data;
     const supabase = await createClient();
 
     try {
@@ -460,14 +472,18 @@ export const PATCH = trackApiRoute('/api/customers', async (request: Request) =>
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const body = await request.json();
-    const { name, gender, phone, customer_code } = body;
+    const result = customerSchema.safeParse(body);
+    if (!result.success) {
+        return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+    }
+    const { name, gender, phone, customer_code } = result.data;
 
     try {
         const query = `
             UPDATE "Customer"
             SET name = $1, customer_code = $2, gender = $3, phone = $4
             WHERE id = $5
-            RETURNING *;
+            RETURNING id, name, customer_code, gender, phone, created_at, updated_at, deleted_at;
         `;
         const values = [name, customer_code, gender || null, phone || null, id];
         const { rows } = await pool.query(query, values);

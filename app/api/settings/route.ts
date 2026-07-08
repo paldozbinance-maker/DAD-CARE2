@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import { trackApiRoute } from '@/lib/egress-tracker';
+import { z } from 'zod';
+
+const settingSchema = z.object({
+    key: z.string().min(1, 'Key is required'),
+    value: z.union([z.string(), z.number(), z.boolean()]),
+});
 
 export const GET = trackApiRoute('/api/settings', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
@@ -29,11 +35,11 @@ export const POST = trackApiRoute('/api/settings', async (request: Request) => {
     if (errorResponse) return errorResponse;
     try {
         const body = await request.json();
-        const { key, value } = body;
-
-        if (!key || value === undefined) {
-            return NextResponse.json({ error: 'Key and value are required' }, { status: 400 });
+        const result = settingSchema.safeParse(body);
+        if (!result.success) {
+            return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
         }
+        const { key, value } = result.data;
 
         // Create table if not exists
         await pool.query(`

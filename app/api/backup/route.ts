@@ -319,7 +319,7 @@ export const POST = trackApiRoute('/api/backup', async (request: Request) => {
 
         // Fetch top 500 transactions for all customers in ONE query
         const { rows: allTxns } = await pool.query(`
-            SELECT * FROM (
+            SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at FROM (
                 SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at,
                        ROW_NUMBER() OVER(PARTITION BY customer_id ORDER BY created_at DESC) as rn
                 FROM "Ledger"

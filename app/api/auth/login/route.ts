@@ -21,7 +21,7 @@ export async function POST(request: Request) {
         const userAgent = request.headers.get('user-agent') || 'unknown';
 
         // Check user credentials against database directly via pg pool
-        const { rows } = await pool.query('SELECT * FROM "User" WHERE username = $1 LIMIT 1', [username]);
+        const { rows } = await pool.query('SELECT id, username, password, role, is_active, name, avatar_url FROM "User" WHERE username = $1 LIMIT 1', [username]);
         const user = rows[0] || null;
 
         let resolvedUser: any = null;

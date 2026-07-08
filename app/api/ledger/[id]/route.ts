@@ -22,7 +22,7 @@ export async function DELETE(
 
         // Fetch the ledger entry to verify it exists and get customer_id
         const { rows } = await client.query(
-            `SELECT * FROM "Ledger" WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+            `SELECT id, customer_id, amount, type FROM "Ledger" WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
             [ledgerId]
         );
 
@@ -81,7 +81,7 @@ export async function PATCH(
         await client.query('BEGIN');
 
         const { rows } = await client.query(
-            `SELECT * FROM "Ledger" WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+            `SELECT id, customer_id, amount, kg, price_per_kg, type, reference_date, edit_count FROM "Ledger" WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
             [ledgerId]
         );
 

@@ -3,6 +3,18 @@ import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSuperAdmin, evictSessionCache } from '@/lib/require-session';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+
+const userSchema = z.object({
+    username: z.string().min(3, 'Username must be at least 3 characters'),
+    password: z.string().min(4, 'Password must be at least 4 characters'),
+    name: z.string().optional().nullable(),
+    role: z.string().optional(),
+    gender: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+    avatar_url: z.string().url().optional().nullable(),
+    assigned_customer_ids: z.array(z.string()).optional()
+});
 
 export async function GET(request: Request) {
     const { errorResponse } = await requireSuperAdmin(request);
@@ -22,12 +34,13 @@ export async function POST(request: Request) {
     const { errorResponse } = await requireSuperAdmin(request);
     if (errorResponse) return errorResponse;
     const body = await request.json();
-    const { username, name, password, role, gender, phone, avatar_url, assigned_customer_ids } = body;
+    const result = userSchema.safeParse(body);
+    if (!result.success) {
+        return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+    }
+    const { username, name, password, role, gender, phone, avatar_url, assigned_customer_ids } = result.data;
 
     try {
-        if (!username || !password) {
-            return NextResponse.json({ error: 'Username and password are required' }, { status: 400 });
-        }
 
         const { rows: existing } = await pool.query('SELECT id FROM "User" WHERE username = $1', [username]);
         if (existing.length > 0) {
@@ -39,7 +52,7 @@ export async function POST(request: Request) {
 
         const { rows: inserted } = await pool.query(
             `INSERT INTO "User" (id, username, email, name, password, role, is_active, gender, phone, avatar_url, assigned_customer_ids, created_at, updated_at)
-             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) RETURNING *`,
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) RETURNING id, username, name, role, is_active, gender, phone, avatar_url, assigned_customer_ids, created_at, updated_at`,
             [
                 username,
                 `${username}@example.com`,
