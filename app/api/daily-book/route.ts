@@ -5,6 +5,21 @@ import pool from '@/lib/db';
 import { recalculateCustomerLedger } from '@/lib/ledger-utils';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { trackApiRoute } from '@/lib/egress-tracker';
+import { rateLimitResponse } from '@/lib/rate-limit';
+import { z } from 'zod';
+
+// ── Zod Schemas ────────────────────────────────────────────────────────────
+const DailyBookItemSchema = z.object({
+    customer_id: z.string().uuid('Invalid customer ID'),
+    kg: z.union([z.string(), z.number()]).optional(),
+    present: z.boolean().optional(),
+    note: z.string().max(500).nullable().optional(),
+});
+
+const DailyBookSchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+    items: z.array(DailyBookItemSchema).max(300, 'Too many items'),
+});
 
 export const GET = trackApiRoute('/api/daily-book', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
@@ -63,8 +78,20 @@ export const GET = trackApiRoute('/api/daily-book', async (request: Request) => 
 export const POST = trackApiRoute('/api/daily-book', async (request: Request) => {
     const { errorResponse, session } = await requireSession(request);
     if (errorResponse) return errorResponse;
+
+    // Rate limit: max 5 saves per 30 seconds to prevent duplicate submissions
+    const limited = rateLimitResponse(request, 5, 30_000);
+    if (limited) return limited;
+
     const body = await request.json();
-    const { date: dateStr, items } = body;
+
+    // ── Zod validation ──────────────────────────────────────────────────
+    const parsed = DailyBookSchema.safeParse(body);
+    if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+    }
+
+    const { date: dateStr, items } = parsed.data;
 
     const client = await pool.connect();
 

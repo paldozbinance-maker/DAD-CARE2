@@ -79,9 +79,10 @@ export function useLedgerStatusForDate(dateStr: string | null) {
         dateStr ? `/api/ledger-by-date?date=${dateStr}` : null,
         fetcher,
         {
-            revalidateOnFocus: true,
-            dedupingInterval: 5000,
-            revalidateIfStale: true,
+            revalidateOnFocus: false,   // FIX: was 'true' — was hitting DB on every tab switch
+            revalidateOnReconnect: false,
+            revalidateIfStale: false,
+            dedupingInterval: 30000,    // FIX: was 5000 — 30s dedup window
             shouldRetryOnError: false,
         }
     );

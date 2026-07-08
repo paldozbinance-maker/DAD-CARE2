@@ -317,14 +317,26 @@ export const POST = trackApiRoute('/api/backup', async (request: Request) => {
         let customerCount = 0;
         let totalTransactions = 0;
 
-        for (const cust of (customers || [])) {
-            const { rows: txns } = await pool.query(`
-                SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at
+        // Fetch top 500 transactions for all customers in ONE query
+        const { rows: allTxns } = await pool.query(`
+            SELECT * FROM (
+                SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at,
+                       ROW_NUMBER() OVER(PARTITION BY customer_id ORDER BY created_at DESC) as rn
                 FROM "Ledger"
-                WHERE customer_id = $1 AND deleted_at IS NULL
-                ORDER BY created_at DESC
-                LIMIT 500
-            `, [cust.id]);
+                WHERE deleted_at IS NULL
+            ) t
+            WHERE rn <= 500
+        `);
+
+        // Group transactions by customer in memory
+        const txnsByCustomer = (allTxns || []).reduce((acc: any, txn: any) => {
+            if (!acc[txn.customer_id]) acc[txn.customer_id] = [];
+            acc[txn.customer_id].push(txn);
+            return acc;
+        }, {});
+
+        for (const cust of (customers || [])) {
+            const txns = txnsByCustomer[cust.id] || [];
 
             if (!txns || txns.length === 0) continue;
             customerCount++;

@@ -4,10 +4,38 @@ import { requireSession } from '@/lib/require-session';
 import { revalidateTag, revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { trackApiRoute } from '@/lib/egress-tracker';
+import { rateLimitResponse } from '@/lib/rate-limit';
+import { z } from 'zod';
+
+// ── Zod Schemas ────────────────────────────────────────────────────────────
+const LedgerItemSchema = z.object({
+    type: z.enum(['PRODUCT', 'PAYMENT', 'ADJUSTMENT']),
+    date: z.string().optional(),
+    kg: z.union([z.string(), z.number()]).optional(),
+    price: z.union([z.string(), z.number()]).optional(),
+    amount: z.union([z.string(), z.number()]).optional(),
+    note: z.string().max(500).nullable().optional(),
+    receipt_id: z.string().uuid().nullable().optional(),
+});
+
+const LedgerBatchSchema = z.object({
+    customerId: z.string().uuid('Invalid customer ID'),
+    items: z.array(LedgerItemSchema).min(1, 'At least one item is required').max(50),
+    receipt_id: z.string().uuid().nullable().optional(),
+});
+
+const LedgerSingleSchema = LedgerItemSchema.extend({
+    customerId: z.string().uuid('Invalid customer ID'),
+    receipt_id: z.string().uuid().nullable().optional(),
+});
 
 export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
+
+    // Rate limit: max 10 write requests per 10 seconds per IP
+    const limited = rateLimitResponse(request, 10, 10_000);
+    if (limited) return limited;
 
     try {
         const body = await request.json();
@@ -15,6 +43,20 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
 
         // Support both single entry and batch (items array)
         const isBatch = Array.isArray(items);
+
+        // ── Zod validation ──────────────────────────────────────────────────
+        if (isBatch) {
+            const parsed = LedgerBatchSchema.safeParse(body);
+            if (!parsed.success) {
+                return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+            }
+        } else {
+            const parsed = LedgerSingleSchema.safeParse(body);
+            if (!parsed.success) {
+                return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+            }
+        }
+
         const customerId = isBatch ? customerIdBatch : body.customerId;
         const receipt_id = body.receipt_id || (isBatch ? crypto.randomUUID() : null);
 
@@ -115,23 +157,23 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
                 });
             }
 
-            // 4. SEQUENTIAL INSERT
-            for (const entry of entriesToInsert) {
+            // 4. BULK INSERT
+            if (entriesToInsert.length > 0) {
                 await client.query(
                     `INSERT INTO "Ledger" (id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at)
-                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                     SELECT gen_random_uuid(), * FROM UNNEST($1::uuid[], $2::text[], $3::date[], $4::float8[], $5::float8[], $6::float8[], $7::float8[], $8::float8[], $9::text[], $10::uuid[], $11::timestamp[])`,
                     [
-                        entry.customer_id, 
-                        entry.type, 
-                        entry.reference_date, 
-                        entry.kg, 
-                        entry.price_per_kg, 
-                        entry.amount, 
-                        entry.previous_debt, 
-                        entry.new_debt, 
-                        entry.note, 
-                        entry.receipt_id, 
-                        entry.created_at
+                        entriesToInsert.map(e => e.customer_id),
+                        entriesToInsert.map(e => e.type),
+                        entriesToInsert.map(e => e.reference_date),
+                        entriesToInsert.map(e => e.kg),
+                        entriesToInsert.map(e => e.price_per_kg),
+                        entriesToInsert.map(e => e.amount),
+                        entriesToInsert.map(e => e.previous_debt),
+                        entriesToInsert.map(e => e.new_debt),
+                        entriesToInsert.map(e => e.note),
+                        entriesToInsert.map(e => e.receipt_id),
+                        entriesToInsert.map(e => e.created_at)
                     ]
                 );
             }

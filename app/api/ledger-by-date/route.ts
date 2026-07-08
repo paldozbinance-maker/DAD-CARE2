@@ -16,11 +16,11 @@ export const GET = trackApiRoute('/api/ledger-by-date', async (request: Request)
 
     try {
         const { rows } = await pool.query(
-            `SELECT DISTINCT customer_id FROM "Ledger" WHERE reference_date = $1 AND type = 'PRODUCT'`,
+            `SELECT DISTINCT customer_id FROM "Ledger" WHERE reference_date = $1 AND type = 'PRODUCT' AND deleted_at IS NULL`,
             [date]
         );
         const res = NextResponse.json(rows.map((r: any) => r.customer_id));
-        res.headers.set('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=30');
+        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
         return res;
     } catch (error: any) {
         console.error('Ledger by date error:', error);
