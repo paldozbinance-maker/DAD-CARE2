@@ -5,7 +5,7 @@ import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import bcrypt from 'bcryptjs';
-
+import { unstable_cache } from 'next/cache';
 
 async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) {
     const query = `
@@ -250,6 +250,83 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
     return rows;
 }
 
+const getCachedCustomersLite = unstable_cache(
+    async () => {
+        const query = `
+            SELECT 
+                c.id, c.name, c.customer_code, c.phone,
+                COALESCE(
+                    (SELECT new_debt FROM "Ledger" WHERE customer_id = c.id AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1), 
+                0)::float as current_balance,
+                CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive
+            FROM "Customer" c
+            WHERE c.deleted_at IS NULL
+            ORDER BY c.customer_code ASC;
+        `;
+        const { rows } = await pool.query(query);
+        return rows;
+    },
+    ['customers-lite-data'],
+    { revalidate: 300, tags: ['customers', 'max'] }
+);
+
+const getCachedCustomersLedger = unstable_cache(
+    async () => {
+        const query = `
+            WITH prev_pair AS (
+                SELECT
+                    ('2026-06-28'::date + (
+                        ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2 - 2
+                    )::int * '1 day'::interval)::date AS date1,
+                    ('2026-06-28'::date + (
+                        ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2 - 1
+                    )::int * '1 day'::interval)::date AS date2
+            )
+            SELECT
+                c.id, c.name, c.customer_code,
+                CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive,
+                COALESCE(dbk.total_books_count, 0) as total_books_count,
+                CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
+                CASE
+                    WHEN COALESCE(td.prev_pair_ledger_count, 0) >= 2 THEN true
+                    WHEN (c.created_at AT TIME ZONE 'Africa/Mogadishu')::date > (SELECT date2 FROM prev_pair) THEN true
+                    ELSE false
+                END as is_target_days_done
+            FROM "Customer" c
+            LEFT JOIN (
+                SELECT customer_id, COUNT(DISTINCT id) as total_books_count, SUM(kg) as total_daily_kg
+                FROM "DailyBookItem" WHERE kg > 0 AND deleted_at IS NULL GROUP BY customer_id
+            ) dbk ON c.id = dbk.customer_id
+            LEFT JOIN (
+                SELECT customer_id, SUM(kg) as total_ledger_kg
+                FROM "Ledger" WHERE type = 'PRODUCT' AND deleted_at IS NULL GROUP BY customer_id
+            ) lk ON c.id = lk.customer_id
+            LEFT JOIN (
+                SELECT customer_id,
+                    COUNT(DISTINCT COALESCE((reference_date AT TIME ZONE 'Africa/Mogadishu')::date, (created_at AT TIME ZONE 'Africa/Mogadishu')::date)) as prev_pair_ledger_count
+                FROM "Ledger"
+                WHERE type = 'PRODUCT' AND deleted_at IS NULL
+                  AND COALESCE((reference_date AT TIME ZONE 'Africa/Mogadishu')::date, (created_at AT TIME ZONE 'Africa/Mogadishu')::date)
+                        IN (SELECT date1 FROM prev_pair UNION SELECT date2 FROM prev_pair)
+                GROUP BY customer_id
+            ) td ON c.id = td.customer_id
+            ORDER BY c.name ASC;
+        `;
+        const { rows } = await pool.query(query);
+        return rows;
+    },
+    ['customers-ledger-data'],
+    { revalidate: 300, tags: ['customers', 'max'] }
+);
+
+const getCachedCustomersFull = unstable_cache(
+    async (maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) => {
+        return getCustomers(maqalD1, maqalD2, maxAllTimeDate);
+    },
+    ['customers-full-data'],
+    { revalidate: 300, tags: ['customers', 'max'] }
+);
+
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
@@ -262,76 +339,23 @@ export async function GET(request: Request) {
 
     try {
         if (isLite) {
-            const query = `
-                SELECT 
-                    c.id, c.name, c.customer_code, c.phone,
-                    COALESCE(
-                        (SELECT new_debt FROM "Ledger" WHERE customer_id = c.id AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1), 
-                    0)::float as current_balance,
-                    CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive
-                FROM "Customer" c
-                WHERE c.deleted_at IS NULL
-                ORDER BY c.customer_code ASC;
-            `;
-            const { rows } = await pool.query(query);
+            const rows = await getCachedCustomersLite();
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
             return res;
         }
 
-        // Lightweight mode for the Ledger page — skips all heavy maqal/payment CTEs.
-        // Returns only the columns the ledger dropdown and filter need.
         if (mode === 'ledger') {
-            const query = `
-                WITH prev_pair AS (
-                    SELECT
-                        ('2026-06-28'::date + (
-                            ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2 - 2
-                        )::int * '1 day'::interval)::date AS date1,
-                        ('2026-06-28'::date + (
-                            ((NOW() AT TIME ZONE 'Africa/Mogadishu')::date - '2026-06-28'::date) / 2 * 2 - 1
-                        )::int * '1 day'::interval)::date AS date2
-                )
-                SELECT
-                    c.id, c.name, c.customer_code,
-                    CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive,
-                    COALESCE(dbk.total_books_count, 0) as total_books_count,
-                    CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
-                    CASE
-                        WHEN COALESCE(td.prev_pair_ledger_count, 0) >= 2 THEN true
-                        WHEN (c.created_at AT TIME ZONE 'Africa/Mogadishu')::date > (SELECT date2 FROM prev_pair) THEN true
-                        ELSE false
-                    END as is_target_days_done
-                FROM "Customer" c
-                LEFT JOIN (
-                    SELECT customer_id, COUNT(DISTINCT id) as total_books_count, SUM(kg) as total_daily_kg
-                    FROM "DailyBookItem" WHERE kg > 0 AND deleted_at IS NULL GROUP BY customer_id
-                ) dbk ON c.id = dbk.customer_id
-                LEFT JOIN (
-                    SELECT customer_id, SUM(kg) as total_ledger_kg
-                    FROM "Ledger" WHERE type = 'PRODUCT' AND deleted_at IS NULL GROUP BY customer_id
-                ) lk ON c.id = lk.customer_id
-                LEFT JOIN (
-                    SELECT customer_id,
-                        COUNT(DISTINCT COALESCE((reference_date AT TIME ZONE 'Africa/Mogadishu')::date, (created_at AT TIME ZONE 'Africa/Mogadishu')::date)) as prev_pair_ledger_count
-                    FROM "Ledger"
-                    WHERE type = 'PRODUCT' AND deleted_at IS NULL
-                      AND COALESCE((reference_date AT TIME ZONE 'Africa/Mogadishu')::date, (created_at AT TIME ZONE 'Africa/Mogadishu')::date)
-                            IN (SELECT date1 FROM prev_pair UNION SELECT date2 FROM prev_pair)
-                    GROUP BY customer_id
-                ) td ON c.id = td.customer_id
-                ORDER BY c.name ASC;
-            `;
-            const { rows } = await pool.query(query);
+            const rows = await getCachedCustomersLedger();
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
             return res;
         }
 
-        const customers = await getCustomers(maqalD1, maqalD2, maxAllTimeDate);
+        const customers = await getCachedCustomersFull(maqalD1, maqalD2, maxAllTimeDate);
         
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

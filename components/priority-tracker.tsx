@@ -58,8 +58,8 @@ export function PriorityTracker() {
 
     useEffect(() => {
         fetchData();
-        const t = setInterval(fetchData, 300000);
-        return () => clearInterval(t);
+        // Removed setInterval to prevent continuous background polling which drains Supabase bandwidth.
+        // The data will still refresh when the component mounts or upon manual interaction/cache invalidation.
     }, []);
 
     const allUsers = data?.users || [];

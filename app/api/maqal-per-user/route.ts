@@ -21,11 +21,10 @@ import { requireSession } from '@/lib/require-session';
 //     ACTIVE pair offset = 4  → Jul 2 & Jul 3  ← tracker focuses here
 //     WAITING pair offset = 6 → Jul 4 & Jul 5  ← shown as "coming next"
 //     Auto-advance fires when DailyBook has a Jul 6 entry (offset 8)
-export async function GET(request: NextRequest) {
-    try {
-        const sessionRes = await requireSession(request);
-        if (sessionRes instanceof NextResponse) return sessionRes;
+import { unstable_cache } from 'next/cache';
 
+const getCachedMaqalData = unstable_cache(
+    async () => {
         // 1. Get all users with assigned_customer_ids
         const { rows: users } = await pool.query(`
             SELECT id, username, name, assigned_customer_ids, avatar_url
@@ -35,7 +34,7 @@ export async function GET(request: NextRequest) {
         `);
 
         if (users.length === 0) {
-            return NextResponse.json({ users: [] });
+            return { users: [] };
         }
 
         // 2. Compute pair offsets
@@ -49,11 +48,8 @@ export async function GET(request: NextRequest) {
         const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
         const diffDaysToday = Math.floor((todayMs - epochMs) / 86400000);
 
-        // The pair that contains today
         const currentPairOffset = Math.floor(diffDaysToday / 2) * 2;
-        // The pair BEFORE today — this is where users should have processed customers
         const activePairOffset = Math.max(0, currentPairOffset - 2);
-        // The pair AFTER active — this is the "waiting" pair users will work on next
         const waitingPairOffset = activePairOffset + 2;
 
         const toDateStr = (offsetDays: number): string => {
@@ -64,19 +60,12 @@ export async function GET(request: NextRequest) {
             return `${y}-${m}-${day}`;
         };
 
-        // Active pair dates
         const activePairDate1 = toDateStr(activePairOffset);
         const activePairDate2 = toDateStr(activePairOffset + 1);
-
-        // Waiting pair dates  
         const waitingPairDate1 = toDateStr(waitingPairOffset);
         const waitingPairDate2 = toDateStr(waitingPairOffset + 1);
-
-        // The day AFTER the waiting pair ends — auto-advance trigger date
         const autoAdvanceTriggerDate = toDateStr(waitingPairOffset + 2);
 
-        // 3. Check if DailyBook has an entry for the auto-advance trigger date
-        //    (i.e., the day after the waiting pair's last day)
         const triggerRes = await pool.query(`
             SELECT EXISTS (
                 SELECT 1 FROM "DailyBook"
@@ -86,37 +75,29 @@ export async function GET(request: NextRequest) {
         `, [autoAdvanceTriggerDate]);
         const hasAutoAdvanceTrigger = triggerRes.rows[0]?.has_trigger === true;
 
-        // Determine which pair is actually "active" for the tracker
-        // If the auto-advance trigger exists, the waiting pair becomes the new active pair
         let trackerDate1: string;
         let trackerDate2: string;
         let nextDate1: string;
         let nextDate2: string;
 
         if (hasAutoAdvanceTrigger) {
-            // Waiting pair is now the new active pair
             trackerDate1 = waitingPairDate1;
             trackerDate2 = waitingPairDate2;
-            // Next pair after waiting
             nextDate1 = toDateStr(waitingPairOffset + 2);
             nextDate2 = toDateStr(waitingPairOffset + 3);
         } else {
-            // Stay on active pair until the trigger fires
             trackerDate1 = activePairDate1;
             trackerDate2 = activePairDate2;
-            // Waiting pair shown as upcoming
             nextDate1 = waitingPairDate1;
             nextDate2 = waitingPairDate2;
         }
 
         if (!trackerDate1 || !trackerDate2) {
-            return NextResponse.json({ users: [], date1: null, date2: null });
+            return { users: [], date1: null, date2: null };
         }
 
-        // 4. Get all assigned customer IDs across all users
         const allAssignedIds = [...new Set(users.flatMap((u: any) => u.assigned_customer_ids || []))];
 
-        // 5. For each assigned customer, check if they have a PRODUCT ledger entry for BOTH dates in the active pair
         const { rows: customerData } = await pool.query(`
             SELECT 
                 c.id,
@@ -135,7 +116,6 @@ export async function GET(request: NextRequest) {
               AND c.deleted_at IS NULL
         `, [trackerDate1, trackerDate2, allAssignedIds]);
 
-        // 6. Build per-user response
         const customerMap = new Map(customerData.map((c: any) => [c.id, c]));
 
         const perUserData = users.map((user: any) => {
@@ -159,15 +139,28 @@ export async function GET(request: NextRequest) {
             };
         });
 
-        const res = NextResponse.json({
+        return {
             users: perUserData,
             date1: trackerDate1,
             date2: trackerDate2,
             waitingDate1: nextDate1,
             waitingDate2: nextDate2,
             autoAdvanced: hasAutoAdvanceTrigger,
-        });
-        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        };
+    },
+    ['maqal-per-user-data'],
+    { revalidate: 300, tags: ['ledger', 'daily-book'] }
+);
+
+export async function GET(request: NextRequest) {
+    try {
+        const sessionRes = await requireSession(request);
+        if (sessionRes instanceof NextResponse) return sessionRes;
+
+        const data = await getCachedMaqalData();
+
+        const res = NextResponse.json(data);
+        res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
         return res;
 
     } catch (error: any) {
