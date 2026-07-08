@@ -323,7 +323,7 @@ export const POST = trackApiRoute('/api/backup', async (request: Request) => {
                 FROM "Ledger"
                 WHERE customer_id = $1 AND deleted_at IS NULL
                 ORDER BY created_at DESC
-                LIMIT 10000
+                LIMIT 500
             `, [cust.id]);
 
             if (!txns || txns.length === 0) continue;

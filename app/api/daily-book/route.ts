@@ -3,7 +3,7 @@ import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import pool from '@/lib/db';
 import { recalculateCustomerLedger } from '@/lib/ledger-utils';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { trackApiRoute } from '@/lib/egress-tracker';
 
 export const GET = trackApiRoute('/api/daily-book', async (request: Request) => {
@@ -195,6 +195,7 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
             revalidatePath('/api/daily-book-history-full');
             revalidatePath('/api/daily-book-init');
             revalidatePath('/api/reports');
+            revalidateTag('customers', 'max');
         } catch (e) {
             console.error('Failed to revalidate paths:', e);
         }

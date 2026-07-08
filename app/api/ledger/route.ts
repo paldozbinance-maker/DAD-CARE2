@@ -171,7 +171,7 @@ export const GET = trackApiRoute('/api/ledger', async (request: Request) => {
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 500);
     const offset = parseInt(searchParams.get('offset') || '0');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');

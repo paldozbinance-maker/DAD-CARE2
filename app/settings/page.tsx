@@ -646,7 +646,7 @@ export default function SettingsPage() {
             if (Array.isArray(customers)) {
                 const txnsByCustomer: Record<string, any[]> = {};
                 for (const cust of customers) {
-                    const ledgerRes = await fetch(`/api/ledger?customerId=${cust.id}&limit=10000`);
+                    const ledgerRes = await fetch(`/api/ledger?customerId=${cust.id}&limit=500`);
                     const ledgerData = await ledgerRes.json();
                     txnsByCustomer[cust.id] = ledgerData.transactions || [];
                 }
