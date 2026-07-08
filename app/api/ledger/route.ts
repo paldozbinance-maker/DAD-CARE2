@@ -3,8 +3,9 @@ import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
 import { revalidateTag, revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
-export async function POST(request: Request) {
+export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
 
@@ -163,9 +164,9 @@ export async function POST(request: Request) {
         console.error('Ledger Error:', error);
         return NextResponse.json({ error: error.message || 'Failed to add entry' }, { status: 500 });
     }
-}
+});
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/ledger', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
@@ -228,9 +229,9 @@ export async function GET(request: Request) {
         console.error('Fetch Ledger Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = trackApiRoute('/api/ledger', async (request: Request) => {
     const { errorResponse, session } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
@@ -268,4 +269,4 @@ export async function DELETE(request: Request) {
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});

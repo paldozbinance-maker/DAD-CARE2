@@ -2,8 +2,9 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { logAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/require-session';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/settings', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     try {
@@ -21,9 +22,9 @@ export async function GET(request: Request) {
         console.error('Settings GET Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = trackApiRoute('/api/settings', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     try {
@@ -54,4 +55,4 @@ export async function POST(request: Request) {
         console.error('Settings POST Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});

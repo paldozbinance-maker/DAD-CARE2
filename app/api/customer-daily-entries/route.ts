@@ -1,6 +1,7 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 // Get unprocessed daily book entries for a specific customer.
 //
@@ -23,7 +24,7 @@ import { requireSession } from '@/lib/require-session';
 //   2. If all done → shows the WAITING pair (isReady: false) so they can see it's coming
 // ──────────────────────────────────────────────────────────────────────────
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/customer-daily-entries', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
@@ -210,5 +211,5 @@ export async function GET(request: Request) {
         console.error('Fetch Customer Daily Entries Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
 

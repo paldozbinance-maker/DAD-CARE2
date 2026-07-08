@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { validateSession, touchSession, getOnlineSessions, getAllSessions } from '@/lib/sessions-store';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 /**
  * GET /api/admin-sessions
  * Returns online and recent session data for the super admin dashboard.
  * Also updates the caller's lastSeenAt (heartbeat).
  */
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/admin-sessions', async (request: Request) => {
     try {
         const cookieHeader = request.headers.get('cookie') || '';
         const cookieToken = cookieHeader.match(/dadwork_session=([^;]+)/)?.[1];
@@ -76,13 +77,13 @@ export async function GET(request: Request) {
         console.error('Admin Sessions Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
 
 /**
  * POST /api/admin-sessions
  * Heartbeat endpoint — keeps the current user's session marked as "online".
  */
-export async function POST(request: Request) {
+export const POST = trackApiRoute('/api/admin-sessions', async (request: Request) => {
     try {
         const cookieHeader = request.headers.get('cookie') || '';
         const cookieToken = cookieHeader.match(/dadwork_session=([^;]+)/)?.[1];
@@ -94,4 +95,4 @@ export async function POST(request: Request) {
     } catch {
         return NextResponse.json({ ok: true });
     }
-}
+});

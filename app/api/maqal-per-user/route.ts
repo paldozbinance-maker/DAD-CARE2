@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 // Returns per-user maqal progress based on assigned_customer_ids.
 //
@@ -152,7 +153,7 @@ const getCachedMaqalData = unstable_cache(
     { revalidate: 300, tags: ['ledger', 'daily-book'] }
 );
 
-export async function GET(request: NextRequest) {
+export const GET = trackApiRoute('/api/maqal-per-user', async (request: NextRequest) => {
     try {
         const sessionRes = await requireSession(request);
         if (sessionRes instanceof NextResponse) return sessionRes;
@@ -167,4 +168,4 @@ export async function GET(request: NextRequest) {
         console.error('Error fetching per-user maqal:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});

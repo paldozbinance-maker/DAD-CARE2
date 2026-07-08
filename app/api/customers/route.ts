@@ -6,6 +6,7 @@ import { requireSession } from '@/lib/require-session';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import bcrypt from 'bcryptjs';
 import { unstable_cache } from 'next/cache';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) {
     const query = `
@@ -327,7 +328,7 @@ const getCachedCustomersFull = unstable_cache(
     { revalidate: 300, tags: ['customers', 'max'] }
 );
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/customers', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
@@ -361,9 +362,9 @@ export async function GET(request: Request) {
         console.error('Fetch Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = trackApiRoute('/api/customers', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const body = await request.json();
@@ -391,8 +392,6 @@ export async function POST(request: Request) {
 
         if (userError) {
             console.error('Error creating linked user:', userError);
-            // Proceed anyway to create customer, or throw? 
-            // Let's log but proceed for now to avoid blocking business logic if auth fails
         }
 
         // 2. Create the Customer record
@@ -418,9 +417,9 @@ export async function POST(request: Request) {
         console.error('Create Customer Error:', error);
         return NextResponse.json({ error: error.message || 'Creation failed' }, { status: 500 });
     }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = trackApiRoute('/api/customers', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
@@ -454,8 +453,8 @@ export async function DELETE(request: Request) {
         console.error('Delete Customer Error:', error);
         return NextResponse.json({ error: error.message || 'Deletion failed' }, { status: 500 });
     }
-}
-export async function PATCH(request: Request) {
+});
+export const PATCH = trackApiRoute('/api/customers', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
@@ -489,4 +488,4 @@ export async function PATCH(request: Request) {
         console.error('Update Customer Error:', error);
         return NextResponse.json({ error: error.message || 'Update failed' }, { status: 500 });
     }
-}
+});

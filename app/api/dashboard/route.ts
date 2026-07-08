@@ -1,6 +1,7 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { validateSession } from '@/lib/sessions-store';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 const getDashboardData = async (today: string) => {
     try {
@@ -98,7 +99,7 @@ const getDashboardData = async (today: string) => {
     }
 };
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/dashboard', async (request: Request) => {
     // Double-check auth even though middleware already guards this route
     const cookieHeader = request.headers.get('cookie') || '';
     const cookieToken = cookieHeader.match(/dadwork_session=([^;]+)/)?.[1];
@@ -126,4 +127,4 @@ export async function GET(request: Request) {
         console.error('Dashboard Fetch Error:', error);
         return NextResponse.json({ error: error.message || 'Failed to fetch dashboard' }, { status: 500 });
     }
-}
+});

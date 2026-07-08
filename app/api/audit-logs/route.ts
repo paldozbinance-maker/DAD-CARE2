@@ -2,8 +2,9 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { validateSession, touchSession } from '@/lib/sessions-store';
 import { ensureAuditLogTable } from '@/lib/audit';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/audit-logs', async (request: Request) => {
     try {
         // Accept token from httpOnly cookie OR x-session-token header
         const cookieHeader = request.headers.get('cookie') || '';
@@ -127,4 +128,4 @@ export async function GET(request: Request) {
         console.error('Audit Log GET Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});

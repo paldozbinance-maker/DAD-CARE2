@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
 import pool from '@/lib/db';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/daily-book-history', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
 
@@ -58,4 +59,4 @@ export async function GET(request: Request) {
         console.error('Fetch Daily Book History Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});

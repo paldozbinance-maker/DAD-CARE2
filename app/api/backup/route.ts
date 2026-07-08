@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { requireSuperAdmin } from '@/lib/require-session';
 import pool from '@/lib/db';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -286,7 +287,7 @@ function buildMaalinlahaHTML(entries: any[]) {
 // ──────────────────────────────────────────────
 // MAIN API: Generate and Save Backups
 // ──────────────────────────────────────────────
-export async function POST(request: Request) {
+export const POST = trackApiRoute('/api/backup', async (request: Request) => {
     const { errorResponse } = await requireSuperAdmin(request);
     if (errorResponse) return errorResponse;
     const backupDir = path.join('C:', 'Users', 'abdiq', 'OneDrive', 'Desktop', 'dadcare app', 'Backups');
@@ -375,6 +376,7 @@ export async function POST(request: Request) {
             WHERE db.deleted_at IS NULL
             GROUP BY db.id, db.date
             ORDER BY db.date DESC
+            LIMIT 365
         `);
 
         const history = (historyResult || []).map((book: any) => {
@@ -440,9 +442,9 @@ export async function POST(request: Request) {
         console.error('Backup Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/backup', async (request: Request) => {
     const { errorResponse } = await requireSuperAdmin(request);
     if (errorResponse) return errorResponse;
     const backupDir = path.join('C:', 'Users', 'abdiq', 'OneDrive', 'Desktop', 'dadcare app', 'Backups');
@@ -471,4 +473,4 @@ export async function GET(request: Request) {
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});

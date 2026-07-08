@@ -50,7 +50,7 @@ export async function GET(request: Request) {
         });
 
         const response = NextResponse.json(history);
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
         return response;
     } catch (error: any) {
         console.error('Fetch Daily Book Full History Error:', error);

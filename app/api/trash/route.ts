@@ -17,6 +17,7 @@ export async function GET(request: Request) {
                 FROM "DailyBook"
                 WHERE deleted_at IS NOT NULL
                 ORDER BY deleted_at DESC
+                LIMIT 100
             `),
             pool.query(`
                 SELECT l.id, l.customer_id, l.reference_date as date, l.deleted_at, l.deleted_by, 'ledger' as type, l.type as ledger_type, l.amount, l.kg, l.note, c.name as customer_name
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
                 LEFT JOIN "Customer" c ON c.id = l.customer_id
                 WHERE l.deleted_at IS NOT NULL
                 ORDER BY l.deleted_at DESC
+                LIMIT 100
             `)
         ]);
 

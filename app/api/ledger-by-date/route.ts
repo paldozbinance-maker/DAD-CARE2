@@ -1,9 +1,10 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 // Returns list of customer_ids that already have a PRODUCT ledger entry for a given date
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/ledger-by-date', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
@@ -25,4 +26,4 @@ export async function GET(request: Request) {
         console.error('Ledger by date error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
