@@ -87,9 +87,7 @@ export async function createSession(
     const expires = new Date(now.getTime() + SESSION_TTL_HOURS * 3600 * 1000);
     await pool.query(
         `INSERT INTO "AdminSession" (token, user_id, username, name, role, avatar_url, ip_address, user_agent, login_at, last_seen_at, expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10)
-         ON CONFLICT (token) DO UPDATE
-         SET last_seen_at = NOW(), expires_at = $10`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10)`,
         [
             token,
             userId,
