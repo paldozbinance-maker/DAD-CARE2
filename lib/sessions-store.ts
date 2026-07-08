@@ -50,6 +50,26 @@ async function ensureTable() {
         CREATE INDEX IF NOT EXISTS idx_adminsession_username ON "AdminSession"(username);
         CREATE INDEX IF NOT EXISTS idx_adminsession_last_seen ON "AdminSession"(last_seen_at);
     `);
+
+    // Auto-repair: if the table was restored from backup without a PRIMARY KEY on token,
+    // the ON CONFLICT clause will fail. Add the constraint if it's missing.
+    try {
+        await pool.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conrelid = '"AdminSession"'::regclass
+                      AND contype = 'p'
+                ) THEN
+                    ALTER TABLE "AdminSession" ADD PRIMARY KEY (token);
+                END IF;
+            END$$;
+        `);
+    } catch {
+        // If constraint already exists or table is locked, silently continue
+    }
+
     tableReady = true;
 }
 
