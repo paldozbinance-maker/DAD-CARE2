@@ -12,11 +12,11 @@ export async function GET(request: Request) {
 
     try {
         const params: any[] = [];
-        const filters: string[] = [`type = 'PAYMENT'`, `deleted_at IS NULL`];
+        const filters: string[] = [`l.type = 'PAYMENT'`, `l.deleted_at IS NULL`];
 
         if (customerId) {
             params.push(customerId);
-            filters.push(`customer_id = $${params.length}`);
+            filters.push(`l.customer_id = $${params.length}`);
         }
 
         const whereClause = filters.join(' AND ');
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
                 ) as customer,
                 -- Window aggregates computed in DB (zero extra round-trips)
                 SUM(l.amount) OVER () AS _total_all_time,
-                SUM(CASE WHEN COALESCE(l.reference_date, l.created_at)::date = ${todayParam}::date THEN l.amount ELSE 0 END) OVER () AS _today_total
+                SUM(CASE WHEN COALESCE(l.reference_date, l.created_at::date) = ${todayParam}::date THEN l.amount ELSE 0 END) OVER () AS _today_total
              FROM "Ledger" l
              LEFT JOIN "Customer" c ON c.id = l.customer_id
              WHERE ${whereClause}
@@ -48,8 +48,13 @@ export async function GET(request: Request) {
         const totalAllTime = rows[0]?._total_all_time ? parseFloat(rows[0]._total_all_time) : 0;
         const todayTotal   = rows[0]?._today_total   ? parseFloat(rows[0]._today_total)   : 0;
 
-        // Strip internal aggregate columns from the payment objects
-        const payments = rows.map(({ _total_all_time, _today_total, ...rest }) => rest);
+        // Strip internal aggregate columns from the payment objects and parse numeric fields
+        const payments = rows.map(({ _total_all_time, _today_total, amount, previous_debt, new_debt, ...rest }) => ({
+            ...rest,
+            amount: Number(amount) || 0,
+            previous_debt: Number(previous_debt) || 0,
+            new_debt: Number(new_debt) || 0
+        }));
 
         const response = NextResponse.json({
             payments,

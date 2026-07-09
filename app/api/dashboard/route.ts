@@ -17,32 +17,26 @@ const getDashboardData = async (today: string) => {
             // 1. Total customers count
             pool.query('SELECT count(*)::int as count FROM "Customer" WHERE deleted_at IS NULL'),
             
-            // 2. Total Current Debt (Lacagta Guud)
+            // 2. Total Current Debt (Lacagta Guud) — sum of all customers with positive balance
             pool.query(`
-                SELECT COALESCE(SUM(new_debt), 0)::float as total_debt
+                SELECT COALESCE(SUM(CASE WHEN new_debt > 0 THEN new_debt ELSE 0 END), 0)::float as total_debt
                 FROM (
-                    SELECT DISTINCT ON (customer_id) 
-                        new_debt,
-                        (type = 'PAYMENT') as is_reesto
+                    SELECT DISTINCT ON (customer_id) new_debt
                     FROM "Ledger"
                     WHERE deleted_at IS NULL
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) latest_balances
-                WHERE is_reesto = false AND new_debt != 0
             `),
 
-            // 2b. Total Reesto
+            // 2b. Total Reesto — sum of all customers who have overpaid (negative balance)
             pool.query(`
-                SELECT ABS(COALESCE(SUM(new_debt), 0))::float as total_reesto
+                SELECT ABS(COALESCE(SUM(CASE WHEN new_debt < 0 THEN new_debt ELSE 0 END), 0))::float as total_reesto
                 FROM (
-                    SELECT DISTINCT ON (customer_id) 
-                        new_debt,
-                        (type = 'PAYMENT') as is_reesto
+                    SELECT DISTINCT ON (customer_id) new_debt
                     FROM "Ledger"
                     WHERE deleted_at IS NULL
                     ORDER BY customer_id, created_at DESC, id DESC
                 ) latest_balances
-                WHERE is_reesto = true AND new_debt != 0
             `),
 
             // 3. Total Payments

@@ -325,7 +325,7 @@ export default function CustomerDetailPage() {
             if (currentGroup.length > 0) receiptGroups.push(currentGroup);
         }
 
-        // 5. Process groups (they are already sorted internally newest-first)
+        // 5. Process groups and compute a stable sortDate from product reference dates
         const processedReceipts = receiptGroups.map((group, idx) => {
             // Newest-first sort ensures group[0] is the LATEST entry
             const last = group[0];
@@ -340,12 +340,18 @@ export default function CustomerDetailPage() {
             const productDates = group.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
             let titleString = format(new Date(last.created_at), 'EEEE, MMMM dd, yyyy');
 
+            // sortDate: use the EARLIEST product reference_date so ordering is by maqal date, not payment date
+            // Fall back to created_at only for pure payment/adjustment groups
+            let sortDate: Date;
             if (productDates.length > 0) {
                 productDates.sort((a, b) => a.getTime() - b.getTime());
+                sortDate = productDates[0]; // earliest product date = maqal anchor date
                 const uniqueDates = Array.from(new Set(productDates.map(d => format(d, 'dd MMM'))));
                 if (uniqueDates.length === 1) titleString = `Maqalka Taariikhda ${uniqueDates[0]}`;
                 else if (uniqueDates.length === 2) titleString = `Maqalka Taariikhda ${uniqueDates[0]} iyo ${uniqueDates[1]}`;
                 else titleString = `Maqalka Taariikhda ${uniqueDates[0]} ila ${uniqueDates[uniqueDates.length - 1]}`;
+            } else {
+                sortDate = new Date(first.created_at);
             }
 
             return {
@@ -360,23 +366,24 @@ export default function CustomerDetailPage() {
                 totalAdjustment,
                 openingBalance: first.previous_debt,
                 closingBalance: last.new_debt,
-                note: group.find(t => t.note)?.note
-            } as ReceiptGroup;
-        }).sort((a, b) => new Date(b.entries[0].created_at).getTime() - new Date(a.entries[0].created_at).getTime());
+                note: group.find(t => t.note)?.note,
+                _sortDate: sortDate, // internal: stable anchor for ordering
+            } as ReceiptGroup & { _sortDate: Date };
+        });
 
-        // 6. MERGE STEP: fold payment-only receipts into the nearest product receipt.
-        // We sort oldest-first so the product receipt always appears BEFORE the payment in iteration order,
-        // then merge the payment backward into the last product receipt.
+        // 6. MERGE STEP: fold payment-only receipts into the correct product receipt using FIFO.
+        // FIFO = payments go to the OLDEST unpaid product receipt first (correct behavior).
+        // Sort oldest-first by product anchor date so we process chronologically.
         const oldestFirst = [...processedReceipts].sort((a, b) =>
-            new Date(a.entries[0].created_at).getTime() - new Date(b.entries[0].created_at).getTime()
+            (a as any)._sortDate.getTime() - (b as any)._sortDate.getTime()
         );
 
-        const merged: ReceiptGroup[] = [];
-        for (const current of oldestFirst) {
+        const merged: (ReceiptGroup & { _sortDate: Date })[] = [];
+        for (const current of oldestFirst as (ReceiptGroup & { _sortDate: Date })[]) {
             const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
 
             if (isPaymentOnly && merged.length > 0) {
-                // Find the OLDEST product/adjustment receipt in merged that is not fully paid (FIFO)
+                // FIFO: find the OLDEST product/adjustment receipt that is not yet fully paid
                 let targetIdx = -1;
                 for (let k = 0; k < merged.length; k++) {
                     const m = merged[k];
@@ -387,7 +394,7 @@ export default function CustomerDetailPage() {
                     }
                 }
 
-                // If all previous receipts are fully paid, fallback to the most recent receipt
+                // Fallback: if all previous receipts are fully paid, attach to most recent product receipt
                 if (targetIdx === -1) {
                     for (let k = merged.length - 1; k >= 0; k--) {
                         if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
@@ -413,14 +420,15 @@ export default function CustomerDetailPage() {
                     continue; // payment absorbed — don't add it separately
                 }
             }
-            merged.push(current);
+            merged.push(current as ReceiptGroup & { _sortDate: Date });
         }
 
-        // Re-sort newest-first for display
-        return merged.sort((a, b) =>
-            new Date(b.entries[b.entries.length - 1].created_at).getTime() -
-            new Date(a.entries[a.entries.length - 1].created_at).getTime()
-        );
+        // Re-sort newest-first for display using the stable product-anchor date
+        // (Using _sortDate = product reference_date ensures 04 Jul always sits between 02 Jul and 06 Jul
+        //  regardless of when payments were added)
+        return merged
+            .sort((a, b) => b._sortDate.getTime() - a._sortDate.getTime())
+            .map(({ _sortDate, ...r }) => r as ReceiptGroup);
     };
 
     const { data: allCustomers } = useSWR<Customer[]>('/api/customers?lite=true', fetcher, {
