@@ -116,7 +116,6 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
         } else {
             const { rows: newBook } = await client.query(
                 `INSERT INTO "DailyBook" (id, date, created_at) VALUES (gen_random_uuid(), $1::date, NOW())
-                 ON CONFLICT (date) DO UPDATE SET deleted_at = NULL, deleted_by = NULL
                  RETURNING id`,
                 [dateStr]
             );
@@ -222,7 +221,10 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
             revalidatePath('/api/daily-book-history-full');
             revalidatePath('/api/daily-book-init');
             revalidatePath('/api/reports');
-            revalidateTag('customers', 'max');
+            // NOTE: We intentionally do NOT revalidate the 'customers' tag here.
+            // Saving the daily book only updates DailyBookItem records (kg tracking),
+            // not customer balances. The expensive customers query should only be busted
+            // when customer records or ledger entries actually change.
         } catch (e) {
             console.error('Failed to revalidate paths:', e);
         }

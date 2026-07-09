@@ -189,12 +189,12 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
         await logAudit(request, 'ADD_LEDGER_ENTRIES', `Added receipt with new debt ${runningDebt} for customer ${customerName}`);
 
         try {
-            revalidateTag('customers', 'max');
+            // revalidateTag('customers', 'max');
             revalidatePath('/api/dashboard');
             revalidatePath('/api/reports');
             revalidatePath('/api/daily-book-history');
             revalidatePath('/api/daily-book-history-full');
-            revalidatePath('/api/customers');
+            // revalidatePath('/api/customers');
             revalidatePath('/api/ledger-by-date');
             revalidatePath('/api/daily-book-init');
         } catch (cacheErr) {
@@ -299,8 +299,8 @@ export const DELETE = trackApiRoute('/api/ledger', async (request: Request) => {
         await logAudit(request, 'DELETE_LEDGER_ENTRIES', `Soft deleted ledger entry (ID: ${id || 'ALL'}, Customer: ${customerId || 'UNKNOWN'})`);
 
         try {
-            revalidateTag('customers', 'max');
-            revalidatePath('/api/customers');
+            // revalidateTag('customers', 'max');
+            // revalidatePath('/api/customers');
             revalidatePath('/api/ledger-by-date');
             revalidatePath('/api/daily-book-init');
         } catch (cacheErr) {

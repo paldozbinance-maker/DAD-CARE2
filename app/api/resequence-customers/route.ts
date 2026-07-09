@@ -53,17 +53,27 @@ export async function POST(request: Request) {
         // 3. Assign sequential codes 1, 2, 3, ...
         let updated = 0;
         const changes: { id: string; oldCode: string; newCode: string }[] = [];
+        
+        const idsToUpdate: string[] = [];
+        const newCodesToUpdate: string[] = [];
 
         for (let i = 0; i < rows.length; i++) {
             const newCode = String(i + 1);
             if (rows[i].customer_code !== newCode) {
                 changes.push({ id: rows[i].id, oldCode: rows[i].customer_code, newCode });
+                idsToUpdate.push(rows[i].id);
+                newCodesToUpdate.push(newCode);
+                updated++;
             }
-            await client.query(
-                `UPDATE "Customer" SET customer_code = $1 WHERE id = $2`,
-                [newCode, rows[i].id]
-            );
-            updated++;
+        }
+
+        if (idsToUpdate.length > 0) {
+            await client.query(`
+                UPDATE "Customer" AS c
+                SET customer_code = data.new_code
+                FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::text[]) AS new_code) AS data
+                WHERE c.id = data.id
+            `, [idsToUpdate, newCodesToUpdate]);
         }
 
         await client.query('COMMIT');

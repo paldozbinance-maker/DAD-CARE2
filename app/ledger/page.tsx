@@ -11,7 +11,7 @@ import { DollarSign, Plus, Loader2, Trash2, Package, ArrowRight, Receipt, Lock, 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import useSWR, { mutate as globalMutate } from 'swr';
+import useSWR from 'swr';
 
 const fetcher = async (url: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
@@ -922,12 +922,12 @@ export default function LedgerPage() {
                 setFreshBalance(data.finalDebt);
             }
 
-            // 4. Refresh data (fast sync) - force revalidate so balance + checkmark update immediately
-            // globalMutate busts ALL /api/customers keys (customers page uses URL params like ?maqal_d1=...)
-            // Also write a stale signal to localStorage so customers page refreshes even after navigation
+            // 4. Refresh data — only revalidate the ledger-mode customer list used on this page.
+            // The customers page will pick up changes from the localStorage stale signal on next focus.
+            // globalMutate on ALL /api/customers keys is too expensive (triggers the full 200-column query).
             localStorage.setItem('dadwork_customers_stale', Date.now().toString());
             await Promise.all([
-                globalMutate((key: any) => typeof key === 'string' && key.startsWith('/api/customers'), undefined, { revalidate: true }),
+                mutateCustomers(),
                 mutateLedger()
             ]);
             
