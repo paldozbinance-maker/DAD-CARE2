@@ -224,7 +224,9 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
             revalidatePath('/api/reports');
             revalidatePath('/api/reports');
             // @ts-ignore
-            revalidateTag('customers', 'max');
+            revalidateTag('customers');
+            // @ts-ignore
+            revalidateTag('dashboard');
         } catch (e) {
             console.error('Failed to revalidate paths:', e);
         }
@@ -286,7 +288,9 @@ export const DELETE = trackApiRoute('/api/daily-book', async (request: Request) 
             revalidatePath('/api/daily-book-history-full');
             revalidatePath('/api/reports');
             // @ts-ignore
-            revalidateTag('customers', 'max');
+            revalidateTag('customers');
+            // @ts-ignore
+            revalidateTag('dashboard');
         } catch (e) {
             console.error('Failed to revalidate paths:', e);
         }
