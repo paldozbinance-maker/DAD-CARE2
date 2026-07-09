@@ -452,7 +452,7 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
                 UPDATE "Customer" 
                 SET deleted_at = NULL, 
                     customer_code = CASE 
-                        WHEN customer_code LIKE 'del_%' THEN (SELECT val::text FROM next_code)
+                        WHEN customer_code LIKE 'del_%' OR LENGTH(customer_code) > 20 THEN (SELECT val::text FROM next_code)
                         ELSE customer_code 
                     END
                 WHERE id = $1
