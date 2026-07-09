@@ -38,7 +38,7 @@ export async function POST(request: Request) {
                 'UPDATE "Customer" SET customer_code = $1 WHERE id = $2',
                 [code, c.id]
             );
-            if (result.rowCount > 0) {
+            if ((result.rowCount ?? 0) > 0) {
                 restored++;
             } else {
                 skipped++;
