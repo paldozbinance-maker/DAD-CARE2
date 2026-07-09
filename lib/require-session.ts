@@ -27,7 +27,7 @@ type SessionResult =
 const SESSION_CACHE_TTL_MS = 60_000; // 60 seconds
 
 interface CachedSession {
-    session: { userId: string; username: string; role: string };
+    session: { userId: string; username: string; role: string } | null;
     expiresAt: number;
 }
 
@@ -44,15 +44,14 @@ setInterval(() => {
 async function getCachedSession(token: string) {
     const cached = sessionCache.get(token);
     if (cached && cached.expiresAt > Date.now()) {
-        return cached.session; // Cache hit — no DB call needed
+        return cached.session; // Cache hit (valid or explicitly invalid)
     }
     // Cache miss — validate against DB
     const session = await validateSession(token);
-    if (session) {
-        sessionCache.set(token, { session, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
-    } else {
-        sessionCache.delete(token); // Remove stale entry
-    }
+    
+    // Cache the result (whether valid or null) so we don't spam the DB if token is bad
+    sessionCache.set(token, { session, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+    
     return session;
 }
 

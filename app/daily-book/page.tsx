@@ -434,10 +434,9 @@ function DailyBookPageInner() {
       return codeA - codeB;
     });
 
-    // Pagination slice
+    // Show all customers without pagination slice
     const totalCustomers = sortedCustomers.length;
-    const totalPages = Math.max(1, Math.ceil(totalCustomers / pageSize));
-    const paginatedCustomers = sortedCustomers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const paginatedCustomers = sortedCustomers;
 
     // UI handlers for pagination
     const goToPrevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
@@ -648,11 +647,6 @@ return (
                                         </div>
                                     ))}
                                 </div>
-                                <div className="sticky bottom-0 z-30 flex items-center justify-between px-4 py-2 bg-card/95 backdrop-blur-sm border-t border-border shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-                                    <Button variant="outline" size="sm" onClick={goToPrevPage} disabled={currentPage === 1} className="h-8 text-xs font-bold shadow-sm">Previous</Button>
-                                    <span className="text-xs font-black text-muted-foreground uppercase tracking-wider">Page {currentPage} of {totalPages}</span>
-                                    <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages} className="h-8 text-xs font-bold shadow-sm">Next</Button>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -784,11 +778,6 @@ return (
                                             </div>
                                         </div>
                                     ))}
-                                </div>
-                                <div className="sticky bottom-0 z-30 flex items-center justify-between px-4 py-2 bg-card/95 backdrop-blur-sm border-t border-border shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-                                    <Button variant="outline" size="sm" onClick={goToPrevPage} disabled={currentPage === 1} className="h-8 text-xs font-bold shadow-sm">Previous</Button>
-                                    <span className="text-xs font-black text-muted-foreground uppercase tracking-wider">Page {currentPage} of {totalPages}</span>
-                                    <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages} className="h-8 text-xs font-bold shadow-sm">Next</Button>
                                 </div>
                             </div>
                         )}
