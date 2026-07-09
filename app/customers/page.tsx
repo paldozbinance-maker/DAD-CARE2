@@ -252,7 +252,7 @@ export default function CustomersPage() {
                         {inactiveCustomers.length > 0 && (
                             <button 
                                 onClick={() => setActiveTab('inactive')}
-                                className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full transition-colors ${activeTab === 'inactive' ? 'text-red-500 bg-red-500/20 ring-1 ring-red-500/50' : 'text-red-500/60 bg-red-500/10 hover:bg-red-500/20'}`}
+                                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-opacity ${activeTab === 'inactive' ? 'text-red-500 bg-red-500/20 ring-1 ring-red-500/50 opacity-100' : 'text-red-500/60 bg-red-500/10 hover:opacity-100 opacity-60'}`}
                             >
                                 Inactive: {inactiveCustomers.length}
                             </button>

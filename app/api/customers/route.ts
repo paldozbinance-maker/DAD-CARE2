@@ -349,16 +349,22 @@ export const GET = trackApiRoute('/api/customers', async (request: Request) => {
     try {
         if (isLite) {
             const rows = await getCachedCustomersLite();
-            return NextResponse.json(rows);
+            const res = NextResponse.json(rows);
+            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            return res;
         }
 
         if (mode === 'ledger') {
             const rows = await getCachedCustomersLedger();
-            return NextResponse.json(rows);
+            const res = NextResponse.json(rows);
+            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            return res;
         }
 
         const customers = await getCachedCustomersFull(maqalD1, maqalD2, maxAllTimeDate);
-        return NextResponse.json(customers);
+        const res = NextResponse.json(customers);
+        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -434,21 +440,34 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
     try {
         const timestamp = new Date().toISOString();
 
-        // NO CASCADING DELETES: The user explicitly wants to keep historical Ledger and DailyBook records intact.
-        // We only soft-delete the customer profile itself, which marks them as inactive in dropdowns.
+        // PERMANENT DELETE requested by user:
+        // We must manually cascade delete Ledger and DailyBookItem records first 
+        // to avoid foreign key constraint violations, then delete the Customer.
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            
+            // 1. Delete all DailyBookItem records for this customer
+            await client.query('DELETE FROM "DailyBookItem" WHERE customer_id = $1', [id]);
+            
+            // 2. Delete all Ledger records for this customer
+            await client.query('DELETE FROM "Ledger" WHERE customer_id = $1', [id]);
+            
+            // 3. Delete the customer from assigned_customer_ids arrays in Users
+            await client.query('UPDATE "User" SET assigned_customer_ids = array_remove(assigned_customer_ids, $1) WHERE $1 = ANY(assigned_customer_ids)', [id]);
+            
+            // 4. Finally delete the Customer profile permanently
+            await client.query('DELETE FROM "Customer" WHERE id = $1', [id]);
+            
+            await client.query('COMMIT');
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
 
-        // Finally, soft delete the customer
-        const { error } = await supabase
-            .from('Customer')
-            .update({ deleted_at: timestamp })
-            .eq('id', id);
-
-        if (error) throw error;
-
-        // Remove from assigned_customer_ids for all users to update priority lists
-        await pool.query('UPDATE "User" SET assigned_customer_ids = array_remove(assigned_customer_ids, $1) WHERE $1 = ANY(assigned_customer_ids)', [id]);
-
-        await logAudit(request, 'DELETE_CUSTOMER', `Soft deleted customer ID: ${id}`);
+        await logAudit(request, 'DELETE_CUSTOMER', `Permanently deleted customer ID: ${id} and all associated records`);
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
         // @ts-ignore
