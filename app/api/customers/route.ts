@@ -443,15 +443,11 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
             // RESTORE: clear deleted_at and assign a clean numeric customer_code if it was corrupted with a UUID
             await pool.query(`
                 WITH next_code AS (
-                    SELECT COALESCE(MAX(
-                        CASE 
-                            WHEN LENGTH(REGEXP_REPLACE(customer_code, '[^0-9]', '', 'g')) > 0 
-                                 AND LENGTH(REGEXP_REPLACE(customer_code, '[^0-9]', '', 'g')) < 8 
-                            THEN REGEXP_REPLACE(customer_code, '[^0-9]', '', 'g')::int 
-                            ELSE 0 
-                        END
-                    ), 0) + 1 as val
+                    SELECT COALESCE(MAX(customer_code::int), 0) + 1 as val
                     FROM "Customer"
+                    WHERE deleted_at IS NULL 
+                      AND customer_code ~ '^[0-9]+$'
+                      AND LENGTH(customer_code) < 8
                 )
                 UPDATE "Customer" 
                 SET deleted_at = NULL, 
