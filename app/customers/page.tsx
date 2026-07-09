@@ -161,8 +161,8 @@ export default function CustomersPage() {
         if (!confirm('Restore this customer to Active? They will re-appear in all lists with their original ID and history.')) return;
         setManagingCustomerId(customerId);
         
-        // Optimistic UI Update: instantly set is_inactive to false and remove 'del_' prefix visually
-        mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: false, customer_code: c.customer_code.replace(/^del_/, '') } : c) : [], { revalidate: false });
+        // Optimistic UI Update: instantly set is_inactive to false and hide the ugly 'del_' UUID
+        mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: false, customer_code: c.customer_code.startsWith('del_') ? '...' : c.customer_code } : c) : [], { revalidate: false });
 
         try {
             const res = await fetch(`/api/customers?id=${customerId}&restore=true`, {

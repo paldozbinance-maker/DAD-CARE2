@@ -440,11 +440,18 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
 
     try {
         if (restore) {
-            // RESTORE: clear deleted_at and remove the 'del_' prefix from customer_code
+            // RESTORE: clear deleted_at and assign a clean numeric customer_code if it was corrupted with a UUID
             await pool.query(`
+                WITH next_code AS (
+                    SELECT COALESCE(MAX(REGEXP_REPLACE(customer_code, '[^0-9]', '', 'g')::int), 0) + 1 as val
+                    FROM "Customer" WHERE deleted_at IS NULL
+                )
                 UPDATE "Customer" 
                 SET deleted_at = NULL, 
-                    customer_code = CASE WHEN customer_code LIKE 'del_%' THEN substring(customer_code from 5) ELSE customer_code END
+                    customer_code = CASE 
+                        WHEN customer_code LIKE 'del_%' THEN (SELECT val::text FROM next_code)
+                        ELSE customer_code 
+                    END
                 WHERE id = $1
             `, [id]);
             await logAudit(request, 'RESTORE_CUSTOMER', `Restored customer ID: ${id}`);
