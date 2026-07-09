@@ -64,25 +64,23 @@ function getVipCount(note: string | undefined): number {
     return found ? totalCount : 0;
 }
 
-function parseVipDetails(note: string | undefined): string {
-    if (!note) return '';
-    const lower = note.toLowerCase();
-    if (!lower.includes('vip')) return '';
-    
-    const regex = /(\d+)\s*vip(?:\s*(\d+))?/g;
-    let match;
-    let detailsArr: string[] = [];
-    let found = false;
-    while ((match = regex.exec(lower)) !== null) {
-        found = true;
-        const count = match[1];
-        if (match[2]) {
-            detailsArr.push(`${count} VIP @ $${match[2]}`);
+function getFormattedNoteBadges(note: string | undefined): { text: string, isVip: boolean }[] {
+    if (!note) return [];
+    const parts = note.split(',').map(s => s.trim()).filter(s => s);
+    const badges = [];
+    for (const part of parts) {
+        const isVip = part.toLowerCase().includes('vip');
+        const match = part.match(/^(\d+)\s+([a-zA-Z]+)(?:\s+(\d+))?$/);
+        if (match) {
+            const count = match[1];
+            const label = match[2];
+            const price = match[3];
+            badges.push({ text: price ? `${count} ${label.toUpperCase()} @ $${price}` : `${count} ${label.toUpperCase()}`, isVip });
         } else {
-            detailsArr.push(`${count} VIP`);
+            badges.push({ text: part, isVip });
         }
     }
-    return found ? detailsArr.join(', ') : 'VIP';
+    return badges;
 }
 
 
@@ -581,7 +579,7 @@ return (
                                     <div className="col-span-3 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-right">KG</div>
                                 </div>
                                 <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
-                                    {sortedCustomers.map((customer, index) => (
+                                    {paginatedCustomers.map((customer, index) => (
                                         <div key={customer.id} className="grid grid-cols-12 items-center px-2 md:px-4 py-1.5 transition-colors hover:bg-blue-100/20 dark:hover:bg-slate-800/30 group border-b border-blue-50/50 dark:border-slate-800/30 last:border-0">
                                             <div className="col-span-2 flex items-center justify-start gap-1">
                                                 <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">#{customer.customer_code}</span>
@@ -650,6 +648,11 @@ return (
                                         </div>
                                     ))}
                                 </div>
+                                <div className="sticky bottom-0 z-30 flex items-center justify-between px-4 py-2 bg-card/95 backdrop-blur-sm border-t border-border shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+                                    <Button variant="outline" size="sm" onClick={goToPrevPage} disabled={currentPage === 1} className="h-8 text-xs font-bold shadow-sm">Previous</Button>
+                                    <span className="text-xs font-black text-muted-foreground uppercase tracking-wider">Page {currentPage} of {totalPages}</span>
+                                    <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages} className="h-8 text-xs font-bold shadow-sm">Next</Button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -713,7 +716,7 @@ return (
                                     <div className="col-span-3 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter text-right">KG</div>
                                 </div>
                                 <div className="divide-y divide-blue-200/30 dark:divide-slate-800/50">
-                                    {sortedCustomers.map((customer, index) => (
+                                    {paginatedCustomers.map((customer, index) => (
                                         <div key={customer.id} className="grid grid-cols-12 items-center px-2 md:px-4 py-1 transition-colors hover:bg-blue-100/20 dark:hover:bg-slate-800/30 group border-b border-blue-50/50 dark:border-slate-800/30 last:border-0 relative">
                                             <div className="col-span-2 flex items-center justify-start gap-1">
                                                 <span className="text-[10px] md:text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">#{customer.customer_code}</span>
@@ -781,6 +784,11 @@ return (
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                                <div className="sticky bottom-0 z-30 flex items-center justify-between px-4 py-2 bg-card/95 backdrop-blur-sm border-t border-border shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+                                    <Button variant="outline" size="sm" onClick={goToPrevPage} disabled={currentPage === 1} className="h-8 text-xs font-bold shadow-sm">Previous</Button>
+                                    <span className="text-xs font-black text-muted-foreground uppercase tracking-wider">Page {currentPage} of {totalPages}</span>
+                                    <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages} className="h-8 text-xs font-bold shadow-sm">Next</Button>
                                 </div>
                             </div>
                         )}
@@ -947,12 +955,15 @@ return (
                                                     ) : (
                                                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                                             {(() => {
-                                                                const isVip = item.note && item.note.toLowerCase().includes('vip');
-                                                                return isVip ? (
-                                                                    <div key={`v-${item.customer_id}`} className="flex items-center justify-between border-b border-amber-200/30 last:border-0 py-0.5">
-                                                                        <span className="text-[10px] font-bold text-amber-600/90 truncate max-w-[120px]" title={item.customer?.name}>👑 {parseVipDetails(item.note)}</span>
+                                                                if (!item.note) return null;
+                                                                const badges = getFormattedNoteBadges(item.note);
+                                                                return badges.map((badge, bIdx) => (
+                                                                    <div key={`n-${item.customer_id}-${bIdx}`} className={`flex items-center justify-between border-b last:border-0 py-0.5 ${badge.isVip ? 'border-amber-200/30' : 'border-slate-200/30 dark:border-slate-700/50'}`}>
+                                                                        <span className={`text-[10px] font-bold truncate max-w-[120px] ${badge.isVip ? 'text-amber-600/90' : 'text-slate-600 dark:text-slate-400'}`} title={badge.text}>
+                                                                            {badge.isVip ? '👑 ' : '🏷️ '}{badge.text}
+                                                                        </span>
                                                                     </div>
-                                                                ) : null;
+                                                                ));
                                                             })()}
                                                             <span className="font-black text-primary text-sm md:text-base">{Math.round(item.kg)} <span className="text-[9px] opacity-60">KG</span></span>
                                                         </div>
@@ -1240,21 +1251,15 @@ return (
                                                                         <span className="font-black text-primary text-base md:text-lg">{Math.round(item.kg)} <span className="text-[10px] opacity-60">KG</span></span>
                                                                     )}
                                                                     {(() => {
-                                                                        const isVip = item.note && item.note.toLowerCase().includes('vip');
-                                                                        if (isVip) {
-                                                                            return (
-                                                                                <div key={`vip-${item.customer_id}`} className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                                                                                    <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded shadow-sm border border-amber-500/20 truncate max-w-[120px]" title={item.customer?.name}>
-                                                                                        👑 {parseVipDetails(item.note)}
-                                                                                    </span>
-                                                                                </div>
-                                                                            );
-                                                                        }
-                                                                        // Show non-VIP notes as plain text
-                                                                        if (item.note && !item.note.toLowerCase().includes('vip')) {
-                                                                            return <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[100px] md:max-w-[150px]">{item.note}</div>;
-                                                                        }
-                                                                        return null;
+                                                                        if (!item.note) return null;
+                                                                        const badges = getFormattedNoteBadges(item.note);
+                                                                        return badges.map((badge, bIdx) => (
+                                                                            <div key={`n-${item.customer_id}-${bIdx}`} className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity mt-0.5">
+                                                                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded shadow-sm border truncate max-w-[120px] ${badge.isVip ? 'text-amber-600 bg-amber-500/10 border-amber-500/20' : 'text-slate-600 bg-slate-500/10 border-slate-500/20 dark:text-slate-300'}`} title={badge.text}>
+                                                                                    {badge.isVip ? '👑 ' : '🏷️ '}{badge.text}
+                                                                                </span>
+                                                                            </div>
+                                                                        ));
                                                                     })()}
                                                                 </div>
                                                             </div>
@@ -1372,7 +1377,11 @@ return (
                                         <div className="daily-popup-info">
                                             <p className="daily-popup-name">{item.customer?.name || 'Unknown'}</p>
                                             <div className="daily-popup-segs">
-                                                {isVip && <span className="daily-popup-seg">👑 {parseVipDetails(item.note)}</span>}
+                                                {getFormattedNoteBadges(item.note).map((badge, bIdx) => (
+                                                    <span key={bIdx} className={`daily-popup-seg ${!badge.isVip ? 'opacity-70 grayscale' : ''}`}>
+                                                        {badge.isVip ? '👑 ' : ''}{badge.text}
+                                                    </span>
+                                                ))}
                                             </div>
                                         </div>
                                     </div>

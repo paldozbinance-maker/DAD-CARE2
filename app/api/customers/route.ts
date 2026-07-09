@@ -9,6 +9,9 @@ import { unstable_cache } from 'next/cache';
 import { trackApiRoute } from '@/lib/egress-tracker';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const customerSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     customer_code: z.string().optional().nullable(),
@@ -350,20 +353,20 @@ export const GET = trackApiRoute('/api/customers', async (request: Request) => {
         if (isLite) {
             const rows = await getCachedCustomersLite();
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
             return res;
         }
 
         if (mode === 'ledger') {
             const rows = await getCachedCustomersLedger();
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+            res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
             return res;
         }
 
         const customers = await getCachedCustomersFull(maqalD1, maqalD2, maxAllTimeDate);
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);
