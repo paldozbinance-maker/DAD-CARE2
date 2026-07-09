@@ -438,9 +438,6 @@ function DailyBookPageInner() {
     const totalCustomers = sortedCustomers.length;
     const paginatedCustomers = sortedCustomers;
 
-    // UI handlers for pagination
-    const goToPrevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
-    const goToNextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
 
 
     const handleKeyPress = (e: React.KeyboardEvent, index: number) => {
