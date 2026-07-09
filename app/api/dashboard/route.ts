@@ -2,10 +2,10 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { validateSession } from '@/lib/sessions-store';
 import { trackApiRoute } from '@/lib/egress-tracker';
+import { unstable_cache } from 'next/cache';
 
-const getDashboardData = async (today: string) => {
-    try {
-        // Run queries concurrently for maximum speed
+const getDashboardData = unstable_cache(
+    async (today: string) => {
         const [
             totalCustomersResult,
             totalDebtResult,
@@ -14,10 +14,8 @@ const getDashboardData = async (today: string) => {
             totalKgResult,
             todayStatsResult
         ] = await Promise.all([
-            // 1. Total customers count
             pool.query('SELECT count(*)::int as count FROM "Customer" WHERE deleted_at IS NULL'),
             
-            // 2. Total Current Debt (Lacagta Guud) — sum of all customers with positive balance
             pool.query(`
                 SELECT COALESCE(SUM(CASE WHEN new_debt > 0 THEN new_debt ELSE 0 END), 0)::float as total_debt
                 FROM (
@@ -88,10 +86,10 @@ const getDashboardData = async (today: string) => {
             topDebtors,
             recentTransactions
         };
-    } catch (e) {
-        throw e;
-    }
-};
+    },
+    ['dashboard-data-cache'],
+    { revalidate: 300, tags: ['dashboard'] }
+);
 
 export const GET = trackApiRoute('/api/dashboard', async (request: Request) => {
     // Double-check auth even though middleware already guards this route

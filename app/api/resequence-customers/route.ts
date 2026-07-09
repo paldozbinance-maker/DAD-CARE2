@@ -50,7 +50,7 @@ export async function POST(request: Request) {
             WHERE deleted_at IS NULL
         `);
 
-        // 3. Assign sequential codes 1, 2, 3, ...
+        // 3. Assign sequential codes 1, 2, 3, ... to EVERYONE
         let updated = 0;
         const changes: { id: string; oldCode: string; newCode: string }[] = [];
         
@@ -59,19 +59,19 @@ export async function POST(request: Request) {
 
         for (let i = 0; i < rows.length; i++) {
             const newCode = String(i + 1);
-            if (rows[i].customer_code !== newCode) {
-                changes.push({ id: rows[i].id, oldCode: rows[i].customer_code, newCode });
-                idsToUpdate.push(rows[i].id);
-                newCodesToUpdate.push(newCode);
-                updated++;
-            }
+            changes.push({ id: rows[i].id, oldCode: rows[i].customer_code, newCode });
+            idsToUpdate.push(rows[i].id);
+            newCodesToUpdate.push(newCode);
+            updated++;
         }
 
         if (idsToUpdate.length > 0) {
             await client.query(`
                 UPDATE "Customer" AS c
                 SET customer_code = data.new_code
-                FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::text[]) AS new_code) AS data
+                FROM (
+                    SELECT unnest($1::uuid[]) AS id, unnest($2::text[]) AS new_code
+                ) AS data
                 WHERE c.id = data.id
             `, [idsToUpdate, newCodesToUpdate]);
         }
