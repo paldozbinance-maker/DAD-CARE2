@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 const customerSchema = z.object({
     name: z.string().min(1, 'Name is required'),
-    customer_code: z.string().min(1, 'Code is required'),
+    customer_code: z.string().optional().nullable(),
     gender: z.string().optional().nullable(),
     phone: z.string().optional().nullable(),
 });
@@ -379,10 +379,27 @@ export const POST = trackApiRoute('/api/customers', async (request: Request) => 
     if (!result.success) {
         return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
-    const { name, gender, phone, customer_code } = result.data;
+    const { name, gender, phone, customer_code: hintCode } = result.data;
     const supabase = await createClient();
 
     try {
+        // ✅ ALWAYS auto-generate a sequential numeric code server-side.
+        // This prevents UUID-corrupted codes from ever being stored.
+        // The client hint is used ONLY if it is already a valid positive integer.
+        let customer_code: string;
+        const hintIsValid = hintCode && /^\d+$/.test(hintCode.trim()) && parseInt(hintCode.trim()) > 0;
+        if (hintIsValid) {
+            customer_code = hintCode!.trim();
+        } else {
+            // Auto-assign: max existing numeric code + 1
+            const { rows } = await pool.query(`
+                SELECT COALESCE(MAX(customer_code::int), 0) + 1 as next_code
+                FROM "Customer"
+                WHERE customer_code ~ '^[0-9]+$' AND LENGTH(customer_code) < 8
+            `);
+            customer_code = String(rows[0].next_code);
+        }
+
         // Hash default password '123' securely
         const salt = await bcrypt.genSalt(10);
         const hashedDefaultPassword = await bcrypt.hash('123', salt);

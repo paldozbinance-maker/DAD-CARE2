@@ -1,4 +1,14 @@
-// Fix all broken customer codes - assigns sequential numbers 1, 2, 3...
+/**
+ * Fix Customer Codes Script
+ * 
+ * This script reassigns proper sequential numeric customer codes
+ * to all customers whose codes are corrupted (UUID-like values).
+ * 
+ * Customers with already-valid numeric codes keep their number.
+ * Customers with UUID-like codes get reassigned starting after the max existing numeric code.
+ * 
+ * Run with: node fix-customer-codes.js
+ */
 const { Pool } = require('pg');
 
 const pool = new Pool({
@@ -6,48 +16,78 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-async function fixCustomerCodes() {
+async function fixCodes() {
     const client = await pool.connect();
     try {
-        console.log('Connecting to database...');
-        
-        // Get ALL active customers sorted by created_at (oldest first = lowest number)
+        console.log('🔍 Reading all customers from database...\n');
+
         const { rows } = await client.query(`
-            SELECT id, name, customer_code, created_at
+            SELECT id, customer_code, name, deleted_at, created_at
             FROM "Customer"
-            WHERE deleted_at IS NULL
             ORDER BY created_at ASC
         `);
-        
-        console.log('Found ' + rows.length + ' active customers');
-        
-        await client.query('BEGIN');
-        
-        // Step 1: Set all to temp codes to avoid UNIQUE conflicts
-        await client.query('UPDATE "Customer" SET customer_code = \'tmp_\' || id WHERE deleted_at IS NULL');
-        console.log('Set temp codes...');
-        
-        // Step 2: Assign 1, 2, 3... in order of creation
-        for (let i = 0; i < rows.length; i++) {
-            const newCode = String(i + 1);
-            await client.query(
-                'UPDATE "Customer" SET customer_code = $1 WHERE id = $2',
-                [newCode, rows[i].id]
-            );
-            console.log('  #' + newCode + ' -> ' + rows[i].name);
+
+        console.log(`Found ${rows.length} total customers.\n`);
+
+        // Separate valid numeric codes from broken UUID-like codes
+        const validNumeric = rows.filter(r => /^\d+$/.test(r.customer_code));
+        const brokenCodes = rows.filter(r => !/^\d+$/.test(r.customer_code));
+
+        console.log(`✅ Already have valid numeric codes: ${validNumeric.length}`);
+        console.log(`❌ Broken/UUID codes that need fixing: ${brokenCodes.length}\n`);
+
+        if (brokenCodes.length === 0) {
+            console.log('🎉 All codes are already valid! Nothing to fix.');
+            return;
         }
-        
+
+        // Find the highest existing numeric code
+        const maxCode = validNumeric.reduce((max, r) => Math.max(max, parseInt(r.customer_code)), 0);
+        console.log(`📊 Current highest numeric code: ${maxCode}`);
+        console.log(`📝 Will assign new codes starting from: ${maxCode + 1}\n`);
+
+        // Show what will be changed
+        console.log('Changes to be made:');
+        let nextCode = maxCode + 1;
+        const updates = [];
+        for (const customer of brokenCodes) {
+            updates.push({ id: customer.id, name: customer.name, newCode: String(nextCode), oldCode: customer.customer_code });
+            nextCode++;
+        }
+        updates.forEach(u => {
+            console.log(`  ${u.name}: [${u.oldCode.substring(0, 30)}...] → #${u.newCode}`);
+        });
+
+        console.log('\n⚡ Applying fixes...');
+        await client.query('BEGIN');
+        for (const u of updates) {
+            await client.query(
+                `UPDATE "Customer" SET customer_code = $1 WHERE id = $2`,
+                [u.newCode, u.id]
+            );
+        }
         await client.query('COMMIT');
-        console.log('\nSUCCESS! All customer codes fixed.');
-        console.log('Total customers re-coded: ' + rows.length);
-        
+        console.log(`\n✅ SUCCESS! Fixed ${updates.length} customer codes.`);
+
+        // Verify final state
+        console.log('\n📋 Final state - all active customers:');
+        const { rows: final } = await client.query(`
+            SELECT customer_code, name
+            FROM "Customer"
+            WHERE deleted_at IS NULL
+            ORDER BY 
+                CASE WHEN customer_code ~ '^[0-9]+$' THEN customer_code::int ELSE 9999 END ASC,
+                name ASC
+        `);
+        final.forEach(r => console.log(`  #${r.customer_code} → ${r.name}`));
+
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('ERROR:', err.message);
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('\n❌ ERROR - rolled back all changes:', err.message);
     } finally {
         client.release();
         await pool.end();
     }
 }
 
-fixCustomerCodes();
+fixCodes();
