@@ -63,8 +63,9 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
         });
 
         const response = NextResponse.json(history);
-        // No CDN cache — must always be fresh so customer count/codes update immediately
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        // Cache at CDN edge for 30s, serve stale for 2min while revalidating in background.
+        // revalidatePath('/api/daily-book-history') is called on every save/delete, so data is always fresh.
+        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
         return response;
     } catch (error: any) {
         console.error('Fetch Daily Book History Error:', error);

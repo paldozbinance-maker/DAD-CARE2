@@ -34,8 +34,9 @@ export async function GET(request: Request) {
     try {
         const data = await getDailyBookInit();
         const response = NextResponse.json(data);
-        // No CDN cache — customer codes must always be fresh
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        // Cache at edge for 60s, serve stale for 5min.
+        // revalidatePath('/api/daily-book-init') is called on every customer add/edit/delete.
+        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
         return response;
     } catch (error: any) {
         console.error('Daily Book Init Error:', error);
