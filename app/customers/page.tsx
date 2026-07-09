@@ -44,7 +44,7 @@ export default function CustomersPage() {
     const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
     const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
-    const [visibleCount, setVisibleCount] = useState(20);
+    const [visibleCount] = useState(Infinity);
     const [rankingMode, setRankingMode] = useState<'maqalka' | 'lacagta'>('maqalka');
     const [selectedMaqalPair, setSelectedMaqalPair] = useState<string>('latest');
     const [showAllTimePct, setShowAllTimePct] = useState<Record<string, boolean>>({});
@@ -554,7 +554,7 @@ export default function CustomersPage() {
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {filteredCustomers.slice(0, visibleCount).map((customer, index) => {
+                        {filteredCustomers.map((customer, index) => {
                             const isMale = customer.gender === 'Male';
                             const isFemale = customer.gender === 'Female';
                             const accentColor = isMale ? 'text-blue-400' : isFemale ? 'text-pink-400' : 'text-primary';
@@ -713,14 +713,7 @@ export default function CustomersPage() {
                     </div>
                 )}
             </div>
-            {filteredCustomers.length > visibleCount && (
-                <button 
-                    onClick={() => setVisibleCount(prev => prev + 20)}
-                    className="w-full mt-4 py-3 rounded-xl border border-primary/20 text-primary text-xs font-black uppercase tracking-widest hover:bg-primary/5 transition-colors"
-                >
-                    Load More Customers
-                </button>
-            )}
+
         </div>
     );
 }
