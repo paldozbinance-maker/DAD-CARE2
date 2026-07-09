@@ -1,10 +1,9 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
-
-
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/customers/basic', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     try {
@@ -23,4 +22,4 @@ export async function GET(request: Request) {
         console.error('Fetch Basic Customers Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});

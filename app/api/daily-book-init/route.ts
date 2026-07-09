@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
+import { trackApiRoute } from '@/lib/egress-tracker';
 
 async function getDailyBookInit() {
     // Fetch customers sorted by their numeric customer_code (so #1 comes before #2, etc.)
@@ -28,7 +29,7 @@ async function getDailyBookInit() {
     };
 }
 
-export async function GET(request: Request) {
+export const GET = trackApiRoute('/api/daily-book-init', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     try {
@@ -42,4 +43,4 @@ export async function GET(request: Request) {
         console.error('Daily Book Init Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
+});
