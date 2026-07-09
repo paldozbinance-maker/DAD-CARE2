@@ -53,12 +53,6 @@ export default function CustomersPage() {
 
     const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: false, dedupingInterval: 600000, revalidateIfStale: false });
 
-    // Force a fresh fetch on every page load so restored/changed codes always show immediately
-    useEffect(() => {
-        mutateCustomers(undefined, { revalidate: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     // Latest pair = latest pair with ≥20 customers who paid (the "qualified" latest)
     const latestPair = maqalPairs?.find(pair => parseInt(pair.payment_count) >= 20) || null;
 

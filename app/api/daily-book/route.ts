@@ -222,7 +222,6 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
             revalidatePath('/api/daily-book-history-full');
             revalidatePath('/api/daily-book-init');
             revalidatePath('/api/reports');
-            revalidatePath('/api/reports');
             // @ts-ignore
             revalidateTag('customers');
             // @ts-ignore

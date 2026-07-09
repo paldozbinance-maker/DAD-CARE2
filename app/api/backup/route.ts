@@ -317,7 +317,7 @@ export const POST = trackApiRoute('/api/backup', async (request: Request) => {
         let customerCount = 0;
         let totalTransactions = 0;
 
-        // Fetch top 500 transactions for all customers in ONE query
+        // Fetch top 100 transactions per customer in ONE query (reduced from 500 to cut Supabase egress)
         const { rows: allTxns } = await pool.query(`
             SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at FROM (
                 SELECT id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at,
@@ -325,7 +325,7 @@ export const POST = trackApiRoute('/api/backup', async (request: Request) => {
                 FROM "Ledger"
                 WHERE deleted_at IS NULL
             ) t
-            WHERE rn <= 500
+            WHERE rn <= 100
         `);
 
         // Group transactions by customer in memory
@@ -388,7 +388,7 @@ export const POST = trackApiRoute('/api/backup', async (request: Request) => {
             WHERE db.deleted_at IS NULL
             GROUP BY db.id, db.date
             ORDER BY db.date DESC
-            LIMIT 365
+            LIMIT 90
         `);
 
         const history = (historyResult || []).map((book: any) => {
