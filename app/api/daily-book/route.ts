@@ -184,7 +184,7 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
 
                 // Compare rounded to 2 decimal places to avoid tiny float diffs
                 if (Math.abs((ledger.kg || 0) - newKg) > 0.001) {
-                    
+
                     let effectivePrice = parseFloat(ledger.price_per_kg);
                     // If price_per_kg is null or invalid (like for a manual VIP entry), deduce it from amount / kg
                     if (isNaN(effectivePrice)) {
@@ -214,7 +214,7 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
         );
 
         await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${items?.length || 0} items. Synced ${customersToRecalculate.size} ledger records.`);
-        
+
         // Force Next.js CDN to purge cache instantly so the UI doesn't require multiple refreshes!
         try {
             revalidatePath('/api/daily-book');
@@ -280,7 +280,7 @@ export const DELETE = trackApiRoute('/api/daily-book', async (request: Request) 
         }));
 
         await logAudit(request, 'DELETE_DAILY_BOOK', `Moved daily book entry for ${dateStr} to Trash (deleted ${books.length} record(s))`);
-        
+
         try {
             revalidatePath('/api/daily-book-history');
             revalidatePath('/api/daily-book-history-full');

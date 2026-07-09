@@ -48,57 +48,7 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
-// Parse ALL note entries from a note (restricted to VIP only)
-// Pattern: "{count} vip {price}" e.g. "5 vip 36"
-// Also supports "10 vip 38, 10 vip 37" for multiple splits.
-function parseVipEntries(note?: string): { count: number; price?: string; text: string }[] {
-    if (!note) return [];
-    const n = note.trim();
-    const results: { count: number; price?: string; text: string }[] = [];
-
-    // Full pattern: {count} vip {price}
-    const fullPattern = /(\d+(?:\.\d+)?)\s+(vip)\s+(\d+(?:\.\d+)?)/gi;
-    let match;
-    while ((match = fullPattern.exec(n)) !== null) {
-        const count = parseFloat(match[1]);
-        const price = match[3];
-        if (count > 0 && parseFloat(price) > 0) {
-            results.push({ count, price, text: `${match[1]} VIP @${price}` });
-        }
-    }
-
-    // Fallback: {count} vip without price (e.g. "5 vip")
-    if (results.length === 0) {
-        const simplePattern = /(\d+(?:\.\d+)?)\s+(vip)\b/gi;
-        while ((match = simplePattern.exec(n)) !== null) {
-            const count = parseFloat(match[1]);
-            if (count > 0) {
-                results.push({ count, text: `${match[1]} VIP` });
-            }
-        }
-    }
-
-    // Legacy: plain 'vip' with no number (kept for backward compat)
-    if (results.length === 0 && n.toLowerCase().includes('vip')) {
-        results.push({ count: 0, text: 'VIP' });
-    }
-
-    return results;
-}
-
-
-// Legacy helper — returns first VIP entry (used for backward compat display)
-function getVipInfo(note?: string) {
-    const entries = parseVipEntries(note);
-    if (entries.length === 0) return null;
-    // For the simple badge case, return the first entry
-    return entries[0];
-}
-
-// Total VIP count across all segments in a note
-function getTotalVipCount(note?: string): number {
-    return parseVipEntries(note).reduce((sum, e) => sum + e.count, 0);
-}
+// Legacy parsing functions removed as per request to just sum KG based on 'VIP' string
 
 function DailyBookPageInner() {
     const [date, setDate] = useState<Date>(new Date());
@@ -428,8 +378,8 @@ function DailyBookPageInner() {
     };
 
     const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
-    // Sum ALL vip quantities across all customers (e.g. 10+5+5+5 = 25)
-    const totalVip = Object.values(entries).reduce((sum, entry) => sum + getTotalVipCount(entry.note), 0);
+    // Sum ALL vip quantities across all customers
+    const totalVip = Object.values(entries).reduce((sum, entry) => sum + (entry.note && entry.note.toLowerCase().includes('vip') ? Number(entry.kg) || 0 : 0), 0);
     const filteredEntries = searchDate
         ? savedEntries.filter(e => e.date && e.date.substring(0, 10) === format(searchDate, 'yyyy-MM-dd'))
         : savedEntries;
@@ -645,12 +595,11 @@ return (
                                             <div className="col-span-3 flex items-center justify-end gap-1">
                                                 <div className="flex items-center justify-end gap-1 relative w-full">
                                                     {(() => {
-                                                        const vipEntries = parseVipEntries(entries[customer.id]?.note);
-                                                        return vipEntries.length > 0 ? (
+                                                        const note = entries[customer.id]?.note || '';
+                                                        const isVip = note.toLowerCase().includes('vip');
+                                                        return isVip ? (
                                                             <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex flex-col items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform gap-0.5">
-                                                                {vipEntries.map((v, i) => (
-                                                                    <span key={i}>✏️ {v.text}</span>
-                                                                ))}
+                                                                <span>👑 VIP</span>
                                                             </button>
                                                         ) : null;
                                                     })()}
@@ -778,12 +727,11 @@ return (
                                             <div className="col-span-3 flex items-center justify-end gap-1">
                                                 <div className="flex items-center justify-end gap-1 relative w-full">
                                                     {(() => {
-                                                        const vipEntries = parseVipEntries(entries[customer.id]?.note);
-                                                        return vipEntries.length > 0 ? (
+                                                        const note = entries[customer.id]?.note || '';
+                                                        const isVip = note.toLowerCase().includes('vip');
+                                                        return isVip ? (
                                                             <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex flex-col items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform gap-0.5">
-                                                                {vipEntries.map((v, i) => (
-                                                                    <span key={i}>✏️ {v.text}</span>
-                                                                ))}
+                                                                <span>👑 VIP</span>
                                                             </button>
                                                         ) : null;
                                                     })()}
@@ -912,8 +860,8 @@ return (
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase">Total KG</span>
                                 </div>
                                 {(() => {
-                                    // Sum all VIP quantities (e.g. 10+5+5+5 = 25)
-                                    const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
+                                    // Sum all VIP quantities
+                                    const entryVipCount = entry.items.reduce((sum, i) => sum + (i.note && i.note.toLowerCase().includes('vip') ? Number(i.kg) || 0 : 0), 0);
                                     if (entryVipCount > 0) {
                                         return (
                                             <>
@@ -963,14 +911,12 @@ return (
                                                     ) : (
                                                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                                             {(() => {
-                                                                const vipEntries = parseVipEntries(item.note);
-                                                                return vipEntries.length > 0 ? (
+                                                                const isVip = item.note && item.note.toLowerCase().includes('vip');
+                                                                return isVip ? (
                                                                     <div className="flex flex-col items-end gap-0.5">
-                                                                        {vipEntries.map((v, i) => (
-                                                                            <span key={i} className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] md:text-xs uppercase tracking-widest inline-block whitespace-nowrap shadow-[0_0_8px_rgba(251,191,36,0.3)]">
-                                                                                {v.text}
-                                                                            </span>
-                                                                        ))}
+                                                                        <span className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] md:text-xs uppercase tracking-widest inline-block whitespace-nowrap shadow-[0_0_8px_rgba(251,191,36,0.3)]">
+                                                                            👑 VIP
+                                                                        </span>
                                                                     </div>
                                                                 ) : null;
                                                             })()}
@@ -988,8 +934,13 @@ return (
                                     <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Quantity</span>
                                     <div className="flex items-center gap-4">
                                         {(() => {
-                                            // Sum all VIP quantities (e.g. 10+5+5+5 = 25)
-                                            const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
+                                            // Sum the actual KG of any customer whose note contains 'vip'
+                                            const entryVipCount = entry.items.reduce((sum, i) => {
+                                                if (i.note && i.note.toLowerCase().includes('vip')) {
+                                                    return sum + (Number(i.kg) || 0);
+                                                }
+                                                return sum;
+                                            }, 0);
                                             return entryVipCount > 0 ? (
                                                 <span className="font-black text-amber-600 text-xl">{entryVipCount} <span className="text-xs opacity-60">VIP</span></span>
                                             ) : null;
@@ -1126,9 +1077,9 @@ return (
                                                                         ⚡ {Math.round(entry.totalKg)} KG
                                                                     </span>
                                                                     {(() => {
-                                                                        // Sum all VIP quantities (e.g. 10+5+5+5 = 25)
+                                                                        // Sum the actual KG of any customer whose note contains 'vip'
                                                                         const vipItems = entry.items.filter(i => i.note && i.note.toLowerCase().includes('vip'));
-                                                                        const entryVipCount = entry.items.reduce((sum, i) => sum + getTotalVipCount(i.note), 0);
+                                                                        const entryVipCount = vipItems.reduce((sum, i) => sum + (Number(i.kg) || 0), 0);
                                                                         return entryVipCount > 0 ? (
                                                                             <button
                                                                                 type="button"
@@ -1255,15 +1206,13 @@ return (
                                                                         <span className="font-black text-primary text-base md:text-lg">{Math.round(item.kg)} <span className="text-[10px] opacity-60">KG</span></span>
                                                                     )}
                                                                     {(() => {
-                                                                        const vipEntries = parseVipEntries(item.note);
-                                                                        if (vipEntries.length > 0) {
+                                                                        const isVip = item.note && item.note.toLowerCase().includes('vip');
+                                                                        if (isVip) {
                                                                             return (
                                                                                 <div className="flex flex-col items-end gap-0.5 mt-0.5">
-                                                                                    {vipEntries.map((v, i) => (
-                                                                                        <span key={i} className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] uppercase tracking-widest inline-block whitespace-nowrap">
-                                                                                            {v.text}
-                                                                                        </span>
-                                                                                    ))}
+                                                                                    <span className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] uppercase tracking-widest inline-block whitespace-nowrap">
+                                                                                        👑 VIP
+                                                                                    </span>
                                                                                 </div>
                                                                             );
                                                                         }
@@ -1380,7 +1329,7 @@ return (
                         {/* list */}
                         <div className="daily-popup-list">
                             {vipPopupData.items.map((item, idx) => {
-                                const segs = parseVipEntries(item.note);
+                                const isVip = item.note && item.note.toLowerCase().includes('vip');
                                 return (
                                     <div key={idx} className="daily-popup-item daily-popup-item--vip" style={{ animationDelay: `${idx * 35}ms` }}>
                                         <div className="daily-popup-avatar daily-popup-avatar--gold">
@@ -1389,9 +1338,7 @@ return (
                                         <div className="daily-popup-info">
                                             <p className="daily-popup-name">{item.customer?.name || 'Unknown'}</p>
                                             <div className="daily-popup-segs">
-                                                {segs.map((s, si) => (
-                                                    <span key={si} className="daily-popup-seg">{s.text}</span>
-                                                ))}
+                                                {isVip && <span className="daily-popup-seg">👑 VIP</span>}
                                             </div>
                                         </div>
                                     </div>
@@ -1436,8 +1383,8 @@ return (
                     act2 = entry2.items.filter(i => i.present !== false).length;
                     custDiff = act1 - act2;
                     
-                    const vip1 = entry1.items.reduce((s, i) => s + getTotalVipCount(i.note), 0);
-                    const vip2 = entry2.items.reduce((s, i) => s + getTotalVipCount(i.note), 0);
+                    const vip1 = entry1.items.reduce((s, i) => s + (i.note && i.note.toLowerCase().includes('vip') ? Number(i.kg) || 0 : 0), 0);
+                    const vip2 = entry2.items.reduce((s, i) => s + (i.note && i.note.toLowerCase().includes('vip') ? Number(i.kg) || 0 : 0), 0);
                     vipDiff = vip1 - vip2;
 
                     abs1 = entry1.items.filter(i => i.present === false).length;

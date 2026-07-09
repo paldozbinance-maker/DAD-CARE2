@@ -422,7 +422,9 @@ export const POST = trackApiRoute('/api/customers', async (request: Request) => 
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
         // @ts-ignore
-        revalidateTag('customers', 'max');
+        revalidateTag('customers');
+        // @ts-ignore
+        revalidateTag('dashboard');
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Create Customer Error:', error);
@@ -486,7 +488,9 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
         // @ts-ignore
-        revalidateTag('customers', 'max');
+        revalidateTag('customers');
+        // @ts-ignore
+        revalidateTag('dashboard');
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Delete Customer Error:', error);
@@ -526,7 +530,9 @@ export const PATCH = trackApiRoute('/api/customers', async (request: Request) =>
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
         // @ts-ignore
-        revalidateTag('customers', 'max');
+        revalidateTag('customers');
+        // @ts-ignore
+        revalidateTag('dashboard');
         return NextResponse.json(data);
     } catch (error: any) {
         console.error('Update Customer Error:', error);
