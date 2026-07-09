@@ -49,6 +49,7 @@ export function useDailyBookInit() {
             keepPreviousData: true,
             dedupingInterval: 300000,
             revalidateIfStale: false,
+            revalidateOnReconnect: false,
             shouldRetryOnError: false,
         }
     );
@@ -66,6 +67,7 @@ export function useDailyBookDate(dateStr: string | null) {
             keepPreviousData: true,
             dedupingInterval: 60000,
             revalidateIfStale: false,
+            revalidateOnReconnect: false,
             shouldRetryOnError: false,
         }
     );
@@ -103,6 +105,7 @@ export function useDailyBookHistory() {
             revalidateOnFocus: false,
             dedupingInterval: 30000,
             revalidateIfStale: false,
+            revalidateOnReconnect: false,
             shouldRetryOnError: false,
         }
     );

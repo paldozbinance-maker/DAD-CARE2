@@ -213,7 +213,7 @@ export default function LedgerPage() {
     // Data state
     const { data: rawCustomers, isLoading: fetchingCustomers, mutate: mutateCustomers } = useSWR<{ id: string, name: string, customer_code: string, unprocessed_books_count?: number, total_books_count?: number, is_target_days_done?: boolean }[]>('/api/customers?mode=ledger', fetcher, {
         revalidateOnFocus: false,
-        dedupingInterval: 60000,    // 1 min — balances egress vs. freshness after save
+        dedupingInterval: 300000,   // 5 min (safely mutating on saves)
         revalidateIfStale: false,
         revalidateOnReconnect: false,
     });
@@ -226,6 +226,7 @@ export default function LedgerPage() {
     const { data: ledgerData, isLoading: fetchingLedger, mutate: mutateLedger } = useSWR(ledgerUrl, fetcher, {
         revalidateOnFocus: false,
         dedupingInterval: 600000,   // 10 min — per-customer ledger, re-fetch on explicit mutate
+        revalidateIfStale: false,
         revalidateOnReconnect: false,
     });
     

@@ -436,6 +436,7 @@ export default function CustomerDetailPage() {
         dedupingInterval: 300000,
         keepPreviousData: true,
         revalidateIfStale: false,
+        revalidateOnReconnect: false,
     });
     
     // Construct the base URL for the first page of ledger data
@@ -447,6 +448,7 @@ export default function CustomerDetailPage() {
         revalidateOnFocus: false,
         dedupingInterval: 300000,
         revalidateIfStale: false,
+        revalidateOnReconnect: false,
     });
 
     // Sync SWR cache instantly to local state
