@@ -207,10 +207,11 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
 
         await client.query('COMMIT');
 
-        // 5. Trigger the cascade recalculation for any affected customers (AFTER commit)
-        for (const customerId of customersToRecalculate) {
-            await recalculateCustomerLedger(customerId);
-        }
+        // 5. Trigger the cascade recalculation for any affected customers IN PARALLEL (AFTER commit)
+        // Running them sequentially would block for ~200ms per customer. Parallel = instant!
+        await Promise.all(
+            Array.from(customersToRecalculate).map(customerId => recalculateCustomerLedger(customerId))
+        );
 
         await logAudit(request, 'SAVE_DAILY_BOOK', `Saved daily book entry for ${dateStr} with ${items?.length || 0} items. Synced ${customersToRecalculate.size} ledger records.`);
         
@@ -266,19 +267,17 @@ export const DELETE = trackApiRoute('/api/daily-book', async (request: Request) 
 
         const username = session?.username || 'unknown';
 
-        // Soft-delete ALL matching books (handles duplicates - loop through each one)
-        for (const book of books) {
-            // Soft delete items for this book
+        // Soft-delete ALL matching books in parallel (handles duplicates)
+        await Promise.all(books.map(async (book) => {
             await pool.query(
                 `UPDATE "DailyBookItem" SET deleted_at = NOW() WHERE daily_book_id = $1 AND deleted_at IS NULL`,
                 [book.id]
             );
-            // Soft delete the book itself
             await pool.query(
                 `UPDATE "DailyBook" SET deleted_at = NOW(), deleted_by = $1 WHERE id = $2`,
                 [username, book.id]
             );
-        }
+        }));
 
         await logAudit(request, 'DELETE_DAILY_BOOK', `Moved daily book entry for ${dateStr} to Trash (deleted ${books.length} record(s))`);
         
