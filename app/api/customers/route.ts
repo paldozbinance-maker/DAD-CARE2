@@ -9,9 +9,6 @@ import { unstable_cache } from 'next/cache';
 import { trackApiRoute } from '@/lib/egress-tracker';
 import { z } from 'zod';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 const customerSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     customer_code: z.string().optional().nullable(),
@@ -264,16 +261,25 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
 
 const getCachedCustomersLite = unstable_cache(
     async () => {
+        // ✅ Use DISTINCT ON JOIN instead of correlated subquery — fixes N+1 egress bug.
+        // Old query ran 1 extra DB query per customer (e.g. 50 customers = 50 extra queries).
         const query = `
             SELECT 
                 c.id, c.name, c.customer_code, c.phone,
-                COALESCE(
-                    (SELECT new_debt FROM "Ledger" WHERE customer_id = c.id AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1), 
-                0)::float as current_balance,
+                COALESCE(lb.new_debt, 0)::float as current_balance,
                 CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive
             FROM "Customer" c
+            LEFT JOIN (
+                SELECT DISTINCT ON (customer_id)
+                    customer_id, new_debt
+                FROM "Ledger"
+                WHERE deleted_at IS NULL
+                ORDER BY customer_id, created_at DESC, id DESC
+            ) lb ON lb.customer_id = c.id
             WHERE c.deleted_at IS NULL
-            ORDER BY c.customer_code ASC;
+            ORDER BY
+                CASE WHEN c.customer_code ~ '^[0-9]+$' THEN c.customer_code::int ELSE 9999 END ASC,
+                c.name ASC;
         `;
         const { rows } = await pool.query(query);
         return rows;
@@ -353,20 +359,20 @@ export const GET = trackApiRoute('/api/customers', async (request: Request) => {
         if (isLite) {
             const rows = await getCachedCustomersLite();
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
             return res;
         }
 
         if (mode === 'ledger') {
             const rows = await getCachedCustomersLedger();
             const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+            res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
             return res;
         }
 
         const customers = await getCachedCustomersFull(maqalD1, maqalD2, maxAllTimeDate);
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

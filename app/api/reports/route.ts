@@ -12,6 +12,13 @@ export const GET = trackApiRoute('/api/reports', async (request: Request) => {
         // This avoids fetching ALL ledger rows over the Supabase PostgREST API
         // (which was the #1 cause of Supabase egress usage).
         const { rows } = await pool.query(`
+            WITH latest_ledger AS (
+                SELECT DISTINCT ON (customer_id)
+                    customer_id, new_debt, type
+                FROM "Ledger"
+                WHERE deleted_at IS NULL
+                ORDER BY customer_id, created_at DESC, id DESC
+            )
             SELECT
                 c.id,
                 c.name,
@@ -29,25 +36,16 @@ export const GET = trackApiRoute('/api/reports', async (request: Request) => {
                 -- Count of PRODUCT transactions
                 COUNT(CASE WHEN l.type = 'PRODUCT' THEN 1 END)::int                               AS "productTxnCount",
 
-                -- Current balance = new_debt from the most recent ledger entry
-                COALESCE((
-                    SELECT new_debt FROM "Ledger" l2
-                    WHERE l2.customer_id = c.id AND l2.deleted_at IS NULL
-                    ORDER BY l2.created_at DESC, l2.id DESC
-                    LIMIT 1
-                ), 0)::float AS "currentDebt",
+                -- Current balance from DISTINCT ON join (single scan, not N correlated subqueries)
+                COALESCE(ll.new_debt, 0)::float AS "currentDebt",
 
-                -- Is Reesto = last transaction was a PAYMENT (meaning balance is negative/credit)
-                COALESCE((
-                    SELECT (type = 'PAYMENT') FROM "Ledger" l2
-                    WHERE l2.customer_id = c.id AND l2.deleted_at IS NULL
-                    ORDER BY l2.created_at DESC, l2.id DESC
-                    LIMIT 1
-                ), false) AS "is_reesto"
+                -- Is Reesto = last transaction was a PAYMENT
+                COALESCE((ll.type = 'PAYMENT'), false) AS "is_reesto"
 
             FROM "Customer" c
             LEFT JOIN "Ledger" l ON l.customer_id = c.id AND l.deleted_at IS NULL
-            GROUP BY c.id, c.name, c.customer_code
+            LEFT JOIN latest_ledger ll ON ll.customer_id = c.id
+            GROUP BY c.id, c.name, c.customer_code, ll.new_debt, ll.type
             ORDER BY c.name ASC
         `);
 

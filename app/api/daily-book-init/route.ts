@@ -28,17 +28,15 @@ async function getDailyBookInit() {
     };
 }
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 export async function GET(request: Request) {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     try {
         const data = await getDailyBookInit();
         const response = NextResponse.json(data);
-        // Force no-store to prevent stuck UI issues
-        response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+        // Cache at edge for 30s, serve stale for 2min while revalidating.
+        // revalidatePath is called on every customer add/edit/delete to bust this.
+        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
         return response;
     } catch (error: any) {
         console.error('Daily Book Init Error:', error);
