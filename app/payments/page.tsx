@@ -25,7 +25,7 @@ import useSWR from 'swr';
 
 const fetcher = async (url: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
-    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {} });
+    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {}, credentials: 'include' });
     if (!res.ok) throw new Error('Fetch error');
     return res.json();
 };
