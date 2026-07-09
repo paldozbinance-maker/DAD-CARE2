@@ -325,7 +325,7 @@ const getCachedCustomersLedger = unstable_cache(
         return rows;
     },
     ['customers-ledger-data'],
-    { revalidate: 300, tags: ['customers', 'max'] }
+    { revalidate: 600, tags: ['customers', 'max'] }
 );
 
 const getCachedCustomersFull = unstable_cache(
@@ -333,7 +333,7 @@ const getCachedCustomersFull = unstable_cache(
         return getCustomers(maqalD1, maqalD2, maxAllTimeDate);
     },
     ['customers-full-data'],
-    { revalidate: 300, tags: ['customers', 'max'] }
+    { revalidate: 600, tags: ['customers', 'max'] }
 );
 
 export const GET = trackApiRoute('/api/customers', async (request: Request) => {
@@ -349,23 +349,16 @@ export const GET = trackApiRoute('/api/customers', async (request: Request) => {
     try {
         if (isLite) {
             const rows = await getCachedCustomersLite();
-            const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-            return res;
+            return NextResponse.json(rows);
         }
 
         if (mode === 'ledger') {
             const rows = await getCachedCustomersLedger();
-            const res = NextResponse.json(rows);
-            res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-            return res;
+            return NextResponse.json(rows);
         }
 
         const customers = await getCachedCustomersFull(maqalD1, maqalD2, maxAllTimeDate);
-        
-        const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-        return res;
+        return NextResponse.json(customers);
     } catch (error: any) {
         console.error('Fetch Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

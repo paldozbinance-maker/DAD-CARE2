@@ -221,10 +221,9 @@ export const POST = trackApiRoute('/api/daily-book', async (request: Request) =>
             revalidatePath('/api/daily-book-history-full');
             revalidatePath('/api/daily-book-init');
             revalidatePath('/api/reports');
-            // NOTE: We intentionally do NOT revalidate the 'customers' tag here.
-            // Saving the daily book only updates DailyBookItem records (kg tracking),
-            // not customer balances. The expensive customers query should only be busted
-            // when customer records or ledger entries actually change.
+            revalidatePath('/api/reports');
+            // @ts-ignore
+            revalidateTag('customers', 'max');
         } catch (e) {
             console.error('Failed to revalidate paths:', e);
         }
@@ -287,6 +286,8 @@ export const DELETE = trackApiRoute('/api/daily-book', async (request: Request) 
             revalidatePath('/api/daily-book-history');
             revalidatePath('/api/daily-book-history-full');
             revalidatePath('/api/reports');
+            // @ts-ignore
+            revalidateTag('customers', 'max');
         } catch (e) {
             console.error('Failed to revalidate paths:', e);
         }

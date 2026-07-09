@@ -143,7 +143,9 @@ export default function CustomersPage() {
         // Listen for cross-page invalidation signal (e.g. from Ledger saves)
         const handleStorage = (e: StorageEvent) => {
             if (e.key === 'dadwork_customers_stale') {
-                mutateCustomers(undefined, { revalidate: true });
+                if (document.visibilityState === 'visible') {
+                    mutateCustomers(undefined, { revalidate: true });
+                }
             }
         };
 

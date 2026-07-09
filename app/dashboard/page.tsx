@@ -66,7 +66,9 @@ export default function DashboardPage() {
         // Listen for cross-page invalidation signal (e.g. from Ledger saves)
         const handleStorage = (e: StorageEvent) => {
             if (e.key === 'dadwork_customers_stale') {
-                mutateDashboard(undefined, { revalidate: true });
+                if (document.visibilityState === 'visible') {
+                    mutateDashboard(undefined, { revalidate: true });
+                }
             }
         };
 

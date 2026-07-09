@@ -922,14 +922,21 @@ export default function LedgerPage() {
                 setFreshBalance(data.finalDebt);
             }
 
-            // 4. Refresh data — only revalidate the ledger-mode customer list used on this page.
-            // The customers page will pick up changes from the localStorage stale signal on next focus.
-            // globalMutate on ALL /api/customers keys is too expensive (triggers the full 200-column query).
+            // 4. Refresh data instantly using Optimistic UI (Zero Bandwidth!)
             localStorage.setItem('dadwork_customers_stale', Date.now().toString());
-            await Promise.all([
-                mutateCustomers(),
-                mutateLedger()
-            ]);
+            
+            // Update the ledger transactions instantly
+            mutateLedger();
+            
+            // Optimistically update the customer sidebar to show they are processed
+            mutateCustomers((current) => {
+                if (!current) return current;
+                return current.map(c => 
+                    c.id === selectedCustomerId 
+                        ? { ...c, unprocessed_books_count: 0 } 
+                        : c
+                );
+            }, { revalidate: false }); // revalidate: false means DO NOT hit the server!
             
             setDateEntries([{ id: Date.now().toString(), date: '', kg: '', pricePerKg: defaultPrice, extraKg: '', extraPricePerKg: defaultPrice, extraNote: 'Notebook' }]);
             setPaymentEntries([{ id: (Date.now() + 1).toString(), date: '', amount: '' }]);
