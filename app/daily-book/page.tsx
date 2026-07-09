@@ -48,7 +48,43 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
-// Legacy parsing functions removed as per request to just sum KG based on 'VIP' string
+function getVipCount(note: string | undefined): number {
+    if (!note) return 0;
+    const lower = note.toLowerCase();
+    if (!lower.includes('vip')) return 0;
+    
+    const regex = /(\d+)\s*vip/g;
+    let match;
+    let totalCount = 0;
+    let found = false;
+    while ((match = regex.exec(lower)) !== null) {
+        found = true;
+        totalCount += parseInt(match[1], 10);
+    }
+    return found ? totalCount : 0;
+}
+
+function parseVipDetails(note: string | undefined): string {
+    if (!note) return '';
+    const lower = note.toLowerCase();
+    if (!lower.includes('vip')) return '';
+    
+    const regex = /(\d+)\s*vip(?:\s*(\d+))?/g;
+    let match;
+    let detailsArr: string[] = [];
+    let found = false;
+    while ((match = regex.exec(lower)) !== null) {
+        found = true;
+        const count = match[1];
+        if (match[2]) {
+            detailsArr.push(`${count} VIP @ $${match[2]}`);
+        } else {
+            detailsArr.push(`${count} VIP`);
+        }
+    }
+    return found ? detailsArr.join(', ') : 'VIP';
+}
+
 
 function DailyBookPageInner() {
     const [date, setDate] = useState<Date>(new Date());
@@ -378,8 +414,8 @@ function DailyBookPageInner() {
     };
 
     const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
-    // Sum ALL vip quantities across all customers
-    const totalVip = Object.values(entries).reduce((sum, entry) => sum + (entry.note && entry.note.toLowerCase().includes('vip') ? Number(entry.kg) || 0 : 0), 0);
+    // Sum ALL vip quantities across all customers based on note
+    const totalVip = Object.values(entries).reduce((sum, entry) => sum + getVipCount(entry.note), 0);
     const filteredEntries = searchDate
         ? savedEntries.filter(e => e.date && e.date.substring(0, 10) === format(searchDate, 'yyyy-MM-dd'))
         : savedEntries;
@@ -860,8 +896,8 @@ return (
                                     <span className="text-[10px] font-bold text-muted-foreground uppercase">Total KG</span>
                                 </div>
                                 {(() => {
-                                    // Sum all VIP quantities
-                                    const entryVipCount = entry.items.reduce((sum, i) => sum + (i.note && i.note.toLowerCase().includes('vip') ? Number(i.kg) || 0 : 0), 0);
+                                    // Sum all VIP quantities based on note
+                                    const entryVipCount = entry.items.reduce((sum, i) => sum + getVipCount(i.note), 0);
                                     if (entryVipCount > 0) {
                                         return (
                                             <>
@@ -913,10 +949,8 @@ return (
                                                             {(() => {
                                                                 const isVip = item.note && item.note.toLowerCase().includes('vip');
                                                                 return isVip ? (
-                                                                    <div className="flex flex-col items-end gap-0.5">
-                                                                        <span className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] md:text-xs uppercase tracking-widest inline-block whitespace-nowrap shadow-[0_0_8px_rgba(251,191,36,0.3)]">
-                                                                            👑 VIP
-                                                                        </span>
+                                                                    <div key={`v-${item.customer_id}`} className="flex items-center justify-between border-b border-amber-200/30 last:border-0 py-0.5">
+                                                                        <span className="text-[10px] font-bold text-amber-600/90 truncate max-w-[120px]" title={item.customer?.name}>👑 {parseVipDetails(item.note)}</span>
                                                                     </div>
                                                                 ) : null;
                                                             })()}
@@ -934,10 +968,10 @@ return (
                                     <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Quantity</span>
                                     <div className="flex items-center gap-4">
                                         {(() => {
-                                            // Sum the actual KG of any customer whose note contains 'vip'
+                                            // Sum the actual count of any customer whose note contains 'vip'
                                             const entryVipCount = entry.items.reduce((sum, i) => {
                                                 if (i.note && i.note.toLowerCase().includes('vip')) {
-                                                    return sum + (Number(i.kg) || 0);
+                                                    return sum + getVipCount(i.note);
                                                 }
                                                 return sum;
                                             }, 0);
@@ -1077,9 +1111,9 @@ return (
                                                                         ⚡ {Math.round(entry.totalKg)} KG
                                                                     </span>
                                                                     {(() => {
-                                                                        // Sum the actual KG of any customer whose note contains 'vip'
+                                                                        // Sum the actual count of any customer whose note contains 'vip'
                                                                         const vipItems = entry.items.filter(i => i.note && i.note.toLowerCase().includes('vip'));
-                                                                        const entryVipCount = vipItems.reduce((sum, i) => sum + (Number(i.kg) || 0), 0);
+                                                                        const entryVipCount = vipItems.reduce((sum, i) => sum + getVipCount(i.note), 0);
                                                                         return entryVipCount > 0 ? (
                                                                             <button
                                                                                 type="button"
@@ -1209,9 +1243,9 @@ return (
                                                                         const isVip = item.note && item.note.toLowerCase().includes('vip');
                                                                         if (isVip) {
                                                                             return (
-                                                                                <div className="flex flex-col items-end gap-0.5 mt-0.5">
-                                                                                    <span className="font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-sm text-[10px] uppercase tracking-widest inline-block whitespace-nowrap">
-                                                                                        👑 VIP
+                                                                                <div key={`vip-${item.customer_id}`} className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                                                                                    <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded shadow-sm border border-amber-500/20 truncate max-w-[120px]" title={item.customer?.name}>
+                                                                                        👑 {parseVipDetails(item.note)}
                                                                                     </span>
                                                                                 </div>
                                                                             );
@@ -1338,7 +1372,7 @@ return (
                                         <div className="daily-popup-info">
                                             <p className="daily-popup-name">{item.customer?.name || 'Unknown'}</p>
                                             <div className="daily-popup-segs">
-                                                {isVip && <span className="daily-popup-seg">👑 VIP</span>}
+                                                {isVip && <span className="daily-popup-seg">👑 {parseVipDetails(item.note)}</span>}
                                             </div>
                                         </div>
                                     </div>
@@ -1383,8 +1417,8 @@ return (
                     act2 = entry2.items.filter(i => i.present !== false).length;
                     custDiff = act1 - act2;
                     
-                    const vip1 = entry1.items.reduce((s, i) => s + (i.note && i.note.toLowerCase().includes('vip') ? Number(i.kg) || 0 : 0), 0);
-                    const vip2 = entry2.items.reduce((s, i) => s + (i.note && i.note.toLowerCase().includes('vip') ? Number(i.kg) || 0 : 0), 0);
+                    const vip1 = entry1.items.reduce((s, i) => s + getVipCount(i.note), 0);
+                    const vip2 = entry2.items.reduce((s, i) => s + getVipCount(i.note), 0);
                     vipDiff = vip1 - vip2;
 
                     abs1 = entry1.items.filter(i => i.present === false).length;
