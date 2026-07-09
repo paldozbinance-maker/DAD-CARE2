@@ -601,11 +601,18 @@ export default function CustomerDetailPage() {
         setPendingSecurityAction(null);
         if (!customer) return;
         try {
-            const res = await fetch(`/api/customers?id=${customerId}`, { method: 'DELETE' });
+            const token = localStorage.getItem('dadwork_session_token') || '';
+            const res = await fetch(`/api/customers?id=${customerId}`, {
+                method: 'DELETE',
+                headers: { 'x-session-token': token }
+            });
             if (res.ok) {
-                toast.success(`${customer.name} deleted`);
+                toast.success(`${customer.name} moved to Inactive. Their history is preserved.`);
                 localStorage.setItem('dadwork_customers_stale', Date.now().toString());
                 router.push('/customers');
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to deactivate customer');
             }
         } catch {
             toast.error('Network error');
@@ -664,7 +671,7 @@ export default function CustomerDetailPage() {
                 description={
                     pendingSecurityAction === 'clear_history' ? 'Permanently clear all ledger history for this customer?' : 
                     pendingSecurityAction === 'delete_receipt' ? `Permanently delete ${receiptToDelete?.entries.length} transactions from "${receiptToDelete?.titleString}"?` :
-                    `⚠️ Are you sure you want to DELETE "${customer?.name}"? This will remove them from Daily Book, Ledger, and all priority lists. This action cannot be undone!`
+                    `Move "${customer?.name}" to Inactive? Their full history (daily book, ledger) will be preserved. You can recover them from the Inactive tab.`
                 }
                 isProcessing={updating}
             />

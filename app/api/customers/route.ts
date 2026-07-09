@@ -435,39 +435,39 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
     if (errorResponse) return errorResponse;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const supabase = await createClient();
+    const permanent = searchParams.get('permanent') === 'true';
+    const restore = searchParams.get('restore') === 'true';
 
     try {
-        const timestamp = new Date().toISOString();
-
-        // PERMANENT DELETE requested by user:
-        // We must manually cascade delete Ledger and DailyBookItem records first 
-        // to avoid foreign key constraint violations, then delete the Customer.
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            
-            // 1. Delete all DailyBookItem records for this customer
-            await client.query('DELETE FROM "DailyBookItem" WHERE customer_id = $1', [id]);
-            
-            // 2. Delete all Ledger records for this customer
-            await client.query('DELETE FROM "Ledger" WHERE customer_id = $1', [id]);
-            
-            // 3. Delete the customer from assigned_customer_ids arrays in Users
-            await client.query('UPDATE "User" SET assigned_customer_ids = array_remove(assigned_customer_ids, $1) WHERE $1 = ANY(assigned_customer_ids)', [id]);
-            
-            // 4. Finally delete the Customer profile permanently
-            await client.query('DELETE FROM "Customer" WHERE id = $1', [id]);
-            
-            await client.query('COMMIT');
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
+        if (restore) {
+            // RESTORE: clear deleted_at so the customer becomes active again (same ID/code)
+            await pool.query('UPDATE "Customer" SET deleted_at = NULL WHERE id = $1', [id]);
+            await logAudit(request, 'RESTORE_CUSTOMER', `Restored customer ID: ${id}`);
+        } else if (permanent) {
+            // PERMANENT DELETE: cascade-delete all associated data, then the customer
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                await client.query('DELETE FROM "DailyBookItem" WHERE customer_id = $1', [id]);
+                await client.query('DELETE FROM "Ledger" WHERE customer_id = $1', [id]);
+                await client.query('UPDATE "User" SET assigned_customer_ids = array_remove(assigned_customer_ids, $1) WHERE $1 = ANY(assigned_customer_ids)', [id]);
+                await client.query('DELETE FROM "Customer" WHERE id = $1', [id]);
+                await client.query('COMMIT');
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+            await logAudit(request, 'PERMANENT_DELETE_CUSTOMER', `Permanently deleted customer ID: ${id} and all records`);
+        } else {
+            // SOFT DELETE (default): just sets deleted_at — moves to Inactive tab, history preserved
+            const timestamp = new Date().toISOString();
+            await pool.query('UPDATE "Customer" SET deleted_at = $1 WHERE id = $2', [timestamp, id]);
+            await pool.query('UPDATE "User" SET assigned_customer_ids = array_remove(assigned_customer_ids, $1) WHERE $1 = ANY(assigned_customer_ids)', [id]);
+            await logAudit(request, 'DEACTIVATE_CUSTOMER', `Soft-deleted (deactivated) customer ID: ${id}`);
         }
 
-        await logAudit(request, 'DELETE_CUSTOMER', `Permanently deleted customer ID: ${id} and all associated records`);
         revalidatePath('/api/customers');
         revalidatePath('/api/daily-book-init');
         // @ts-ignore
@@ -475,9 +475,10 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Delete Customer Error:', error);
-        return NextResponse.json({ error: error.message || 'Deletion failed' }, { status: 500 });
+        return NextResponse.json({ error: error.message || 'Operation failed' }, { status: 500 });
     }
 });
+
 export const PATCH = trackApiRoute('/api/customers', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;

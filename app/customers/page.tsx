@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useEffect, useState, useMemo } from 'react';
 import { AddCustomerDialog } from '@/components/add-customer-dialog';
 import { toast } from 'sonner';
-import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2, Clock, Globe, CalendarDays, CheckCircle2 } from 'lucide-react';
+import { Phone, Search, ChevronRight, Users, Star, Filter, Check, Loader2, Clock, Globe, CalendarDays, CheckCircle2, RotateCcw, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -48,6 +48,7 @@ export default function CustomersPage() {
     const [rankingMode, setRankingMode] = useState<'maqalka' | 'lacagta'>('maqalka');
     const [selectedMaqalPair, setSelectedMaqalPair] = useState<string>('latest');
     const [showAllTimePct, setShowAllTimePct] = useState<Record<string, boolean>>({});
+    const [managingCustomerId, setManagingCustomerId] = useState<string | null>(null);
     const [maqalSearch, setMaqalSearch] = useState('');
 
     const { data: maqalPairs } = useSWR<any[]>('/api/maqal-pairs', fetcher, { revalidateOnFocus: false, dedupingInterval: 600000, revalidateIfStale: false });
@@ -129,6 +130,55 @@ export default function CustomersPage() {
         { revalidateOnFocus: false, dedupingInterval: 300000, revalidateOnReconnect: false, revalidateIfStale: false }
     );
     const customers = customersData || [];
+
+    const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
+
+    const handleDeactivate = async (e: React.MouseEvent, customerId: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!confirm('Move this customer to Inactive? Their history will be preserved and they can be recovered.')) return;
+        setManagingCustomerId(customerId);
+        try {
+            const res = await fetch(`/api/customers?id=${customerId}`, {
+                method: 'DELETE',
+                headers: { 'x-session-token': getToken() }
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+            toast.success('Customer moved to Inactive.');
+            mutateCustomers(undefined, { revalidate: true });
+        } catch (err: any) { toast.error(err.message); }
+        finally { setManagingCustomerId(null); }
+    };
+
+    const handleRestore = async (customerId: string) => {
+        if (!confirm('Restore this customer to Active? They will re-appear in all lists with their original ID and history.')) return;
+        setManagingCustomerId(customerId);
+        try {
+            const res = await fetch(`/api/customers?id=${customerId}&restore=true`, {
+                method: 'DELETE',
+                headers: { 'x-session-token': getToken() }
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+            toast.success('Customer restored to Active!');
+            mutateCustomers(undefined, { revalidate: true });
+        } catch (err: any) { toast.error(err.message); }
+        finally { setManagingCustomerId(null); }
+    };
+
+    const handlePermanentDelete = async (customerId: string, name: string) => {
+        if (!confirm(`⚠️ PERMANENTLY DELETE "${name}"? This will erase ALL their ledger entries, daily book history, and cannot be undone!`)) return;
+        setManagingCustomerId(customerId);
+        try {
+            const res = await fetch(`/api/customers?id=${customerId}&permanent=true`, {
+                method: 'DELETE',
+                headers: { 'x-session-token': getToken() }
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+            toast.success('Customer permanently deleted.');
+            mutateCustomers(undefined, { revalidate: true });
+        } catch (err: any) { toast.error(err.message); }
+        finally { setManagingCustomerId(null); }
+    };
 
     useEffect(() => {
         const userStr = localStorage.getItem('currentUser');
@@ -492,6 +542,44 @@ export default function CustomersPage() {
                             let performanceColor = '';
                             if (filterType === 'best' && index < 5) performanceColor = 'bg-emerald-500/10';
                             else if (filterType === 'worst' && index < 5) performanceColor = 'bg-destructive/10';
+
+                            // Inactive customers get action buttons, not a nav link
+                            if ((customer as any).is_inactive) {
+                                return (
+                                    <div
+                                        key={customer.id}
+                                        className="flex items-center gap-3 px-4 py-2.5 bg-muted/10"
+                                    >
+                                        <Avatar className="h-8 w-8 border shrink-0 bg-muted/30 border-border/30">
+                                            <AvatarFallback className="text-xs font-black text-muted-foreground/50">
+                                                {customer.name.substring(0, 1).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-black truncate uppercase text-muted-foreground/60 line-through">{customer.name}</p>
+                                            <p className="text-[10px] text-muted-foreground/40 font-bold">#{customer.customer_code}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                onClick={() => handleRestore(customer.id)}
+                                                disabled={managingCustomerId === customer.id}
+                                                className="flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                                            >
+                                                {managingCustomerId === customer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                                                Recover
+                                            </button>
+                                            <button
+                                                onClick={() => handlePermanentDelete(customer.id, customer.name)}
+                                                disabled={managingCustomerId === customer.id}
+                                                className="flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                                Delete Forever
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            }
 
                             return (
                                 <Link
