@@ -440,8 +440,13 @@ export const DELETE = trackApiRoute('/api/customers', async (request: Request) =
 
     try {
         if (restore) {
-            // RESTORE: clear deleted_at so the customer becomes active again (same ID/code)
-            await pool.query('UPDATE "Customer" SET deleted_at = NULL WHERE id = $1', [id]);
+            // RESTORE: clear deleted_at and remove the 'del_' prefix from customer_code
+            await pool.query(`
+                UPDATE "Customer" 
+                SET deleted_at = NULL, 
+                    customer_code = CASE WHEN customer_code LIKE 'del_%' THEN substring(customer_code from 5) ELSE customer_code END
+                WHERE id = $1
+            `, [id]);
             await logAudit(request, 'RESTORE_CUSTOMER', `Restored customer ID: ${id}`);
         } else if (permanent) {
             // PERMANENT DELETE: cascade-delete all associated data, then the customer

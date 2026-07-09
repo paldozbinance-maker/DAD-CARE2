@@ -138,6 +138,10 @@ export default function CustomersPage() {
         e.stopPropagation();
         if (!confirm('Move this customer to Inactive? Their history will be preserved and they can be recovered.')) return;
         setManagingCustomerId(customerId);
+        
+        // Optimistic UI Update: instantly set is_inactive to true
+        mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: true } : c) : [], { revalidate: false });
+        
         try {
             const res = await fetch(`/api/customers?id=${customerId}`, {
                 method: 'DELETE',
@@ -146,13 +150,20 @@ export default function CustomersPage() {
             if (!res.ok) throw new Error((await res.json()).error || 'Failed');
             toast.success('Customer moved to Inactive.');
             mutateCustomers(undefined, { revalidate: true });
-        } catch (err: any) { toast.error(err.message); }
+        } catch (err: any) { 
+            toast.error(err.message); 
+            mutateCustomers(undefined, { revalidate: true }); // Revert on failure
+        }
         finally { setManagingCustomerId(null); }
     };
 
     const handleRestore = async (customerId: string) => {
         if (!confirm('Restore this customer to Active? They will re-appear in all lists with their original ID and history.')) return;
         setManagingCustomerId(customerId);
+        
+        // Optimistic UI Update: instantly set is_inactive to false and remove 'del_' prefix visually
+        mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: false, customer_code: c.customer_code.replace(/^del_/, '') } : c) : [], { revalidate: false });
+
         try {
             const res = await fetch(`/api/customers?id=${customerId}&restore=true`, {
                 method: 'DELETE',
@@ -161,13 +172,20 @@ export default function CustomersPage() {
             if (!res.ok) throw new Error((await res.json()).error || 'Failed');
             toast.success('Customer restored to Active!');
             mutateCustomers(undefined, { revalidate: true });
-        } catch (err: any) { toast.error(err.message); }
+        } catch (err: any) { 
+            toast.error(err.message); 
+            mutateCustomers(undefined, { revalidate: true }); // Revert on failure
+        }
         finally { setManagingCustomerId(null); }
     };
 
     const handlePermanentDelete = async (customerId: string, name: string) => {
         if (!confirm(`⚠️ PERMANENTLY DELETE "${name}"? This will erase ALL their ledger entries, daily book history, and cannot be undone!`)) return;
         setManagingCustomerId(customerId);
+        
+        // Optimistic UI Update: instantly remove from the list
+        mutateCustomers((prev: any) => prev ? prev.filter((c: any) => c.id !== customerId) : [], { revalidate: false });
+
         try {
             const res = await fetch(`/api/customers?id=${customerId}&permanent=true`, {
                 method: 'DELETE',
@@ -176,7 +194,10 @@ export default function CustomersPage() {
             if (!res.ok) throw new Error((await res.json()).error || 'Failed');
             toast.success('Customer permanently deleted.');
             mutateCustomers(undefined, { revalidate: true });
-        } catch (err: any) { toast.error(err.message); }
+        } catch (err: any) { 
+            toast.error(err.message); 
+            mutateCustomers(undefined, { revalidate: true }); // Revert on failure
+        }
         finally { setManagingCustomerId(null); }
     };
 
