@@ -636,6 +636,15 @@ export default function LedgerPage() {
 
         if (merged.length === 0) return null;
         
+        // Find the last product maqal and tag all groups with sequential display IDs
+        let displayCounter = 0;
+        for (const m of merged) {
+            if (m.totalMaqalka > 0 || m.totalAdjustment > 0) {
+                displayCounter++;
+                m.displayMaqalId = displayCounter;
+            }
+        }
+
         for (let i = merged.length - 1; i >= 0; i--) {
             if (merged[i].totalMaqalka > 0 || merged[i].totalAdjustment > 0) {
                 return merged[i];
@@ -1760,8 +1769,13 @@ export default function LedgerPage() {
                                                             const pct = lastReceiptGroup.totalMaqalka > 0 ? Math.min(100, Math.round((paymentsInReceipt / lastReceiptGroup.totalMaqalka) * 100)) : 100;
                                                             return (
                                                                 <div className="flex flex-col items-center justify-center gap-1 mb-3 mt-1">
-                                                                    <p className="text-[9px] font-bold text-muted-foreground text-center uppercase tracking-wider">
-                                                                        {lastReceiptGroup.titleString}
+                                                                    <p className="text-[9px] font-bold text-muted-foreground text-center uppercase tracking-wider flex items-center gap-1.5 justify-center flex-wrap">
+                                                                        <span>{lastReceiptGroup.titleString}</span>
+                                                                        {lastReceiptGroup.displayMaqalId != null && (
+                                                                            <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/40 shrink-0 tracking-wider uppercase animate-mq-pulse shadow-[0_0_8px_rgba(59,130,246,0.25)]">
+                                                                                ⚡MQ#{lastReceiptGroup.displayMaqalId}
+                                                                            </span>
+                                                                        )}
                                                                     </p>
                                                                     {lastReceiptGroup.totalMaqalka > 0 && (
                                                                         <span className={`text-[8px] px-1.5 py-0.5 rounded-sm font-bold tracking-wider ${pct >= 100 ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-500' : 'bg-red-500/20 text-red-700 dark:text-red-400'}`}>
@@ -1846,7 +1860,14 @@ export default function LedgerPage() {
                                                                 <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-700/80 dark:text-emerald-500/80 pt-2.5 pb-0.5">Lacagaha</p>
                                                                 {lastReceiptGroup.entries.filter((e: any) => e.type === 'PAYMENT').map((e: any) => (
                                                                     <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
-                                                                        <span>{format(new Date(e.reference_date), 'MMM dd')} {e.note && e.note !== 'Lacagta' ? e.note : 'Payment'}</span>
+                                                                        <span className="flex items-center gap-1.5">
+                                                                            {format(new Date(e.reference_date), 'MMM dd')} {e.note && e.note !== 'Lacagta' ? e.note : 'Payment'}
+                                                                            {lastReceiptGroup.displayMaqalId != null && (
+                                                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0 tracking-wider uppercase animate-mq-pulse shadow-[0_0_5px_rgba(59,130,246,0.2)]">
+                                                                                    ⚡MQ#{lastReceiptGroup.displayMaqalId}
+                                                                                </span>
+                                                                            )}
+                                                                        </span>
                                                                         <span>-${Math.round(e.amount).toLocaleString()}</span>
                                                                     </div>
                                                                 ))}
@@ -1872,7 +1893,14 @@ export default function LedgerPage() {
                                                                     return !(ln.includes('heyn') || ln.includes('cafis')) && parseFloat(p.amount) > 0;
                                                                 }).map((pay, idx) => (
                                                                     <div key={`pay-${idx}`} className="flex justify-between py-1 border-b border-border/30 text-emerald-600 font-bold">
-                                                                        <span>{format(new Date(pay.date || new Date()), 'MMM dd yyyy')} {pay.note || 'Lacagta'}</span>
+                                                                        <span className="flex items-center gap-1.5">
+                                                                            {format(new Date(pay.date || new Date()), 'MMM dd yyyy')} {pay.note || 'Lacagta'}
+                                                                            {lastReceiptGroup?.displayMaqalId != null && (
+                                                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0 tracking-wider uppercase animate-mq-pulse">
+                                                                                    ⚡MQ#{lastReceiptGroup.displayMaqalId}
+                                                                                </span>
+                                                                            )}
+                                                                        </span>
                                                                         <span>-${Math.round(parseFloat(pay.amount)).toLocaleString()}</span>
                                                                     </div>
                                                                 ))}

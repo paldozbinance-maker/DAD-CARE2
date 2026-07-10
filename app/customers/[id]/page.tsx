@@ -1020,15 +1020,11 @@ export default function CustomerDetailPage() {
                                 >
                                     <div className={`w-1 h-8 rounded-full shrink-0 ${receipt.kind === 'ADJUSTMENT' ? 'bg-amber-500' : 'bg-primary'}`} />
                                     <div className="flex-1 text-left min-w-0">
-                                        <p className="text-[11px] font-bold text-foreground leading-tight truncate flex items-center gap-1.5 flex-wrap">
-                                            {receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}
-                                            {receipt.displayMaqalId != null ? (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/40 shrink-0 tracking-widest uppercase animate-kinetic shadow-[0_0_10px_rgba(59,130,246,0.3)] flex items-center gap-1">
-                                                    ⚡ MQ#{receipt.displayMaqalId}
-                                                </span>
-                                            ) : receipt.receiptId && (
-                                                <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-primary/10 text-primary/70 border border-primary/15 shrink-0 tracking-wider uppercase">
-                                                    #{receipt.receiptId.slice(-6).toUpperCase()}
+                                        <p className="text-[11px] font-bold text-foreground leading-tight flex items-center gap-1.5 flex-wrap min-w-0">
+                                            <span className="truncate">{receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}</span>
+                                            {receipt.displayMaqalId != null && (
+                                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/40 shrink-0 tracking-wider uppercase animate-mq-pulse shadow-[0_0_8px_rgba(59,130,246,0.25)]">
+                                                    ⚡MQ#{receipt.displayMaqalId}
                                                 </span>
                                             )}
                                         </p>
@@ -1270,14 +1266,10 @@ export default function CustomerDetailPage() {
                                                                         <span className="flex items-center gap-1.5">
                                                                             {format(new Date(e.reference_date), 'MMM dd')} Payment
                                                                             {receipt.displayMaqalId != null ? (
-                                                                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0 tracking-widest uppercase animate-kinetic shadow-[0_0_5px_rgba(59,130,246,0.2)]">
-                                                                                    MQ#{receipt.displayMaqalId}
+                                                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0 tracking-wider uppercase animate-mq-pulse shadow-[0_0_5px_rgba(59,130,246,0.2)]">
+                                                                                    ⚡MQ#{receipt.displayMaqalId}
                                                                                 </span>
-                                                                            ) : e.receipt_id && (
-                                                                                <span className="text-[7px] font-mono px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600/70 dark:text-emerald-400/60 border border-emerald-500/15 shrink-0 tracking-wider">
-                                                                                    #{e.receipt_id.slice(-6).toUpperCase()}
-                                                                                </span>
-                                                                            )}
+                                                                            ) : null}
                                                                         </span>
                                                                         {(() => {
                                                                             const txTime = new Date(e.created_at || e.reference_date).getTime();

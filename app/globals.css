@@ -296,3 +296,19 @@ main {
 .animate-lightning {
   animation: lightning 3s infinite;
 }
+
+/* Contained MQ# badge glow-pulse — stays inside its own badge, no scrolling */
+@keyframes mq-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(59, 130, 246, 0.2), 0 0 0px rgba(59, 130, 246, 0);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.6), 0 0 18px rgba(59, 130, 246, 0.25);
+    opacity: 0.85;
+  }
+}
+
+.animate-mq-pulse {
+  animation: mq-pulse 2s ease-in-out infinite;
+}
