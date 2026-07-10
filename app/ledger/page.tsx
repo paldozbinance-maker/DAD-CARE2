@@ -306,6 +306,7 @@ export default function LedgerPage() {
     const [expandedPaymentIds, setExpandedPaymentIds] = useState<Set<string>>(new Set());
     const [startDate, setStartDate] = useState<string>('');
     const [allUnprocessedDates, setAllUnprocessedDates] = useState<string[]>([]);
+    const [currentMaqalId, setCurrentMaqalId] = useState<number | null>(null);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -420,6 +421,13 @@ export default function LedgerPage() {
                         } catch (e) {
                             console.error('Failed to parse all unprocessed dates header', e);
                         }
+                    }
+                    // Read maqal_id for this pair — used to permanently lock entries to their pair
+                    const maqalIdHeader = dailyRes.headers.get('x-maqal-id');
+                    if (maqalIdHeader) {
+                        setCurrentMaqalId(parseInt(maqalIdHeader, 10));
+                    } else {
+                        setCurrentMaqalId(null);
                     }
                     const dailyData = await dailyRes.json();
                     setCustomerDailyDates(dailyData || []);
@@ -910,6 +918,7 @@ export default function LedgerPage() {
                 body: JSON.stringify({
                     customerId: selectedCustomerId,
                     receipt_id: receiptId,
+                    maqal_id: currentMaqalId,
                     items: items
                 })
             });

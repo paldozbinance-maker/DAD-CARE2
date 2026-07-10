@@ -75,7 +75,7 @@ export const POST = trackApiRoute('/api/payments', async (request: Request) => {
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
     const body = await request.json();
-    const { customerId, amount, note, date } = body;
+    const { customerId, amount, note, date, maqal_id } = body;
 
     try {
         if (!customerId || !amount) {
@@ -101,9 +101,9 @@ export const POST = trackApiRoute('/api/payments', async (request: Request) => {
             const refDate = date || new Date().toISOString().split('T')[0];
 
             await client.query(
-                `INSERT INTO "Ledger" (id, customer_id, type, reference_date, amount, previous_debt, new_debt, note, receipt_id)
-                 VALUES (gen_random_uuid(), $1, 'PAYMENT', $2, $3, $4, $5, $6, $7)`,
-                [customerId, refDate, paymentAmount, previousDebt, newDebt, note || null, body.receipt_id || null]
+                `INSERT INTO "Ledger" (id, customer_id, type, reference_date, amount, previous_debt, new_debt, note, receipt_id, maqal_id)
+                 VALUES (gen_random_uuid(), $1, 'PAYMENT', $2, $3, $4, $5, $6, $7, $8)`,
+                [customerId, refDate, paymentAmount, previousDebt, newDebt, note || null, body.receipt_id || null, maqal_id || null]
             );
 
             await client.query('COMMIT');

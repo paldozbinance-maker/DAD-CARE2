@@ -148,14 +148,17 @@ export const GET = trackApiRoute('/api/customer-daily-entries', async (request: 
 
         // ── STEP 7: Build the response entries ──
         if (oldestUnprocessedPairStart === null) {
-            // Customer is fully caught up on all ready pairs.
-            // Still show the waiting pair in the form so they can see it.
+            // The waiting pair maqal_id
+            const waitingMaqalId = Math.floor(waitingPairStart / 2) + 1;
             const waitingResult = [
                 { date: waitingDay1, kg: 0, note: 'Notebook', processed: false, isReady: false },
                 { date: waitingDay2, kg: 0, note: 'Notebook', processed: false, isReady: false },
             ];
             const res = NextResponse.json(waitingResult, {
-                headers: { 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates) }
+                headers: { 
+                    'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates),
+                    'x-maqal-id': String(waitingMaqalId),
+                }
             });
             res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
             return res;
@@ -200,9 +203,13 @@ export const GET = trackApiRoute('/api/customer-daily-entries', async (request: 
         if (uniqueDatesMap.has(day2Str)) result.push(uniqueDatesMap.get(day2Str)!);
         else result.push({ date: day2Str, kg: 0, note: 'Notebook', processed: false, isReady: true });
 
+        // maqal_id: sequential 1-based ID for this pair (pair offset 0 = maqal 1, offset 2 = maqal 2, etc.)
+        const currentMaqalId = Math.floor(oldestUnprocessedPairStart / 2) + 1;
+
         const res = NextResponse.json(result, {
             headers: {
                 'x-all-unprocessed-dates': JSON.stringify(allUnprocessedDates),
+                'x-maqal-id': String(currentMaqalId),
             }
         });
         res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');

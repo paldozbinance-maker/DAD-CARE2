@@ -91,8 +91,9 @@ interface Transaction {
     new_debt: number;
     created_at: string;
     note?: string;
-    receipt_id?: string | null;
-    edit_count?: number;
+    receipt_id: string | null;
+    maqal_id: number | null;
+    edit_count: number;
 }
 
 interface Summary {
@@ -116,6 +117,7 @@ interface ReceiptGroup {
     note?: string;
     titleString?: string;
     receiptId?: string | null;
+    maqalId?: number | null;
 }
 
 const fetcher = async (url: string) => {
@@ -293,11 +295,18 @@ export default function CustomerDetailPage() {
             return a.id.localeCompare(b.id); // Tie-breaker for batch entries
         });
 
-        // 2. Group by `receipt_id` naturally. If a payment was submitted in a batch with products,
-        // it will share the `receipt_id` and group together. Separately added payments will have unique
-        // `receipt_id`s and form standalone groups that are merged in step 6.
+        // 2. Group by `maqal_id` first. If present, it represents a strict pairing lock.
+        // Fall back to `receipt_id` or isolated payment grouping.
         const normalizedTxns = sortedTxns.map(t => {
-            return { ...t, _groupKey: t.receipt_id || (t.type === 'PAYMENT' ? `__PAY__${t.id}` : null) };
+            let key = null;
+            if (t.maqal_id != null) {
+                key = `__MAQAL__${t.maqal_id}`;
+            } else if (t.receipt_id) {
+                key = t.receipt_id;
+            } else if (t.type === 'PAYMENT') {
+                key = `__PAY__${t.id}`;
+            }
+            return { ...t, _groupKey: key };
         }) as (Transaction & { _groupKey: string | null })[];
 
         const withGroupKey = normalizedTxns.filter(t => t._groupKey);
@@ -387,6 +396,7 @@ export default function CustomerDetailPage() {
                 openingBalance: first.previous_debt,
                 closingBalance: last.new_debt,
                 note: sorted.find(t => t.note)?.note,
+                maqalId: sorted.find(t => t.maqal_id != null)?.maqal_id || null,
                 _sortDate: sortDate, // internal: stable anchor for ordering
             } as ReceiptGroup & { _sortDate: Date; receiptId: string | null };
         });
@@ -401,7 +411,8 @@ export default function CustomerDetailPage() {
 
         const merged: (ReceiptGroup & { _sortDate: Date })[] = [];
         for (const current of oldestFirst as (ReceiptGroup & { _sortDate: Date })[]) {
-            const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
+            // NEVER merge a group that has a strict maqalId lock
+            const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0 && current.maqalId == null;
 
             if (isPaymentOnly && merged.length > 0) {
                 // FIFO: find the OLDEST product/adjustment receipt that is not yet fully paid
@@ -1002,7 +1013,11 @@ export default function CustomerDetailPage() {
                                     <div className="flex-1 text-left min-w-0">
                                         <p className="text-[11px] font-bold text-foreground leading-tight truncate flex items-center gap-1.5 flex-wrap">
                                             {receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}
-                                            {receipt.receiptId && (
+                                            {receipt.maqalId != null ? (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/40 shrink-0 tracking-widest uppercase animate-kinetic shadow-[0_0_10px_rgba(59,130,246,0.3)] flex items-center gap-1">
+                                                    ⚡ MAQAL #{receipt.maqalId}
+                                                </span>
+                                            ) : receipt.receiptId && (
                                                 <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-primary/10 text-primary/70 border border-primary/15 shrink-0 tracking-wider uppercase">
                                                     #{receipt.receiptId.slice(-6).toUpperCase()}
                                                 </span>
@@ -1245,7 +1260,11 @@ export default function CustomerDetailPage() {
                                                                     <div className="flex flex-col flex-1">
                                                                         <span className="flex items-center gap-1.5">
                                                                             {format(new Date(e.reference_date), 'MMM dd')} Payment
-                                                                            {e.receipt_id && (
+                                                                            {e.maqal_id != null ? (
+                                                                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0 tracking-widest uppercase animate-kinetic shadow-[0_0_5px_rgba(59,130,246,0.2)]">
+                                                                                    MAQAL #{e.maqal_id}
+                                                                                </span>
+                                                                            ) : e.receipt_id && (
                                                                                 <span className="text-[7px] font-mono px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600/70 dark:text-emerald-400/60 border border-emerald-500/15 shrink-0 tracking-wider">
                                                                                     #{e.receipt_id.slice(-6).toUpperCase()}
                                                                                 </span>

@@ -19,12 +19,20 @@ export async function GET(request: NextRequest) {
                        ROW_NUMBER() OVER (ORDER BY db_date DESC) as rn
                 FROM past_dates
             ),
+            numbered_pairs AS (
+                SELECT date1, date2,
+                       ROW_NUMBER() OVER (ORDER BY date2 ASC) as maqal_id
+                FROM (
+                    SELECT n2.db_date::date as date1, n1.db_date::date as date2
+                    FROM numbered_dates n1
+                    JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
+                    WHERE n1.rn % 2 = 1
+                ) all_pairs
+            ),
             latest_pair AS (
-                SELECT n2.db_date::date as date1, n1.db_date::date as date2
-                FROM numbered_dates n1
-                JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
-                WHERE n1.rn % 2 = 1
-                ORDER BY n2.db_date DESC
+                SELECT date1, date2, maqal_id
+                FROM numbered_pairs
+                ORDER BY date1 DESC
                 LIMIT 1
             ),
             pair_customers AS (
@@ -72,6 +80,7 @@ export async function GET(request: NextRequest) {
                 FROM pair_customers pc
             )
             SELECT
+                (SELECT maqal_id FROM latest_pair) as maqal_id,
                 (SELECT date1::text FROM latest_pair) as date1,
                 (SELECT date2::text FROM latest_pair) as date2,
                 json_agg(

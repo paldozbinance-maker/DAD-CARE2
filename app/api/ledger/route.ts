@@ -59,6 +59,7 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
 
         const customerId = isBatch ? customerIdBatch : body.customerId;
         const receipt_id = body.receipt_id || (isBatch ? crypto.randomUUID() : null);
+        const maqal_id = body.maqal_id || null;
 
         if (!customerId) throw new Error('Customer ID is required');
 
@@ -135,11 +136,7 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
                 } else if (type === 'ADJUSTMENT') {
                     entryAmount = Math.round(parseFloat(amount));
                     const lowerNote = (note || '').toLowerCase();
-                    if (lowerNote.includes('setup') || lowerNote.includes('initial') || lowerNote.includes('reesto')) {
-                        runningDebt = entryAmount;
-                    } else {
-                        runningDebt = Math.round(runningDebt + entryAmount);
-                    }
+                    runningDebt = Math.round(runningDebt + entryAmount);
                 }
 
                 entriesToInsert.push({
@@ -153,6 +150,7 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
                     new_debt: runningDebt,
                     note: note || body.note || null,
                     receipt_id: receipt_id,
+                    maqal_id: maqal_id,
                     created_at: new Date(now.getTime() + (i * 1000)).toISOString()
                 });
             }
@@ -160,8 +158,8 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
             // 4. BULK INSERT
             if (entriesToInsert.length > 0) {
                 await client.query(
-                    `INSERT INTO "Ledger" (id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, created_at)
-                     SELECT gen_random_uuid(), * FROM UNNEST($1::uuid[], $2::text[], $3::date[], $4::float8[], $5::float8[], $6::float8[], $7::float8[], $8::float8[], $9::text[], $10::uuid[], $11::timestamp[])`,
+                    `INSERT INTO "Ledger" (id, customer_id, type, reference_date, kg, price_per_kg, amount, previous_debt, new_debt, note, receipt_id, maqal_id, created_at)
+                     SELECT gen_random_uuid(), * FROM UNNEST($1::uuid[], $2::text[], $3::date[], $4::float8[], $5::float8[], $6::float8[], $7::float8[], $8::float8[], $9::text[], $10::uuid[], $11::integer[], $12::timestamp[])`,
                     [
                         entriesToInsert.map(e => e.customer_id),
                         entriesToInsert.map(e => e.type),
@@ -173,9 +171,11 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
                         entriesToInsert.map(e => e.new_debt),
                         entriesToInsert.map(e => e.note),
                         entriesToInsert.map(e => e.receipt_id),
-                        entriesToInsert.map(e => e.created_at)
+                        entriesToInsert.map(e => e.maqal_id),
+                        entriesToInsert.map(e => e.created_at),
                     ]
                 );
+            }
             }
 
             await client.query('COMMIT');

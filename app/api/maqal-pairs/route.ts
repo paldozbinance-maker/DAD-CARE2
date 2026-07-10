@@ -7,6 +7,13 @@ export async function GET(request: NextRequest) {
         const sessionRes = await requireSession(request);
         if (sessionRes instanceof NextResponse) return sessionRes;
 
+        // Auto-migration for maqal_id
+        try {
+            await pool.query('ALTER TABLE "Ledger" ADD COLUMN IF NOT EXISTS maqal_id INTEGER;');
+        } catch (e) {
+            console.error('Migration failed:', e);
+        }
+
         // Query historical pairs from DailyBook
         // We return ALL consecutive pairs of dates (rolling window) to guarantee no pairs are missed
         const query = `
@@ -25,8 +32,14 @@ export async function GET(request: NextRequest) {
                 FROM numbered_dates n1
                 JOIN numbered_dates n2 ON n1.rn = n2.rn - 1
                 WHERE n1.rn % 2 = 1
+            ),
+            numbered_pairs AS (
+                SELECT date1, date2,
+                       ROW_NUMBER() OVER (ORDER BY date2 ASC) as maqal_id
+                FROM pairs
             )
             SELECT 
+                p.maqal_id,
                 p.date1::text as date1, 
                 p.date2::text as date2,
                 (
@@ -85,7 +98,7 @@ export async function GET(request: NextRequest) {
                           )
                     )
                 ) as payment_count
-            FROM pairs p
+            FROM numbered_pairs p
             ORDER BY p.date1 DESC;
         `;
         
