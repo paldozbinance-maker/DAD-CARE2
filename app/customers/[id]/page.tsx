@@ -456,15 +456,11 @@ export default function CustomerDetailPage() {
             merged.push(current as ReceiptGroup & { _sortDate: Date });
         }
 
-        // 7. Calculate sequential display IDs for this customer
-        const uniqueMaqalIds = Array.from(new Set(merged.map(m => m.maqalId).filter(id => id != null)))
-            .sort((a, b) => (a as number) - (b as number));
-        const maqalIdMap = new Map<number, number>();
-        uniqueMaqalIds.forEach((id, idx) => maqalIdMap.set(id as number, idx + 1));
-
+        // 7. Calculate sequential display IDs for this customer (count EVERY product maqal)
+        let displayCounter = 1;
         for (const m of merged) {
-            if (m.maqalId != null) {
-                m.displayMaqalId = maqalIdMap.get(m.maqalId);
+            if (m.totalMaqalka > 0 || m.maqalId != null) {
+                m.displayMaqalId = displayCounter++;
             }
         }
 
