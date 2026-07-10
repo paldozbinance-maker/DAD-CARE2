@@ -118,6 +118,7 @@ interface ReceiptGroup {
     titleString?: string;
     receiptId?: string | null;
     maqalId?: number | null;
+    displayMaqalId?: number | null;
 }
 
 const fetcher = async (url: string) => {
@@ -453,6 +454,18 @@ export default function CustomerDetailPage() {
                 }
             }
             merged.push(current as ReceiptGroup & { _sortDate: Date });
+        }
+
+        // 7. Calculate sequential display IDs for this customer
+        const uniqueMaqalIds = Array.from(new Set(merged.map(m => m.maqalId).filter(id => id != null)))
+            .sort((a, b) => (a as number) - (b as number));
+        const maqalIdMap = new Map<number, number>();
+        uniqueMaqalIds.forEach((id, idx) => maqalIdMap.set(id as number, idx + 1));
+
+        for (const m of merged) {
+            if (m.maqalId != null) {
+                m.displayMaqalId = maqalIdMap.get(m.maqalId);
+            }
         }
 
         // Re-sort newest-first for display using the stable product-anchor date
@@ -1013,9 +1026,9 @@ export default function CustomerDetailPage() {
                                     <div className="flex-1 text-left min-w-0">
                                         <p className="text-[11px] font-bold text-foreground leading-tight truncate flex items-center gap-1.5 flex-wrap">
                                             {receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}
-                                            {receipt.maqalId != null ? (
+                                            {receipt.displayMaqalId != null ? (
                                                 <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/40 shrink-0 tracking-widest uppercase animate-kinetic shadow-[0_0_10px_rgba(59,130,246,0.3)] flex items-center gap-1">
-                                                    ⚡ MAQAL #{receipt.maqalId}
+                                                    ⚡ MQ#{receipt.displayMaqalId}
                                                 </span>
                                             ) : receipt.receiptId && (
                                                 <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-primary/10 text-primary/70 border border-primary/15 shrink-0 tracking-wider uppercase">
@@ -1260,9 +1273,9 @@ export default function CustomerDetailPage() {
                                                                     <div className="flex flex-col flex-1">
                                                                         <span className="flex items-center gap-1.5">
                                                                             {format(new Date(e.reference_date), 'MMM dd')} Payment
-                                                                            {e.maqal_id != null ? (
+                                                                            {receipt.displayMaqalId != null ? (
                                                                                 <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0 tracking-widest uppercase animate-kinetic shadow-[0_0_5px_rgba(59,130,246,0.2)]">
-                                                                                    MAQAL #{e.maqal_id}
+                                                                                    MQ#{receipt.displayMaqalId}
                                                                                 </span>
                                                                             ) : e.receipt_id && (
                                                                                 <span className="text-[7px] font-mono px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600/70 dark:text-emerald-400/60 border border-emerald-500/15 shrink-0 tracking-wider">
