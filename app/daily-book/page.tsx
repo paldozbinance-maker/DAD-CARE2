@@ -132,7 +132,7 @@ function DailyBookPageInner() {
     const isSuperAdmin = session?.role === 'SUPER_ADMIN';
 
     // ⚡ SWR Hooks for Lightning Fast Caching
-    const { data: initData, mutate: mutateInit } = useDailyBookInit();
+    const { data: initData, isError: initError, mutate: mutateInit } = useDailyBookInit();
     const loadInit = () => mutateInit(); // Used by AddCustomerDialog to refresh after adding a customer
     const dateStr = format(date, 'yyyy-MM-dd');
     const { data: bookData } = useDailyBookDate(isInitialized ? dateStr : null);
@@ -455,14 +455,29 @@ function DailyBookPageInner() {
         }
     };
 
+    if (initError && !initData) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[300px] gap-4">
+                <div className="p-4 rounded-full bg-red-100 text-red-600">
+                    <ShieldAlert className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground">Failed to load data</h3>
+                <p className="text-sm text-muted-foreground text-center">There was a problem loading the Daily Book.</p>
+                <Button onClick={() => window.location.reload()} variant="outline" className="mt-2">
+                    Try Again
+                </Button>
+            </div>
+        );
+    }
+
     if (!initData) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[200px] animate-pulse">
-      <div className="h-8 w-32 bg-gray-200 rounded mb-2" />
-      <div className="h-4 w-48 bg-gray-200 rounded" />
-    </div>
-  );
-}
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[200px] animate-pulse">
+                <div className="h-8 w-32 bg-gray-200 rounded mb-2" />
+                <div className="h-4 w-48 bg-gray-200 rounded" />
+            </div>
+        );
+    }
 return (
         <div className="space-y-6 max-w-4xl mx-auto px-1 md:px-0">
             {/* Customer Soft-Delete Security Verification */}
@@ -812,7 +827,7 @@ return (
 
                         {/* Mobile sticky save bar */}
                         {!saving && totalKg > 0 && viewMode === 'edit' && (
-                            <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border md:hidden z-50 animate-in slide-in-from-bottom duration-500">
+                            <div className="fixed bottom-[68px] left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border md:hidden z-40 animate-in slide-in-from-bottom duration-500">
                                 <Button onClick={handleSave} className="w-full h-16 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-xl shadow-primary/30">
                                     <div className="flex items-center justify-between w-full px-4">
                                         <div className="text-left">

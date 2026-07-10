@@ -117,7 +117,7 @@ export function useDailyBookHistory() {
         }
     );
 
-    const historyData = data ? data.flat() : [];
+    const historyData = useMemo(() => data ? data.flat() : [], [data]);
     const isLoadingInitialData = !data && !error;
     const isLoadingMore = isLoadingInitialData || (size > 0 && data && typeof data[size - 1] === 'undefined');
     const isEmpty = data?.[0]?.length === 0;

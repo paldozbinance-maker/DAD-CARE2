@@ -24,21 +24,13 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
                             'customer_id', dbi.customer_id,
                             'kg',          dbi.kg,
                             'present',     dbi.present,
-                            'note',        dbi.note,
-                            'customer',    json_build_object(
-                                'id',            c.id,
-                                'name',          c.name,
-                                'customer_code', c.customer_code,
-                                'gender',        c.gender
-                            )
+                            'note',        dbi.note
                         )
-                        ORDER BY c.customer_code::text ASC
                     ) FILTER (WHERE dbi.id IS NOT NULL),
                     '[]'::json
                 ) as items
             FROM "DailyBook" db
             LEFT JOIN "DailyBookItem" dbi ON dbi.daily_book_id = db.id AND dbi.deleted_at IS NULL
-            LEFT JOIN "Customer" c ON c.id = dbi.customer_id
             WHERE db.deleted_at IS NULL
             GROUP BY db.id, db.date
             ORDER BY db.date DESC
@@ -59,8 +51,7 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
                     customer_id: item.customer_id,
                     kg:          item.kg,
                     present:     item.present,
-                    note:        item.note,
-                    customer:    item.customer,
+                    note:        item.note
                 }))
             };
         });

@@ -54,14 +54,11 @@ export const GET = trackApiRoute('/api/daily-book', async (request: Request) => 
         );
         const totalCount = parseInt(countResult[0].count, 10);
 
-        // Fetch paginated items with customer data
+        // Fetch paginated items without bulky customer joins
         const { rows: items } = await pool.query(
-            `SELECT dbi.*, 
-                    json_build_object('id', c.id, 'name', c.name, 'customer_code', c.customer_code) as customer 
-             FROM "DailyBookItem" dbi
-             JOIN "Customer" c ON dbi.customer_id = c.id
-             WHERE dbi.daily_book_id = $1 AND dbi.deleted_at IS NULL
-             ORDER BY c.customer_code ASC
+            `SELECT *
+             FROM "DailyBookItem"
+             WHERE daily_book_id = $1 AND deleted_at IS NULL
              LIMIT $2 OFFSET $3`,
             [book.id, pageSize, offset]
         );
