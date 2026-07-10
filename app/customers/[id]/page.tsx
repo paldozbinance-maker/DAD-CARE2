@@ -115,6 +115,7 @@ interface ReceiptGroup {
     closingBalance: number;
     note?: string;
     titleString?: string;
+    receiptId?: string | null;
 }
 
 const fetcher = async (url: string) => {
@@ -292,36 +293,36 @@ export default function CustomerDetailPage() {
             return a.id.localeCompare(b.id); // Tie-breaker for batch entries
         });
 
-        // 2. Separate into receipt-id and orphans, forcing payments to have a unique receipt ID
+        // 2. Group by `receipt_id` naturally. If a payment was submitted in a batch with products,
+        // it will share the `receipt_id` and group together. Separately added payments will have unique
+        // `receipt_id`s and form standalone groups that are merged in step 6.
         const normalizedTxns = sortedTxns.map(t => {
-            if (t.type === 'PAYMENT') {
-                return { ...t, receipt_id: `PAYMENT-${t.id}` };
-            }
-            return t;
-        });
-        const withReceiptId = normalizedTxns.filter(t => t.receipt_id);
-        const withoutReceiptId = normalizedTxns.filter(t => !t.receipt_id);
+            return { ...t, _groupKey: t.receipt_id || (t.type === 'PAYMENT' ? `__PAY__${t.id}` : null) };
+        }) as (Transaction & { _groupKey: string | null })[];
+
+        const withGroupKey = normalizedTxns.filter(t => t._groupKey);
+        const withoutGroupKey = normalizedTxns.filter(t => !t._groupKey);
 
         const receiptGroups: Transaction[][] = [];
 
-        // 3. Group by Receipt ID
-        const groupedByReceiptId = withReceiptId.reduce((acc, t) => {
-            const rid = t.type === 'PAYMENT' ? `PAYMENT-${t.receipt_id}` : t.receipt_id!;
-            if (!acc[rid]) acc[rid] = [];
-            acc[rid].push(t);
+        // 3. Group by _groupKey
+        const groupedByKey = withGroupKey.reduce((acc, t) => {
+            const key = t._groupKey!;
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(t);
             return acc;
         }, {} as Record<string, Transaction[]>);
 
-        Object.values(groupedByReceiptId).forEach(group => receiptGroups.push(group));
+        Object.values(groupedByKey).forEach(group => receiptGroups.push(group));
 
-        // 4. For orphans, use 15s batching
-        if (withoutReceiptId.length > 0) {
+        // 4. For orphans (no receipt_id), use 15s batching
+        if (withoutGroupKey.length > 0) {
             let currentGroup: Transaction[] = [];
-            withoutReceiptId.forEach((txn, i) => {
+            withoutGroupKey.forEach((txn, i) => {
                 if (i === 0) {
                     currentGroup.push(txn);
                 } else {
-                    const prev = withoutReceiptId[i - 1];
+                    const prev = withoutGroupKey[i - 1];
                     const diff = Math.abs(new Date(txn.created_at).getTime() - new Date(prev.created_at).getTime());
                     if (diff < 15000) {
                         currentGroup.push(txn);
@@ -336,17 +337,23 @@ export default function CustomerDetailPage() {
 
         // 5. Process groups and compute a stable sortDate from product reference dates
         const processedReceipts = receiptGroups.map((group, idx) => {
-            // Newest-first sort ensures group[0] is the LATEST entry
-            const last = group[0];
-            const first = group[group.length - 1];
+            // Sort group newest-first for consistent processing
+            const sorted = [...group].sort((a, b) => {
+                const ta = new Date(a.created_at).getTime();
+                const tb = new Date(b.created_at).getTime();
+                if (ta !== tb) return tb - ta;
+                return a.id.localeCompare(b.id);
+            });
+            const last = sorted[0];
+            const first = sorted[sorted.length - 1];
 
-            const totalKilos = group.reduce((sum, t) => sum + (t.kg || 0), 0);
-            const totalMaqalka = group.filter(t => t.type === 'PRODUCT').reduce((sum, t) => sum + (t.amount || 0), 0);
-            const totalPaid = group.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
-            const totalAdjustment = group.filter(t => t.type === 'ADJUSTMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
-            const isAdjustmentOnly = group.length === group.filter(t => t.type === 'ADJUSTMENT').length;
+            const totalKilos = sorted.reduce((sum, t) => sum + (t.kg || 0), 0);
+            const totalMaqalka = sorted.filter(t => t.type === 'PRODUCT').reduce((sum, t) => sum + (t.amount || 0), 0);
+            const totalPaid = sorted.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+            const totalAdjustment = sorted.filter(t => t.type === 'ADJUSTMENT').reduce((sum, t) => sum + (t.amount || 0), 0);
+            const isAdjustmentOnly = sorted.length === sorted.filter(t => t.type === 'ADJUSTMENT').length;
 
-            const productDates = group.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
+            const productDates = sorted.filter(t => t.type === 'PRODUCT').map(t => new Date(t.reference_date));
             let titleString = format(new Date(last.created_at), 'EEEE, MMMM dd, yyyy');
 
             // sortDate: use the EARLIEST product reference_date so ordering is by maqal date, not payment date
@@ -363,25 +370,30 @@ export default function CustomerDetailPage() {
                 sortDate = new Date(first.created_at);
             }
 
+            // Canonical receipt_id: prefer shared product receipt_id, else first entry id
+            const productReceiptId = sorted.find(t => t.type === 'PRODUCT' && t.receipt_id)?.receipt_id || null;
+
             return {
                 id: `group-${idx}-${last.id}`,
                 mainDate: last.reference_date,
                 kind: isAdjustmentOnly ? 'ADJUSTMENT' : 'TRANSACTION',
                 titleString: titleString,
-                entries: [...group].reverse(), // Store internally as oldest-first for the breakdown rendering
+                receiptId: productReceiptId,
+                entries: [...sorted].reverse(), // Store internally as oldest-first for the breakdown rendering
                 totalKilos,
                 totalMaqalka,
                 totalPaid,
                 totalAdjustment,
                 openingBalance: first.previous_debt,
                 closingBalance: last.new_debt,
-                note: group.find(t => t.note)?.note,
+                note: sorted.find(t => t.note)?.note,
                 _sortDate: sortDate, // internal: stable anchor for ordering
-            } as ReceiptGroup & { _sortDate: Date };
+            } as ReceiptGroup & { _sortDate: Date; receiptId: string | null };
         });
 
-        // 6. MERGE STEP: fold payment-only receipts into the correct product receipt using FIFO.
-        // FIFO = payments go to the OLDEST unpaid product receipt first (correct behavior).
+        // 6. MERGE STEP: fold payment-only receipts into the correct product receipt.
+        // The user explicitly requested NOT to move payments to older receipts. 
+        // So we attach payments to the MOST RECENT product receipt (LIFO).
         // Sort oldest-first by product anchor date so we process chronologically.
         const oldestFirst = [...processedReceipts].sort((a, b) =>
             (a as any)._sortDate.getTime() - (b as any)._sortDate.getTime()
@@ -392,24 +404,12 @@ export default function CustomerDetailPage() {
             const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
 
             if (isPaymentOnly && merged.length > 0) {
-                // FIFO: find the OLDEST product/adjustment receipt that is not yet fully paid
+                // LIFO: Find the most recent product/adjustment receipt
                 let targetIdx = -1;
-                for (let k = 0; k < merged.length; k++) {
-                    const m = merged[k];
-                    const owed = m.totalMaqalka + m.totalAdjustment;
-                    if ((m.totalMaqalka > 0 || m.totalAdjustment > 0) && m.totalPaid < owed) {
+                for (let k = merged.length - 1; k >= 0; k--) {
+                    if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
                         targetIdx = k;
                         break;
-                    }
-                }
-
-                // Fallback: if all previous receipts are fully paid, attach to most recent product receipt
-                if (targetIdx === -1) {
-                    for (let k = merged.length - 1; k >= 0; k--) {
-                        if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
-                            targetIdx = k;
-                            break;
-                        }
                     }
                 }
 
@@ -988,8 +988,13 @@ export default function CustomerDetailPage() {
                                 >
                                     <div className={`w-1 h-8 rounded-full shrink-0 ${receipt.kind === 'ADJUSTMENT' ? 'bg-amber-500' : 'bg-primary'}`} />
                                     <div className="flex-1 text-left min-w-0">
-                                        <p className="text-[11px] font-bold text-foreground leading-tight truncate">
+                                        <p className="text-[11px] font-bold text-foreground leading-tight truncate flex items-center gap-1.5 flex-wrap">
                                             {receipt.titleString || format(new Date(receipt.mainDate), 'MMM dd, yyyy')}
+                                            {receipt.receiptId && (
+                                                <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-primary/10 text-primary/70 border border-primary/15 shrink-0 tracking-wider uppercase">
+                                                    #{receipt.receiptId.slice(-6).toUpperCase()}
+                                                </span>
+                                            )}
                                         </p>
                                         {/* Inline badges: % paid + diff amount */}
                                         {receipt.totalMaqalka > 0 && (() => {
@@ -1226,7 +1231,14 @@ export default function CustomerDetailPage() {
                                                             {receipt.entries.filter(e => e.type === 'PAYMENT').map(e => (
                                                                 <div key={e.id} className="flex justify-between items-start py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
                                                                     <div className="flex flex-col flex-1">
-                                                                        <span>{format(new Date(e.reference_date), 'MMM dd')} Payment</span>
+                                                                        <span className="flex items-center gap-1.5">
+                                                                            {format(new Date(e.reference_date), 'MMM dd')} Payment
+                                                                            {e.receipt_id && (
+                                                                                <span className="text-[7px] font-mono px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600/70 dark:text-emerald-400/60 border border-emerald-500/15 shrink-0 tracking-wider">
+                                                                                    #{e.receipt_id.slice(-6).toUpperCase()}
+                                                                                </span>
+                                                                            )}
+                                                                        </span>
                                                                         {(() => {
                                                                             const txTime = new Date(e.created_at || e.reference_date).getTime();
                                                                             const isRecent = (Date.now() - txTime) < 24 * 60 * 60 * 1000;
