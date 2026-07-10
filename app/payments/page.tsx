@@ -91,6 +91,7 @@ export default function PaymentsPage() {
     const [filterCustomerId, setFilterCustomerId] = useState('all');
     const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
     const [filterOpen, setFilterOpen] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(50);
 
 
     const filteredPayments = useMemo(() => {
@@ -309,7 +310,7 @@ export default function PaymentsPage() {
                         </div>
                     ) : (
                         <div className="divide-y divide-border/50">
-                            {filteredPayments.map((payment) => (
+                            {filteredPayments.slice(0, visibleCount).map((payment) => (
                                 <div key={payment.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-all group">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 rounded-xl bg-emerald-500/10 group-hover:bg-emerald-500/15 transition-colors shrink-0">
@@ -335,6 +336,17 @@ export default function PaymentsPage() {
                                     </div>
                                 </div>
                             ))}
+                            {filteredPayments.length > visibleCount && (
+                                <div className="p-4">
+                                    <Button 
+                                        onClick={() => setVisibleCount(prev => prev + 50)}
+                                        variant="secondary" 
+                                        className="w-full text-xs font-bold bg-muted/50 hover:bg-muted"
+                                    >
+                                        Load More ({filteredPayments.length - visibleCount} remaining)
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </CardContent>
