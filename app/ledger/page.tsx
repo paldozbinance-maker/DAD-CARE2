@@ -59,7 +59,9 @@ interface Transaction {
     new_debt: number;
     created_at?: string;
     receipt_id?: string;
+    maqal_id?: number | null;
     note?: string;
+    displayMaqalId?: number;
 }
 
 interface CustomerSummary {
@@ -638,10 +640,22 @@ export default function LedgerPage() {
         
         // Find the last product maqal and tag all groups with sequential display IDs
         let displayCounter = 0;
+        const maqalIdMap = new Map<number, number>();
         for (const m of merged) {
             if (m.totalMaqalka > 0 || m.totalAdjustment > 0) {
                 displayCounter++;
                 m.displayMaqalId = displayCounter;
+                if (m.maqalId != null) {
+                    maqalIdMap.set(m.maqalId, m.displayMaqalId);
+                }
+            }
+        }
+
+        for (const m of merged) {
+            for (const e of m.entries) {
+                if (e.type === 'PAYMENT' && e.maqal_id != null) {
+                    e.displayMaqalId = maqalIdMap.get(e.maqal_id);
+                }
             }
         }
 
@@ -1862,9 +1876,9 @@ export default function LedgerPage() {
                                                                     <div key={e.id} className="flex justify-between py-1.5 border-b border-blue-200 dark:border-blue-900/40 text-emerald-700 dark:text-emerald-500 font-bold">
                                                                         <span className="flex items-center gap-1.5">
                                                                             {format(new Date(e.reference_date), 'MMM dd')} {e.note && e.note !== 'Lacagta' ? e.note : 'Payment'}
-                                                                            {lastReceiptGroup.displayMaqalId != null && (
+                                                                            {e.displayMaqalId != null && (
                                                                                 <span className="inline-flex items-center gap-0.5 text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0 tracking-wider uppercase animate-mq-pulse shadow-[0_0_5px_rgba(59,130,246,0.2)]">
-                                                                                    ⚡MQ#{lastReceiptGroup.displayMaqalId}
+                                                                                    ⚡MQ#{e.displayMaqalId}
                                                                                 </span>
                                                                             )}
                                                                         </span>
