@@ -551,16 +551,21 @@ export default function SettingsPage() {
     const handleSavePrice = async () => {
         setLoading(true);
         try {
+            const token = localStorage.getItem('dadwork_session_token') || '';
             const res = await fetch('/api/settings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-session-token': token
+                },
                 body: JSON.stringify({ key: 'dadwork_price_per_kg', value: pricePerKg })
             });
             if (res.ok) {
                 localStorage.setItem('dadwork_price_per_kg', pricePerKg);
                 toast.success(`Global Price per KG set to $${pricePerKg}`);
             } else {
-                toast.error('Failed to save global price');
+                const err = await res.json().catch(() => ({}));
+                toast.error(`Failed to save global price: ${err.error || res.statusText}`);
             }
         } catch (e) {
             toast.error('Network error');
@@ -576,17 +581,22 @@ export default function SettingsPage() {
         setLoading(true);
         
         try {
+            const token = localStorage.getItem('dadwork_session_token') || '';
             const res = await fetch('/api/settings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-session-token': token
+                },
                 body: JSON.stringify({ key: 'dadwork_date_specific_prices', value: JSON.stringify(newPrices) })
             });
             if (res.ok) {
                 localStorage.setItem('dadwork_date_specific_prices', JSON.stringify(newPrices)); // persist for refresh
                 toast.success('Date-specific prices updated');
             } else {
+                const err = await res.json().catch(() => ({}));
                 setDateSpecificPrices(previousPrices); // Rollback
-                toast.error('Failed to save date-specific prices');
+                toast.error(`Failed to save date-specific prices: ${err.error || res.statusText}`);
             }
         } catch (e) {
             setDateSpecificPrices(previousPrices); // Rollback
@@ -640,13 +650,18 @@ export default function SettingsPage() {
     const handleExportPDF = async () => {
         setLoading(true);
         try {
-            const custRes = await fetch('/api/customers');
+            const token = localStorage.getItem('dadwork_session_token') || '';
+            const custRes = await fetch('/api/customers', {
+                headers: { 'x-session-token': token }
+            });
             const customers = await custRes.json();
 
             if (Array.isArray(customers)) {
                 const txnsByCustomer: Record<string, any[]> = {};
                 for (const cust of customers) {
-                    const ledgerRes = await fetch(`/api/ledger?customerId=${cust.id}&limit=500`);
+                    const ledgerRes = await fetch(`/api/ledger?customerId=${cust.id}&limit=500`, {
+                        headers: { 'x-session-token': token }
+                    });
                     const ledgerData = await ledgerRes.json();
                     txnsByCustomer[cust.id] = ledgerData.transactions || [];
                 }

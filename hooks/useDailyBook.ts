@@ -4,21 +4,14 @@ import { Customer, SavedEntry, DailyBookItem } from '@/types';
 
 // Generic fetcher — silently returns null on 401/403 (session expired),
 // throws on other errors so SWR can retry them once.
-// Uses cookies (credentials: 'include') as the primary auth mechanism so that
-// Vercel's CDN can cache API responses — custom headers like x-session-token
-// prevent ALL CDN caching, causing massive Fast Origin Transfer egress.
+// Uses cookies ONLY (credentials: 'include') — NO x-session-token header.
+// Custom headers prevent ALL CDN caching; cookies allow Vercel CDN to cache
+// responses and serve them without hitting Supabase on every request.
 export const fetcher = async (url: string) => {
-    // Try cookie-based auth first (preferred — allows CDN caching)
-    // Fall back to x-session-token header for backwards compat
-    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
-    const headers: HeadersInit = {};
-    if (token) headers['x-session-token'] = token;
-
     let res: Response;
     try {
         res = await fetch(url, {
-            headers,
-            credentials: 'include', // Always send cookies — primary auth path
+            credentials: 'include', // Cookie-only auth — CDN-cacheable
         });
     } catch (networkErr: any) {
         // Network / timeout — log quietly, don't spam

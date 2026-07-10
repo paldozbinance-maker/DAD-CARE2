@@ -21,8 +21,9 @@ import {
 import useSWR from 'swr';
 
 const fetcher = async (url: string) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
-    const res = await fetch(url, { headers: token ? { 'x-session-token': token } : {}, credentials: 'include' });
+    // Cookie-only auth (credentials: include) — NO x-session-token header.
+    // Custom headers prevent Vercel CDN caching; cookies allow it.
+    const res = await fetch(url, { credentials: 'include' });
     if (res.status === 401) {
         if (typeof window !== 'undefined') {
             localStorage.removeItem('dadwork_session_token');
@@ -136,7 +137,7 @@ export default function CustomersPage() {
     const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
         customersUrl,
         fetcher,
-        { revalidateOnFocus: false, dedupingInterval: 300000, revalidateOnReconnect: false, revalidateIfStale: false }
+        { revalidateOnFocus: false, dedupingInterval: 600000, revalidateOnReconnect: false, revalidateIfStale: false }
     );
     const customers = customersData || [];
 
