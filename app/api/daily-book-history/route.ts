@@ -25,8 +25,7 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
                                 'id',            c.id,
                                 'name',          c.name,
                                 'customer_code', c.customer_code,
-                                'gender',        c.gender,
-                                'avatar_url',    c.avatar_url
+                                'gender',        c.gender
                             )
                         )
                         ORDER BY c.customer_code::text ASC

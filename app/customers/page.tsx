@@ -54,7 +54,7 @@ export default function CustomersPage() {
     const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
     const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
-    const [visibleCount] = useState(Infinity);
+    const [visibleCount, setVisibleCount] = useState(50);
     const [rankingMode, setRankingMode] = useState<'maqalka' | 'lacagta'>('maqalka');
     const [selectedMaqalPair, setSelectedMaqalPair] = useState<string>('latest');
     const [showAllTimePct, setShowAllTimePct] = useState<Record<string, boolean>>({});
@@ -564,7 +564,7 @@ export default function CustomersPage() {
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {filteredCustomers.map((customer, index) => {
+                        {filteredCustomers.slice(0, visibleCount).map((customer, index) => {
                             const isMale = customer.gender === 'Male';
                             const isFemale = customer.gender === 'Female';
                             const accentColor = isMale ? 'text-blue-400' : isFemale ? 'text-pink-400' : 'text-primary';
@@ -720,6 +720,19 @@ export default function CustomersPage() {
                                 </Link>
                             );
                         })}
+                    </div>
+                )}
+                
+                {filteredCustomers.length > visibleCount && (
+                    <div className="p-4 pt-2">
+                        <Button 
+                            onClick={() => setVisibleCount(prev => prev + 50)}
+                            variant="secondary" 
+                            className="w-full text-xs font-bold bg-muted/50 hover:bg-muted"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5 mr-2 opacity-50" />
+                            Load More ({filteredCustomers.length - visibleCount} remaining)
+                        </Button>
                     </div>
                 )}
             </div>

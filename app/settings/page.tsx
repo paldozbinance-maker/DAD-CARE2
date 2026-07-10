@@ -715,13 +715,38 @@ export default function SettingsPage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            if (file.size > 2 * 1024 * 1024) {
-                toast.error('Image size must be less than 2MB');
-                return;
-            }
+            // Compress image to 150x150 thumbnail so base64 string is tiny (~5-15 KB instead of 2MB)
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setUserForm(prev => ({ ...prev, avatar_url: reader.result as string }));
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_SIZE = 150;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                        }
+                    } else {
+                        if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+
+                    // Compress as JPEG with 70% quality (tiny base64 footprint)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    setUserForm(prev => ({ ...prev, avatar_url: dataUrl }));
+                };
+                img.src = event.target?.result as string;
             };
             reader.readAsDataURL(file);
         }

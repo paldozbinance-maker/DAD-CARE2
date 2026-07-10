@@ -48,6 +48,13 @@ export const POST = trackApiRoute('/api/settings', async (request: Request) => {
                 value TEXT NOT NULL
             );
         `);
+        
+        // Ensure constraint exists for older DBs that might have created the table without a primary key
+        try {
+            await pool.query(`ALTER TABLE "Settings" ADD CONSTRAINT settings_key_unique UNIQUE (key);`);
+        } catch(e) {
+            // Ignore if constraint already exists
+        }
 
         await pool.query(
             `INSERT INTO "Settings" (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
