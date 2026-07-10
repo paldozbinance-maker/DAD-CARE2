@@ -67,16 +67,22 @@ export default function CustomersPage() {
     // Latest pair = latest pair with ≥20 customers who paid (the "qualified" latest)
     const latestPair = maqalPairs?.find(pair => parseInt(pair.payment_count) >= 20) || null;
 
-    // Debounce search input
+    // Debounce search input — also resets Load More pagination
     useEffect(() => {
         if (searchTerm === debouncedSearch) return;
         setIsSearching(true);
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
             setIsSearching(false);
+            setVisibleCount(50); // Reset pagination on new search
         }, 300);
         return () => clearTimeout(timer);
     }, [searchTerm, debouncedSearch]);
+
+    // Reset Load More pagination when filter or tab changes
+    useEffect(() => {
+        setVisibleCount(50);
+    }, [filterType, activeTab, selectedMaqalPair]);
 
     // Helper to format pair date strings like "2026-06-28" or ISO → "28 Jun"
     const formatPairDate = (dateStr: string) => {
