@@ -191,7 +191,7 @@ function rowToSession(r: any): SessionData {
         username: r.username,
         name: r.name,
         role: r.role,
-        avatarUrl: null,    // stripped — never send avatars from session table
+        avatarUrl: undefined,   // stripped — never send avatars from session table
         createdAt: new Date(r.login_at).getTime(),
         lastSeenAt: new Date(r.last_seen_at).getTime(),
         loginAt: new Date(r.login_at).toISOString(),
