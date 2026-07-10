@@ -392,8 +392,8 @@ export default function CustomerDetailPage() {
         });
 
         // 6. MERGE STEP: fold payment-only receipts into the correct product receipt.
-        // The user explicitly requested payments to attach to the specific date they were subtracted for.
-        // We do this by finding the receipt that shares the payment's exact date, or the closest date.
+        // FIFO = payments go to the OLDEST unpaid product receipt first (standard ledger behavior).
+        // If a payment is meant for a specific pair, it will share that pair's receipt_id and never reach this step.
         // Sort oldest-first by product anchor date so we process chronologically.
         const oldestFirst = [...processedReceipts].sort((a, b) =>
             (a as any)._sortDate.getTime() - (b as any)._sortDate.getTime()
@@ -404,44 +404,18 @@ export default function CustomerDetailPage() {
             const isPaymentOnly = current.totalMaqalka === 0 && current.totalAdjustment === 0 && current.totalPaid > 0;
 
             if (isPaymentOnly && merged.length > 0) {
+                // FIFO: find the OLDEST product/adjustment receipt that is not yet fully paid
                 let targetIdx = -1;
-                const paymentDate = current.mainDate;
-
-                // 1. Try to find a receipt that explicitly contains this date
-                for (let k = merged.length - 1; k >= 0; k--) {
-                    if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
-                        const hasMatchingDate = merged[k].entries.some(e => e.reference_date === paymentDate);
-                        if (hasMatchingDate) {
-                            targetIdx = k;
-                            break;
-                        }
+                for (let k = 0; k < merged.length; k++) {
+                    const m = merged[k];
+                    const owed = m.totalMaqalka + m.totalAdjustment;
+                    if ((m.totalMaqalka > 0 || m.totalAdjustment > 0) && m.totalPaid < owed) {
+                        targetIdx = k;
+                        break;
                     }
                 }
 
-                // 2. If no exact match, find the closest receipt chronologically
-                if (targetIdx === -1) {
-                    let minDiff = Infinity;
-                    const pTime = new Date(paymentDate).getTime();
-                    
-                    for (let k = merged.length - 1; k >= 0; k--) {
-                        if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
-                            let localMinDiff = Infinity;
-                            merged[k].entries.forEach(e => {
-                                if (e.type === 'PRODUCT' || e.type === 'ADJUSTMENT') {
-                                    const diff = Math.abs(new Date(e.reference_date).getTime() - pTime);
-                                    if (diff < localMinDiff) localMinDiff = diff;
-                                }
-                            });
-                            
-                            if (localMinDiff < minDiff) {
-                                minDiff = localMinDiff;
-                                targetIdx = k;
-                            }
-                        }
-                    }
-                }
-
-                // 3. Fallback (LIFO) just in case
+                // Fallback: if all previous receipts are fully paid, attach to most recent product receipt
                 if (targetIdx === -1) {
                     for (let k = merged.length - 1; k >= 0; k--) {
                         if (merged[k].totalMaqalka > 0 || merged[k].totalAdjustment > 0) {
