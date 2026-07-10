@@ -97,19 +97,41 @@ export function useLedgerStatusForDate(dateStr: string | null) {
     return { processedCustomerIds, isLoading, isError: error, mutate };
 }
 
-// Hook for fetching the full daily book history list
+import useSWRInfinite from 'swr/infinite';
+
+// Hook for fetching the full daily book history list with pagination
 export function useDailyBookHistory() {
-    const { data, error, mutate, isLoading } = useSWR<SavedEntry[] | null>(
-        '/api/daily-book-history',
+    const getKey = (pageIndex: number, previousPageData: SavedEntry[] | null) => {
+        if (previousPageData && !previousPageData.length) return null; // reached the end
+        return `/api/daily-book-history?limit=7&offset=${pageIndex * 7}`;
+    };
+
+    const { data, error, mutate, size, setSize, isValidating } = useSWRInfinite<SavedEntry[]>(
+        getKey,
         fetcher,
         {
+            revalidateFirstPage: false,
             revalidateOnFocus: false,
-            dedupingInterval: 30000,
-            revalidateIfStale: false,
-            revalidateOnReconnect: false,
-            shouldRetryOnError: false,
+            revalidateAll: false,
+            persistSize: true,
         }
     );
 
-    return { data, isLoading, isError: error, mutate };
+    const historyData = data ? data.flat() : [];
+    const isLoadingInitialData = !data && !error;
+    const isLoadingMore = isLoadingInitialData || (size > 0 && data && typeof data[size - 1] === 'undefined');
+    const isEmpty = data?.[0]?.length === 0;
+    const isReachingEnd = isEmpty || (data && data[data.length - 1]?.length < 7);
+
+    return { 
+        data: historyData, 
+        isLoading: isLoadingInitialData, 
+        isLoadingMore,
+        isReachingEnd,
+        isError: error, 
+        mutate,
+        size,
+        setSize,
+        isValidating
+    };
 }

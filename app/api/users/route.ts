@@ -62,7 +62,7 @@ export async function POST(request: Request) {
                 true,
                 gender || null,
                 phone || null,
-                avatar_url || null,
+                (avatar_url && avatar_url.startsWith('data:image')) ? null : (avatar_url || null),
                 Array.isArray(assigned_customer_ids) ? assigned_customer_ids : []
             ]
         );

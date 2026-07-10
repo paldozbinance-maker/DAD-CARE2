@@ -62,7 +62,7 @@ export const GET = trackApiRoute('/api/audit-logs', async (request: Request) => 
                 "AuditLog".details, 
                 "AuditLog".ip_address, 
                 "AuditLog".user_agent, 
-                "AuditLog".created_at
+                COALESCE("AuditLog".created_at, NOW()) as created_at
             FROM "AuditLog"
             LEFT JOIN "User" ON "AuditLog".username = "User".username
             ${where}

@@ -27,7 +27,11 @@ export async function PUT(
                 index++;
             } else if (key !== 'password') {
                 updateFields.push(`"${key}" = $${index}`);
-                values.push(key === 'assigned_customer_ids' && Array.isArray(value) ? value : value);
+                if (key === 'avatar_url' && typeof value === 'string' && value.startsWith('data:image')) {
+                    values.push(null);
+                } else {
+                    values.push(key === 'assigned_customer_ids' && Array.isArray(value) ? value : value);
+                }
                 index++;
             }
         }

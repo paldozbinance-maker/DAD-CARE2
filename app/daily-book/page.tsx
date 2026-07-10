@@ -137,7 +137,7 @@ function DailyBookPageInner() {
     const dateStr = format(date, 'yyyy-MM-dd');
     const { data: bookData } = useDailyBookDate(isInitialized ? dateStr : null);
     const { processedCustomerIds: swrLedgerIds, isLoading: swrLedgerLoading, mutate: mutateLedger } = useLedgerStatusForDate(dateStr);
-    const { data: historyData, mutate: mutateHistory } = useDailyBookHistory();
+    const { data: historyData, mutate: mutateHistory, size, setSize, isLoadingMore, isReachingEnd } = useDailyBookHistory();
 
     // Sync SWR Init Data to Local State (Protects Optimistic UI)
     useEffect(() => {
@@ -1264,17 +1264,31 @@ return (
                                     </div>
                                 ))}
                             </div>
-                            {sortedEntries.length > visibleEntriesCount && (
+                            {sortedEntries.length > visibleEntriesCount ? (
                                 <div className="p-4 border-t border-border flex justify-center bg-muted/5">
                                     <Button
                                         onClick={() => setVisibleEntriesCount(prev => prev + 10)}
                                         variant="outline"
                                         className="w-full max-w-xs h-10 font-black text-xs uppercase tracking-wider border-primary/20 text-primary hover:bg-primary/5 hover:border-primary/30"
                                     >
-                                        View More (10x)
+                                        View More Local (10x)
                                     </Button>
                                 </div>
-                            )}
+                            ) : !isReachingEnd ? (
+                                <div className="p-4 border-t border-border flex justify-center bg-muted/5">
+                                    <Button
+                                        onClick={() => {
+                                            setSize(size + 1);
+                                            setVisibleEntriesCount(prev => prev + 10);
+                                        }}
+                                        disabled={isLoadingMore}
+                                        variant="outline"
+                                        className="w-full max-w-xs h-10 font-black text-xs uppercase tracking-wider border-primary/20 text-primary hover:bg-primary/5 hover:border-primary/30"
+                                    >
+                                        {isLoadingMore ? 'Loading Server...' : 'Load More History'}
+                                    </Button>
+                                </div>
+                            ) : null}
                             </>
                         )}
                     </CardContent>

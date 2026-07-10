@@ -91,11 +91,11 @@ export default function PaymentsPage() {
     const [filterCustomerId, setFilterCustomerId] = useState('all');
     const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
     const [filterOpen, setFilterOpen] = useState(false);
-    const [visibleCount, setVisibleCount] = useState(50);
+    const [visibleCount, setVisibleCount] = useState(10);
 
     // Reset Load More pagination whenever filters change
     useEffect(() => {
-        setVisibleCount(50);
+        setVisibleCount(10);
     }, [periodFilter, filterCustomerId, searchTerm]);
 
     const filteredPayments = useMemo(() => {
@@ -343,7 +343,7 @@ export default function PaymentsPage() {
                             {filteredPayments.length > visibleCount && (
                                 <div className="p-4">
                                     <Button 
-                                        onClick={() => setVisibleCount(prev => prev + 50)}
+                                        onClick={() => setVisibleCount(prev => prev + 10)}
                                         variant="secondary" 
                                         className="w-full text-xs font-bold bg-muted/50 hover:bg-muted"
                                     >

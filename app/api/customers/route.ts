@@ -16,22 +16,43 @@ const customerSchema = z.object({
     phone: z.string().optional().nullable(),
 });
 
-async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) {
+async function getCustomers(options: {
+    maqalD1?: string | null;
+    maqalD2?: string | null;
+    maxAllTimeDate?: string | null;
+    page?: number;
+    limit?: number;
+    search?: string | null;
+    tab?: string | null;
+    sort?: string | null;
+}) {
+    const { maqalD1, maqalD2, maxAllTimeDate, page = 1, limit = 20, search, tab = 'active', sort } = options;
+    const offset = (page - 1) * limit;
+    
+    // Add filtering based on search and tab
+    let filterCondition = "1=1";
+    if (tab === 'inactive') {
+        filterCondition += " AND c.deleted_at IS NOT NULL";
+    } else {
+        filterCondition += " AND c.deleted_at IS NULL";
+    }
+    
+    let searchCondition = "1=1";
+    if (search) {
+        searchCondition = `(c.name ILIKE $1 OR c.customer_code ILIKE $1)`;
+    }
+
+    // Add sorting logic
+    let orderClause = "ORDER BY CASE WHEN c.customer_code ~ '^[0-9]+$' THEN c.customer_code::int ELSE 9999 END ASC, c.name ASC";
+    if (sort === 'best') orderClause = "ORDER BY current_balance ASC, total_paid DESC NULLS LAST";
+    else if (sort === 'worst') orderClause = "ORDER BY current_balance DESC NULLS LAST";
+    else if (sort === 'most_paid') orderClause = "ORDER BY total_paid DESC NULLS LAST";
+    else if (sort === 'least_paid') orderClause = "ORDER BY total_paid ASC NULLS LAST";
+    else if (sort === 'most_kg') orderClause = "ORDER BY total_kg DESC NULLS LAST";
+    else if (sort === 'least_kg') orderClause = "ORDER BY total_kg ASC NULLS LAST";
+
     const query = `
         -- ── PAIR EPOCH = 2026-06-28. offset = CURRENT_DATE - epoch ─────────────────
-        -- current pair = the pair that includes TODAY
-        -- prev pair    = the pair immediately BEFORE today's pair (always fully in past)
-        --
-        -- ✅ RULE: customer is "done" when BOTH:
-        --   1. They have Ledger PRODUCT entries for both dates of the PREVIOUS pair
-        --   2. A DailyBook record exists for TODAY (today's kg book has been entered)
-        --
-        -- Today Jul 05 (offset 7): current=Jul04+05, prev=Jul02+03
-        --   ✅ for customers who processed Jul02+03 maqal, IF Jul05 DailyBook exists
-        -- Today Jul 06 (offset 8): current=Jul06+07, prev=Jul04+05
-        --   ✅ for customers who processed Jul04+05 maqal, IF Jul06 DailyBook exists
-        -- Today Jul 08 (offset 10): current=Jul08+09, prev=Jul06+07
-        --   ✅ for customers who processed Jul06+07 maqal, IF Jul08 DailyBook exists
         WITH target_pair AS (
             SELECT
                 ('2026-06-28'::date + (
@@ -147,9 +168,15 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
                 AND l.created_at >= spr.first_receipt_created_at
                 AND l.created_at < spr.next_receipt_created_at
             GROUP BY spr.customer_id
+        ),
+        base_customers AS (
+            SELECT 
+                c.id, c.name, c.customer_code, c.gender, c.phone, c.created_at, c.deleted_at
+            FROM "Customer" c
+            WHERE ${filterCondition} AND ${searchCondition}
         )
         SELECT 
-            c.id, c.name, c.customer_code, c.gender, c.phone, c.created_at, c.deleted_at,
+            c.*,
             COALESCE(l.new_debt, 0)::float as current_balance,
             COALESCE(l.type, null) as last_transaction_type,
             COALESCE(p.total_paid, 0)::float as total_paid,
@@ -157,9 +184,6 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
             COALESCE(l.last_receipt_has_payment, false) as last_receipt_has_payment,
             COALESCE(dbk.total_books_count, 0) as total_books_count,
             CASE WHEN COALESCE(dbk.total_daily_kg, 0) > COALESCE(lk.total_ledger_kg, 0) THEN 1 ELSE 0 END as unprocessed_books_count,
-            -- ✅ RULE: customer is "done" when EITHER:
-            --   1. They have Ledger PRODUCT entries for both dates of the PREVIOUS pair (e.g. Jul 02 + Jul 03).
-            --   2. They were created AFTER the prev_pair.date2 (new customers have no obligation for past pairs).
             CASE
                 WHEN COALESCE(td.prev_pair_ledger_count, 0) >= 2 THEN true
                 WHEN (c.created_at AT TIME ZONE 'Africa/Mogadishu')::date > (SELECT date2 FROM prev_pair) THEN true
@@ -189,7 +213,7 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
                 WHEN COALESCE(sms.maqal_total, 0) = 0 THEN 0
                 ELSE LEAST(100, ROUND((COALESCE(sps.payments_total, 0) / sms.maqal_total) * 100))::int
             END as selected_maqal_pct
-        FROM "Customer" c
+        FROM base_customers c
         LEFT JOIN (
             SELECT DISTINCT ON (customer_id) 
                 customer_id, 
@@ -235,9 +259,6 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
             GROUP BY customer_id
         ) lk ON c.id = lk.customer_id
         LEFT JOIN (
-            -- CONDITION 1: Count how many of the PREVIOUS pair's dates this customer
-            -- has a processed Ledger PRODUCT entry for.
-            -- Both dates must be present (count = 2) to mark as done.
             SELECT
                 customer_id,
                 COUNT(DISTINCT COALESCE((reference_date AT TIME ZONE 'Africa/Mogadishu')::date, (created_at AT TIME ZONE 'Africa/Mogadishu')::date)) as prev_pair_ledger_count
@@ -252,10 +273,18 @@ async function getCustomers(maqalD1?: string | null, maqalD2?: string | null, ma
         LEFT JOIN latest_payment_stats lps ON c.id = lps.customer_id
         LEFT JOIN selected_maqal_stats sms ON c.id = sms.customer_id
         LEFT JOIN selected_payment_stats sps ON c.id = sps.customer_id
-        ORDER BY c.name ASC;
+        ${orderClause}
+        LIMIT $${search ? '2' : '1'} OFFSET $${search ? '3' : '2'};
     `;
 
-    const { rows } = await pool.query(query);
+    const values: any[] = [];
+    if (search) {
+        values.push(`%${search}%`);
+    }
+    values.push(limit);
+    values.push(offset);
+
+    const { rows } = await pool.query(query, values);
     return rows;
 }
 
@@ -338,11 +367,11 @@ const getCachedCustomersLedger = unstable_cache(
 );
 
 const getCachedCustomersFull = unstable_cache(
-    async (maqalD1?: string | null, maqalD2?: string | null, maxAllTimeDate?: string | null) => {
-        return getCustomers(maqalD1, maqalD2, maxAllTimeDate);
+    async (options: any) => {
+        return getCustomers(options);
     },
     ['customers-full-data'],
-    { revalidate: 600, tags: ['customers', 'max'] }
+    { revalidate: 60, tags: ['customers', 'max'] } // Reduced cache time for paginated data
 );
 
 export const GET = trackApiRoute('/api/customers', async (request: Request) => {
@@ -354,6 +383,11 @@ export const GET = trackApiRoute('/api/customers', async (request: Request) => {
     const maqalD1 = searchParams.get('maqal_d1');
     const maqalD2 = searchParams.get('maqal_d2');
     const maxAllTimeDate = searchParams.get('max_all_time_date');
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const search = searchParams.get('search') || null;
+    const tab = searchParams.get('tab') || 'active';
+    const sort = searchParams.get('sort') || null;
 
     try {
         if (isLite) {
@@ -370,9 +404,9 @@ export const GET = trackApiRoute('/api/customers', async (request: Request) => {
             return res;
         }
 
-        const customers = await getCachedCustomersFull(maqalD1, maqalD2, maxAllTimeDate);
+        const customers = await getCachedCustomersFull({ maqalD1, maqalD2, maxAllTimeDate, page, limit, search, tab, sort });
         const res = NextResponse.json(customers);
-        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=60');
         return res;
     } catch (error: any) {
         console.error('Fetch Error:', error);

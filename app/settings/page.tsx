@@ -177,6 +177,7 @@ export default function SettingsPage() {
         return [];
     });
     const [auditLoading, setAuditLoading] = useState(false);
+    const [auditLoadingMore, setAuditLoadingMore] = useState(false);
     const [auditTotal, setAuditTotal] = useState(() => {
         if (typeof window !== 'undefined') {
             const cached = localStorage.getItem('dadwork_audit_total');
@@ -419,13 +420,10 @@ export default function SettingsPage() {
 
                 // ── Heartbeat every 5 minutes (300s) to stay marked ONLINE in the DB ──
                 const heartbeat = setInterval(async () => {
-                    const token = localStorage.getItem('dadwork_session_token') || '';
-                    if (token) {
-                        fetch('/api/admin-sessions', {
-                            method: 'POST',
-                            headers: { 'x-session-token': token }
-                        }).catch(() => { });
-                    }
+                    fetch('/api/admin-sessions', {
+                        method: 'POST',
+                        credentials: 'include',
+                    }).catch(() => { });
                 }, 300_000);
 
                 return () => {
@@ -438,12 +436,11 @@ export default function SettingsPage() {
     const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = false) => {
         if (!silent) setAuditLoading(true);
         try {
-            const token = localStorage.getItem('dadwork_session_token') || '';
-            const params = new URLSearchParams({ limit: '50', stats: includeStats ? 'true' : 'false' });
+            const params = new URLSearchParams({ limit: '20', stats: includeStats ? 'true' : 'false' });
             if (userFilter) params.set('user', userFilter);
             if (actionFilter) params.set('action', actionFilter);
             const res = await fetch(`/api/audit-logs?${params}`, {
-                headers: { 'x-session-token': token }
+                credentials: 'include',
             });
             if (res.ok) {
                 try {
@@ -451,8 +448,7 @@ export default function SettingsPage() {
                     setAuditLogs(data.logs || []);
                     setAuditTotal(data.total || 0);
                     try {
-                        // Only cache first 50 items to avoid quota limit
-                        localStorage.setItem('dadwork_audit_logs', JSON.stringify((data.logs || []).slice(0, 50)));
+                        localStorage.setItem('dadwork_audit_logs', JSON.stringify((data.logs || []).slice(0, 20)));
                         localStorage.setItem('dadwork_audit_total', String(data.total || 0));
                     } catch (e) { console.warn('LocalStorage quota limit reached for audit logs', e); }
                     
@@ -474,12 +470,31 @@ export default function SettingsPage() {
         }
     };
 
+    const loadMoreAuditLogs = async () => {
+        setAuditLoadingMore(true);
+        try {
+            const params = new URLSearchParams({ limit: '20', offset: String(auditLogs.length), stats: 'false' });
+            if (auditFilterUser) params.set('user', auditFilterUser);
+            if (auditFilterAction) params.set('action', auditFilterAction);
+            const res = await fetch(`/api/audit-logs?${params}`, {
+                credentials: 'include',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAuditLogs(prev => [...prev, ...(data.logs || [])]);
+            }
+        } catch (e) {
+            console.error('Failed to load more audit logs:', e);
+        } finally {
+            setAuditLoadingMore(false);
+        }
+    };
+
     const loadAuditStats = async () => {
         try {
-            const token = localStorage.getItem('dadwork_session_token') || '';
             const params = new URLSearchParams({ limit: '1', stats: 'true' });
             const res = await fetch(`/api/audit-logs?${params}`, {
-                headers: { 'x-session-token': token }
+                credentials: 'include',
             });
             if (res.ok) {
                 try {
@@ -500,9 +515,8 @@ export default function SettingsPage() {
 
     const loadOnlineSessions = async () => {
         try {
-            const token = localStorage.getItem('dadwork_session_token') || '';
             const res = await fetch('/api/admin-sessions', {
-                headers: { 'x-session-token': token }
+                credentials: 'include',
             });
             if (res.ok) {
                 try {
@@ -1940,6 +1954,7 @@ export default function SettingsPage() {
                                                 <p className="text-[10px] text-muted-foreground mt-1">Events will appear here as admins use the system</p>
                                             </div>
                                         ) : (
+                                            <>
                                             <div className="divide-y divide-border/20 max-h-[55vh] overflow-y-auto">
                                                 {auditLogs.map((log: any) => {
                                                     const action = log.action as string;
@@ -2028,6 +2043,22 @@ export default function SettingsPage() {
                                                     );
                                                 })}
                                             </div>
+                                            {auditLogs.length < auditTotal && (
+                                                <div className="p-3 border-t border-border/20">
+                                                    <button
+                                                        onClick={() => loadMoreAuditLogs()}
+                                                        disabled={auditLoadingMore}
+                                                        className="w-full py-2 text-[11px] font-bold text-primary hover:bg-primary/5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                    >
+                                                        {auditLoadingMore ? (
+                                                            <><Loader2 className="w-3 h-3 animate-spin" /> Loading...</>
+                                                        ) : (
+                                                            <>Load More ({auditTotal - auditLogs.length} remaining)</>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                            </>
                                         )}
                                     </div>
                                 </div>

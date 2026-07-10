@@ -7,6 +7,10 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
     const { errorResponse } = await requireSession(request);
     if (errorResponse) return errorResponse;
 
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '7', 10);
+    const offset = parseInt(searchParams.get('offset') || '0', 10);
+
     try {
         const { rows: historyResult } = await pool.query(`
             SELECT 
@@ -38,8 +42,8 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
             WHERE db.deleted_at IS NULL
             GROUP BY db.id, db.date
             ORDER BY db.date DESC
-            LIMIT 14
-        `);
+            LIMIT $1 OFFSET $2
+        `, [limit, offset]);
 
         const history = (historyResult || []).map((book: any) => {
             const itemsList: any[] = typeof book.items === 'string'
@@ -62,8 +66,6 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
         });
 
         const response = NextResponse.json(history);
-        // Cache at CDN edge for 30s, serve stale for 2min while revalidating.
-        // revalidatePath('/api/daily-book-history') is called on every save/delete.
         response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
         return response;
     } catch (error: any) {
@@ -71,3 +73,4 @@ export const GET = trackApiRoute('/api/daily-book-history', async (request: Requ
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 });
+

@@ -20,7 +20,7 @@ import {
     DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import useSWR from 'swr';
-
+import useSWRInfinite from 'swr/infinite';
 const fetcher = async (url: string) => {
     // Cookie-only auth (credentials: include) — NO x-session-token header.
     // Custom headers prevent Vercel CDN caching; cookies allow it.
@@ -55,7 +55,6 @@ export default function CustomersPage() {
     const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
     const [currentUser, setCurrentUser] = useState<any | null>(null);
     const [filterType, setFilterType] = useState<string>('default');
-    const [visibleCount, setVisibleCount] = useState(50);
     const [rankingMode, setRankingMode] = useState<'maqalka' | 'lacagta'>('maqalka');
     const [selectedMaqalPair, setSelectedMaqalPair] = useState<string>('latest');
     const [showAllTimePct, setShowAllTimePct] = useState<Record<string, boolean>>({});
@@ -74,14 +73,14 @@ export default function CustomersPage() {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
             setIsSearching(false);
-            setVisibleCount(50); // Reset pagination on new search
+            setSize(1); // Reset pagination on new search
         }, 300);
         return () => clearTimeout(timer);
     }, [searchTerm, debouncedSearch]);
 
     // Reset Load More pagination when filter or tab changes
     useEffect(() => {
-        setVisibleCount(50);
+        setSize(1);
     }, [filterType, activeTab, selectedMaqalPair]);
 
     // Helper to format pair date strings like "2026-06-28" or ISO → "28 Jun"
@@ -122,31 +121,42 @@ export default function CustomersPage() {
         return formatted.includes(q) || day1 === q || day2 === q || day1.startsWith(q) || day2.startsWith(q);
     });
 
-    // ⚡ SWR: Instant cache — no more spinner every time you visit this page
-    // When 'latest' is selected, use the qualified latest pair (≥20 payments)
-    const customersUrl = (() => {
-        let baseUrl = '/api/customers';
+    const getKey = (pageIndex: number, previousPageData: Customer[]) => {
+        if (previousPageData && !previousPageData.length) return null; // reached the end
+        
+        const params = new URLSearchParams();
+        params.append('page', (pageIndex + 1).toString());
+        params.append('limit', '20');
+        
         if (selectedMaqalPair === 'latest' && latestPair) {
-            baseUrl += `?maqal_d1=${latestPair.date1}&maqal_d2=${latestPair.date2}`;
+            params.append('maqal_d1', latestPair.date1);
+            params.append('maqal_d2', latestPair.date2);
         } else if (selectedMaqalPair && selectedMaqalPair.includes('|')) {
-            baseUrl += `?maqal_d1=${selectedMaqalPair.split('|')[0]}&maqal_d2=${selectedMaqalPair.split('|')[1]}`;
+            params.append('maqal_d1', selectedMaqalPair.split('|')[0]);
+            params.append('maqal_d2', selectedMaqalPair.split('|')[1]);
         }
         
-        // Pass the max date to exclude "waiting" maqals from All-Time calculations
         if (latestPair) {
-            const separator = baseUrl.includes('?') ? '&' : '?';
-            baseUrl += `${separator}max_all_time_date=${latestPair.date1}`;
+            params.append('max_all_time_date', latestPair.date1);
+        }
+
+        if (debouncedSearch) {
+            params.append('search', debouncedSearch);
+        }
+        params.append('tab', activeTab);
+        if (filterType !== 'default') {
+            params.append('sort', filterType);
         }
         
-        return baseUrl;
-    })();
+        return `/api/customers?${params.toString()}`;
+    };
 
-    const { data: customersData, isLoading, mutate: mutateCustomers } = useSWR<Customer[]>(
-        customersUrl,
+    const { data: customersDataPages, isLoading, size, setSize, mutate: mutateCustomers } = useSWRInfinite<Customer[]>(
+        getKey,
         fetcher,
         { revalidateOnFocus: false, dedupingInterval: 600000, revalidateOnReconnect: false, revalidateIfStale: false }
     );
-    const customers = customersData || [];
+    const customers = customersDataPages ? customersDataPages.flat() : [];
 
     const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('dadwork_session_token') || '' : '';
 
@@ -156,8 +166,8 @@ export default function CustomersPage() {
         if (!confirm('Move this customer to Inactive? Their history will be preserved and they can be recovered.')) return;
         setManagingCustomerId(customerId);
         
-        // Optimistic UI Update: instantly set is_inactive to true
-        mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: true } : c) : [], { revalidate: false });
+        // Optimistic UI Update is disabled when paginating to avoid complex state management
+        // mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: true } : c) : [], { revalidate: false });
         
         try {
             const res = await fetch(`/api/customers?id=${customerId}`, {
@@ -178,8 +188,8 @@ export default function CustomersPage() {
         if (!confirm('Restore this customer to Active? They will re-appear in all lists with their original ID and history.')) return;
         setManagingCustomerId(customerId);
         
-        // Optimistic UI Update: instantly set is_inactive to false and hide the ugly UUID
-        mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: false, customer_code: (c.customer_code.startsWith('del_') || c.customer_code.length > 20) ? '...' : c.customer_code } : c) : [], { revalidate: false });
+        // Optimistic UI Update is disabled when paginating to avoid complex state management
+        // mutateCustomers((prev: any) => prev ? prev.map((c: any) => c.id === customerId ? { ...c, is_inactive: false, customer_code: (c.customer_code.startsWith('del_') || c.customer_code.length > 20) ? '...' : c.customer_code } : c) : [], { revalidate: false });
 
         try {
             const res = await fetch(`/api/customers?id=${customerId}&restore=true`, {
@@ -200,8 +210,8 @@ export default function CustomersPage() {
         if (!confirm(`⚠️ PERMANENTLY DELETE "${name}"? This will erase ALL their ledger entries, daily book history, and cannot be undone!`)) return;
         setManagingCustomerId(customerId);
         
-        // Optimistic UI Update: instantly remove from the list
-        mutateCustomers((prev: any) => prev ? prev.filter((c: any) => c.id !== customerId) : [], { revalidate: false });
+        // Optimistic UI Update is disabled when paginating to avoid complex state management
+        // mutateCustomers((prev: any) => prev ? prev.filter((c: any) => c.id !== customerId) : [], { revalidate: false });
 
         try {
             const res = await fetch(`/api/customers?id=${customerId}&permanent=true`, {
@@ -259,61 +269,11 @@ export default function CustomersPage() {
         };
     }, [mutateCustomers]);
 
+    // Backend now handles all filtering and sorting!
+    const filteredCustomers = customers;
+
     const activeCustomers = customers.filter(c => !(c as any).is_inactive);
     const inactiveCustomers = customers.filter(c => (c as any).is_inactive);
-
-    // If searching, search ALL customers regardless of tab. Otherwise use activeTab.
-    const baseList = debouncedSearch.trim() !== '' ? customers : (activeTab === 'active' ? activeCustomers : inactiveCustomers);
-
-    const filteredCustomers = baseList.filter(c => {
-        if (filterType === 'priority' && !currentUser?.assigned_customer_ids?.includes(c.id)) return false;
-
-        const term = debouncedSearch.toLowerCase().trim();
-        const cleanTerm = term.replace(/[^a-z0-9]/g, '');
-        const cleanPhoneQuery = debouncedSearch.replace(/[^0-9]/g, '');
-        
-        const nameMatch = c.name && c.name.toLowerCase().includes(term);
-        const cleanNameMatch = c.name && cleanTerm && c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanTerm);
-        const phoneMatch = c.phone && cleanPhoneQuery && c.phone.replace(/[^0-9]/g, '').includes(cleanPhoneQuery);
-        const codeMatch = c.customer_code && c.customer_code.toString().toLowerCase().includes(term);
-        
-        return nameMatch || cleanNameMatch || phoneMatch || codeMatch;
-    }).sort((a, b) => {
-        if (filterType === 'most_paid') {
-            return ((b as any).total_paid || 0) - ((a as any).total_paid || 0);
-        } else if (filterType === 'least_paid') {
-            return ((a as any).total_paid || 0) - ((b as any).total_paid || 0);
-        } else if (filterType === 'most_kg') {
-            const avgA = (a as any).total_books_count ? ((a as any).total_kg || 0) / (a as any).total_books_count : 0;
-            const avgB = (b as any).total_books_count ? ((b as any).total_kg || 0) / (b as any).total_books_count : 0;
-            return avgB - avgA;
-        } else if (filterType === 'least_kg') {
-            const avgA = (a as any).total_books_count ? ((a as any).total_kg || 0) / (a as any).total_books_count : 0;
-            const avgB = (b as any).total_books_count ? ((b as any).total_kg || 0) / (b as any).total_books_count : 0;
-            return avgA - avgB;
-        } else if (filterType === 'best_maqal' || filterType === 'worst_maqal' || filterType === 'best_lacag' || filterType === 'worst_lacag') {
-            const getPct = (c: any) => {
-                if (selectedMaqalPair === 'all_time' || showAllTimePct[c.id]) return c.all_time_maqal_pct ?? -1;
-                return c.selected_maqal_pct ?? c.latest_maqal_pct ?? -1;
-            };
-            const pctA = getPct(a);
-            const pctB = getPct(b);
-            const debtA = (a as any).current_balance ?? 0;
-            const debtB = (b as any).current_balance ?? 0;
-
-            if (filterType === 'best_maqal') return pctB - pctA;
-            if (filterType === 'worst_maqal') return pctA - pctB;
-            if (filterType === 'best_lacag') return debtA - debtB;
-            if (filterType === 'worst_lacag') return debtB - debtA;
-        }
-
-        // default behavior
-
-
-        const idA = parseInt(a.customer_code.replace(/\D/g, ''), 10) || 0;
-        const idB = parseInt(b.customer_code.replace(/\D/g, ''), 10) || 0;
-        return idA - idB;
-    });
 
     return (
         <div className="space-y-4 max-w-2xl mx-auto px-1 md:px-0" suppressHydrationWarning>
@@ -571,7 +531,7 @@ export default function CustomersPage() {
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {filteredCustomers.slice(0, visibleCount).map((customer, index) => {
+                        {customers.map((customer, index) => {
                             const isMale = customer.gender === 'Male';
                             const isFemale = customer.gender === 'Female';
                             const accentColor = isMale ? 'text-blue-400' : isFemale ? 'text-pink-400' : 'text-primary';
@@ -730,15 +690,15 @@ export default function CustomersPage() {
                     </div>
                 )}
                 
-                {filteredCustomers.length > visibleCount && (
+                {customersDataPages && customersDataPages[customersDataPages.length - 1]?.length === 20 && (
                     <div className="p-4 pt-2">
                         <Button 
-                            onClick={() => setVisibleCount(prev => prev + 50)}
+                            onClick={() => setSize(size + 1)}
                             variant="secondary" 
                             className="w-full text-xs font-bold bg-muted/50 hover:bg-muted"
                         >
                             <RefreshCw className="w-3.5 h-3.5 mr-2 opacity-50" />
-                            Load More ({filteredCustomers.length - visibleCount} remaining)
+                            Load More
                         </Button>
                     </div>
                 )}
