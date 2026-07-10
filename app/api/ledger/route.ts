@@ -176,7 +176,7 @@ export const POST = trackApiRoute('/api/ledger', async (request: Request) => {
                     ]
                 );
             }
-            }
+
 
             await client.query('COMMIT');
         } catch (error) {
