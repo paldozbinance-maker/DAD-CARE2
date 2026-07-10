@@ -58,6 +58,7 @@ export const GET = trackApiRoute('/api/audit-logs', async (request: Request) => 
         const { searchParams } = new URL(request.url);
         const filterUser = searchParams.get('user') || '';
         const filterAction = searchParams.get('action') || '';
+        const filterDays = parseInt(searchParams.get('days') || '0', 10); // 0 = no limit
         const limit = parseInt(searchParams.get('limit') || '200', 10);
         const offset = parseInt(searchParams.get('offset') || '0', 10);
 
@@ -78,6 +79,14 @@ export const GET = trackApiRoute('/api/audit-logs', async (request: Request) => 
 
         const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+        // Build a date-limited WHERE for the feed query (not the total count)
+        const feedConditions = [...conditions];
+        let feedIdx = idx;
+        const feedParams = [...params];
+        if (filterDays > 0) {
+            feedConditions.push(`"AuditLog".created_at >= NOW() - INTERVAL '${filterDays} days'`);
+        }
+        const feedWhere = feedConditions.length > 0 ? `WHERE ${feedConditions.join(' AND ')}` : '';
         // Main logs query — includes device info for each event
         const logsQuery = `
             SELECT 
@@ -93,13 +102,13 @@ export const GET = trackApiRoute('/api/audit-logs', async (request: Request) => 
                 COALESCE("AuditLog".created_at, NOW()) as created_at
             FROM "AuditLog"
             LEFT JOIN "User" ON "AuditLog".username = "User".username
-            ${where}
+            ${feedWhere}
             ORDER BY "AuditLog".created_at DESC
-            LIMIT $${idx++} OFFSET $${idx++}
+            LIMIT $${feedIdx++} OFFSET $${feedIdx++}
         `;
-        params.push(limit, offset);
+        feedParams.push(limit, offset);
 
-        const { rows: logs } = await pool.query(logsQuery, params);
+        const { rows: logs } = await pool.query(logsQuery, feedParams);
 
         // Count total
         const countParams = conditions.length > 0 ? params.slice(0, conditions.length) : [];

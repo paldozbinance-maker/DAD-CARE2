@@ -433,12 +433,13 @@ export default function SettingsPage() {
         }
     }, []);
 
-    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = false) => {
+    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = false, days = 3) => {
         if (!silent) setAuditLoading(true);
         try {
             const params = new URLSearchParams({ limit: '20', stats: includeStats ? 'true' : 'false' });
             if (userFilter) params.set('user', userFilter);
             if (actionFilter) params.set('action', actionFilter);
+            if (days > 0) params.set('days', String(days)); // limit to last N days
             const res = await fetch(`/api/audit-logs?${params}`, {
                 credentials: 'include',
             });
@@ -1919,7 +1920,7 @@ export default function SettingsPage() {
                                                 </div>
                                                 <div>
                                                     <h3 className="text-sm font-bold text-foreground">Activity Log</h3>
-                                                    <p className="text-[10px] text-muted-foreground">{auditTotal} total events recorded forever</p>
+                                                    <p className="text-[10px] text-muted-foreground">Last 72 hours · {auditTotal} total all-time</p>
                                                 </div>
                                             </div>
                                             <button

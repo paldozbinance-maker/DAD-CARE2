@@ -872,8 +872,15 @@ return (
                                             <Edit className="w-3 h-3 mr-1" /> Edit
                                         </Button>
                                     )}
-                                    <Button variant="ghost" size="icon" onClick={() => setFocusedEntry(null)} className="h-9 w-9 text-muted-foreground hover:text-foreground rounded-full">
-                                        <span className="text-lg font-bold leading-none">✕</span>
+                                    {/* Back button — large and prominent on mobile */}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setFocusedEntry(null)}
+                                        className="h-10 px-3 font-black text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-xl flex items-center gap-1.5 active:scale-95 transition-all"
+                                    >
+                                        <X className="h-5 w-5" />
+                                        <span className="text-sm md:hidden">Back</span>
                                     </Button>
                                 </div>
                             </div>
