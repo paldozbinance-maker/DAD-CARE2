@@ -29,10 +29,12 @@ if (!globalThis.pool) {
         // The Supabase Pooler (DATABASE_URL) will multiplex these connections perfectly.
         max: 1, 
         
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 10000,
+        // VERCEL SERVERLESS OPTIMIZATIONS:
+        // Kill idle connections immediately after 1 second so Vercel functions don't hold connections open when frozen.
+        idleTimeoutMillis: 1000,
+        connectionTimeoutMillis: 5000,
         
-        // Optional but recommended for serverless: allow closing idle connections early
+        // Allow the Node.js event loop to exit even if a DB connection is technically idle.
         allowExitOnIdle: true,
     });
 }
