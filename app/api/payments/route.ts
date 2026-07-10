@@ -63,7 +63,7 @@ export const GET = trackApiRoute('/api/payments', async (request: Request) => {
             totalAllTime,
             count: payments.length,
         });
-        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
         return response;
     } catch (error: any) {
         console.error('Payments Fetch Error:', error);

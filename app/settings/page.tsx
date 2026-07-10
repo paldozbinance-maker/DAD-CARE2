@@ -536,12 +536,25 @@ export default function SettingsPage() {
     };
 
     const loadUsers = async () => {
+        // Show cached data instantly to avoid blank flash
+        const cached = localStorage.getItem('dadwork_settings_users');
+        const cachedAt = localStorage.getItem('dadwork_settings_users_at');
+        const AGE_LIMIT = 5 * 60 * 1000; // 5 min
+        const isStale = !cachedAt || Date.now() - parseInt(cachedAt) > AGE_LIMIT;
+        if (cached) {
+            try { setUsers(JSON.parse(cached)); } catch {}
+        }
+        if (!isStale && cached) return; // Skip network fetch — data is fresh
         setUsersLoading(true);
         try {
             const res = await fetch('/api/users');
             const data = await res.json();
             if (res.ok && Array.isArray(data)) {
                 setUsers(data);
+                try {
+                    localStorage.setItem('dadwork_settings_users', JSON.stringify(data));
+                    localStorage.setItem('dadwork_settings_users_at', String(Date.now()));
+                } catch {}
             }
         } catch (e) {
             toast.error('Failed to load users');
@@ -551,11 +564,24 @@ export default function SettingsPage() {
     };
 
     const loadCustomers = async () => {
+        // Show cached data instantly
+        const cached = localStorage.getItem('dadwork_settings_customers');
+        const cachedAt = localStorage.getItem('dadwork_settings_customers_at');
+        const AGE_LIMIT = 5 * 60 * 1000; // 5 min
+        const isStale = !cachedAt || Date.now() - parseInt(cachedAt) > AGE_LIMIT;
+        if (cached) {
+            try { setAllCustomers(JSON.parse(cached)); } catch {}
+        }
+        if (!isStale && cached) return; // Skip — still fresh
         try {
             const res = await fetch('/api/customers?lite=true');
             const data = await res.json();
             if (res.ok && Array.isArray(data)) {
                 setAllCustomers(data);
+                try {
+                    localStorage.setItem('dadwork_settings_customers', JSON.stringify(data));
+                    localStorage.setItem('dadwork_settings_customers_at', String(Date.now()));
+                } catch {}
             }
         } catch (e) {
             console.error('Failed to load customers:', e);

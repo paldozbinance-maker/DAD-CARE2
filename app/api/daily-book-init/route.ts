@@ -37,7 +37,7 @@ export const GET = trackApiRoute('/api/daily-book-init', async (request: Request
         const response = NextResponse.json(data);
         // Cache at edge for 30s, serve stale for 2min while revalidating.
         // revalidatePath is called on every customer add/edit/delete to bust this.
-        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
         return response;
     } catch (error: any) {
         console.error('Daily Book Init Error:', error);

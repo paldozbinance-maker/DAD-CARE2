@@ -163,7 +163,7 @@ export async function getOnlineSessions(): Promise<SessionData[]> {
         await ensureTable();
         const cutoff = new Date(Date.now() - ONLINE_THRESHOLD_MS);
         const { rows } = await pool.query(
-            `SELECT user_id, username, name, role, avatar_url, login_at, last_seen_at, ip_address, user_agent FROM "AdminSession"
+            `SELECT user_id, username, name, role, login_at, last_seen_at, ip_address FROM "AdminSession"
              WHERE expires_at > NOW() AND last_seen_at >= $1
              ORDER BY last_seen_at DESC`,
             [cutoff]
@@ -177,7 +177,7 @@ export async function getAllSessions(): Promise<SessionData[]> {
     try {
         await ensureTable();
         const { rows } = await pool.query(
-            `SELECT user_id, username, name, role, avatar_url, login_at, last_seen_at, ip_address, user_agent FROM "AdminSession" WHERE expires_at > NOW() ORDER BY last_seen_at DESC`
+            `SELECT user_id, username, name, role, login_at, last_seen_at, ip_address FROM "AdminSession" WHERE expires_at > NOW() ORDER BY last_seen_at DESC`
         );
         return rows.map(rowToSession);
     } catch { return []; }
@@ -191,11 +191,11 @@ function rowToSession(r: any): SessionData {
         username: r.username,
         name: r.name,
         role: r.role,
-        avatarUrl: r.avatar_url,
+        avatarUrl: null,    // stripped — never send avatars from session table
         createdAt: new Date(r.login_at).getTime(),
         lastSeenAt: new Date(r.last_seen_at).getTime(),
         loginAt: new Date(r.login_at).toISOString(),
         ipAddress: r.ip_address,
-        userAgent: r.user_agent,
+        userAgent: undefined,   // stripped — not needed by UI
     };
 }
