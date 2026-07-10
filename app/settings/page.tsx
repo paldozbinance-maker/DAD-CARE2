@@ -400,8 +400,8 @@ export default function SettingsPage() {
             // Load per-user maqal progress
             const loadPerUserMaqal = async () => {
                 try {
-                    const token = localStorage.getItem('dadwork_session_token') || '';
-                    const res = await fetch('/api/maqal-per-user', { headers: { 'x-session-token': token } });
+                    // Cookie auth — NO x-session-token so Vercel CDN can cache this GET
+                    const res = await fetch('/api/maqal-per-user', { credentials: 'include' });
                     if (res.ok) {
                         const data = await res.json();
                         setPerUserMaqal(data.users || []);

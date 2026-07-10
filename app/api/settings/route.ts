@@ -41,31 +41,56 @@ export const POST = trackApiRoute('/api/settings', async (request: Request) => {
         }
         const { key, value } = result.data;
 
-        // Create table if not exists
+        // Ensure table exists
         await pool.query(`
             CREATE TABLE IF NOT EXISTS "Settings" (
-                key VARCHAR(255) PRIMARY KEY,
+                key VARCHAR(255),
                 value TEXT NOT NULL
             );
         `);
-        
-        // Ensure constraint exists for older DBs that might have created the table without a primary key
-        try {
-            await pool.query(`ALTER TABLE "Settings" ADD CONSTRAINT settings_key_unique UNIQUE (key);`);
-        } catch(e) {
-            // Ignore if constraint already exists
-        }
 
-        await pool.query(
-            `INSERT INTO "Settings" (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
-            [key, value.toString()]
+        // Safe upsert: UPDATE existing row, INSERT only if no row was updated.
+        // This works even if the table has no UNIQUE/PRIMARY KEY constraint.
+        const strVal = value.toString();
+        const updateResult = await pool.query(
+            `UPDATE "Settings" SET value = $2 WHERE key = $1`,
+            [key, strVal]
         );
+
+        if (updateResult.rowCount === 0) {
+            // No existing row — delete any stale duplicates then insert fresh
+            await pool.query(`DELETE FROM "Settings" WHERE key = $1`, [key]);
+            await pool.query(
+                `INSERT INTO "Settings" (key, value) VALUES ($1, $2)`,
+                [key, strVal]
+            );
+        }
 
         await logAudit(request, 'UPDATE_SETTING', `Updated setting ${key} to ${value}`);
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Settings POST Error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+});
+
+export const DELETE = trackApiRoute('/api/settings', async (request: Request) => {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    try {
+        const { searchParams } = new URL(request.url);
+        const key = searchParams.get('key');
+        if (!key) {
+            return NextResponse.json({ error: 'Key is required' }, { status: 400 });
+        }
+
+        await pool.query(`DELETE FROM "Settings" WHERE key = $1`, [key]);
+        await logAudit(request, 'DELETE_SETTING', `Deleted setting ${key}`);
+
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        console.error('Settings DELETE Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 });

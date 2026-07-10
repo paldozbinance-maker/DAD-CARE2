@@ -159,8 +159,9 @@ export default function CustomerDetailPage() {
     const [maqalStatus, setMaqalStatus] = useState<{ date1: string; date2: string; has_payment: boolean } | null>(null);
 
     useEffect(() => {
-        const token = localStorage.getItem('dadwork_session_token') || '';
-        fetch('/api/maqal-latest', { headers: { 'x-session-token': token } })
+        // Use credentials:include (cookie auth) — NOT x-session-token header,
+        // so Vercel CDN can cache this response and reduce egress.
+        fetch('/api/maqal-latest', { credentials: 'include' })
             .then(r => r.json())
             .then(data => {
                 if (data?.customers && customerId) {

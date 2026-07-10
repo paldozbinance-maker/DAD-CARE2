@@ -93,6 +93,10 @@ export default function PaymentsPage() {
     const [filterOpen, setFilterOpen] = useState(false);
     const [visibleCount, setVisibleCount] = useState(50);
 
+    // Reset Load More pagination whenever filters change
+    useEffect(() => {
+        setVisibleCount(50);
+    }, [periodFilter, filterCustomerId, searchTerm]);
 
     const filteredPayments = useMemo(() => {
         let list = data?.payments || [];
