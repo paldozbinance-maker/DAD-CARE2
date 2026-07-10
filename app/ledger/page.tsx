@@ -869,7 +869,7 @@ export default function LedgerPage() {
         }
 
         setLoading(true);
-        const receiptId = (updateLastMaqal && lastReceiptGroup?.receiptId)
+        const receiptId = (showLastMaqal && lastReceiptGroup?.receiptId)
             ? lastReceiptGroup.receiptId
             : crypto.randomUUID();
 
