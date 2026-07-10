@@ -584,6 +584,8 @@ export default function LedgerPage() {
                 totalAdjustment,
                 openingBalance: group[group.length - 1].previous_debt || 0,
                 closingBalance: last.new_debt,
+                receiptId: group.find(t => t.receipt_id && !t.receipt_id.startsWith('PAYMENT-'))?.receipt_id || null,
+                maqalId: group.find(t => t.maqal_id != null)?.maqal_id || null
             };
         });
 
@@ -848,6 +850,11 @@ export default function LedgerPage() {
             ? lastReceiptGroup.receiptId
             : crypto.randomUUID();
 
+        // If editing/paying the last maqal, USE ITS MAQAL ID. Otherwise use the current unprocessed one.
+        const targetMaqalId = (showLastMaqal && lastReceiptGroup?.maqalId != null) 
+            ? lastReceiptGroup.maqalId 
+            : currentMaqalId;
+
         // 1. Gather all items for the batch
         const items = [];
 
@@ -918,7 +925,7 @@ export default function LedgerPage() {
                 body: JSON.stringify({
                     customerId: selectedCustomerId,
                     receipt_id: receiptId,
-                    maqal_id: currentMaqalId,
+                    maqal_id: targetMaqalId,
                     items: items
                 })
             });
