@@ -74,5 +74,7 @@ model Ledger {
   previous_debt  Float
   new_debt       Float
   note           String?
+  receipt_id     String?
+  maqal_id       Int?
   created_at     DateTime   @default(now())
 }
