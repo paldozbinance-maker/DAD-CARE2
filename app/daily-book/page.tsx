@@ -529,7 +529,7 @@ return (
                         className={`h-11 rounded-xl px-5 font-black uppercase tracking-wider text-xs transition-all ${viewMode === 'details' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5' : 'border-border/60 bg-background/50 backdrop-blur-sm text-foreground hover:bg-accent'}`}
                     >
                         <FileText className="w-4 h-4 mr-2 text-current opacity-80" />
-                        History <span className="ml-1.5 opacity-70">({savedEntries.length})</span>
+                        History <span className="ml-1.5 opacity-70">({Math.max(initData?.historyCount || 0, savedEntries.length)})</span>
                     </Button>
                 </div>
             </div>
@@ -818,7 +818,7 @@ return (
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-2 w-full md:w-auto">
+                                <div className="hidden md:flex gap-2 w-full md:w-auto">
                                     {editingDate && (
                                         <Button variant="outline" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-8 md:h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50">Cancel</Button>
                                     )}
@@ -832,19 +832,26 @@ return (
 
                         {/* Mobile sticky save bar */}
                         {!saving && totalKg > 0 && viewMode === 'edit' && (
-                            <div className="fixed bottom-[68px] left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-border md:hidden z-40 animate-in slide-in-from-bottom duration-500">
-                                <Button onClick={handleSave} className="w-full h-16 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-xl shadow-primary/30">
-                                    <div className="flex items-center justify-between w-full px-4">
-                                        <div className="text-left">
-                                            <p className="text-[10px] opacity-60 leading-none mb-1">Total Quantity</p>
-                                            <p className="text-2xl leading-none">{Math.round(totalKg)} KG</p>
+                            <div className="fixed bottom-[68px] left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t border-border md:hidden z-40 animate-in slide-in-from-bottom duration-300">
+                                <div className="flex flex-col gap-2">
+                                    {editingDate && (
+                                        <Button variant="outline" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="w-full h-10 rounded-xl border-border text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
+                                            Cancel Editing
+                                        </Button>
+                                    )}
+                                    <Button onClick={handleSave} className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all">
+                                        <div className="flex items-center justify-between w-full px-2">
+                                            <div className="text-left">
+                                                <p className="text-[10px] opacity-70 leading-none mb-1">Total Quantity</p>
+                                                <p className="text-xl leading-none">{Math.round(totalKg)} KG</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-black/10 px-4 py-2 rounded-lg">
+                                                <Save className="w-4 h-4" />
+                                                <span>{editingDate ? 'UPDATE' : 'SAVE'}</span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl">
-                                            <Save className="w-5 h-5" />
-                                            <span>Save</span>
-                                        </div>
-                                    </div>
-                                </Button>
+                                    </Button>
+                                </div>
                             </div>
                         )}
                     </CardContent>
