@@ -864,16 +864,15 @@ return (
                             </div>
                         </div>
 
-                        {/* Mobile sticky save bar — always visible in edit mode or while saving */}
+                        {/* Mobile save bar — sits at the bottom of the list */}
                         {(viewMode === 'edit' || saving) && (
-                            <div className="fixed bottom-[80px] left-0 right-0 px-3 py-2 bg-background/95 backdrop-blur-xl border-t border-border md:hidden z-[9999] animate-in slide-in-from-bottom duration-200">
+                            <div className="mt-6 md:hidden animate-in fade-in duration-200">
                                 <div className="flex items-center gap-2">
                                     {/* X cancel button — always in-row so it can never be clipped or hidden */}
                                     {editingDate && !saving && (
                                         <Button 
                                             variant="outline" 
                                             size="icon"
-                                            onPointerDown={(e) => e.preventDefault()}
                                             onClick={handleCancelEdit} 
                                             className="shrink-0 w-12 h-12 rounded-xl border-border text-muted-foreground hover:bg-muted hover:text-foreground shadow-sm active:scale-95 transition-all"
                                         >
@@ -882,7 +881,6 @@ return (
                                     )}
                                     <Button 
                                         onClick={handleSave} 
-                                        onPointerDown={(e) => e.preventDefault()}
                                         disabled={saving} 
                                         className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70"
                                     >
