@@ -51,7 +51,7 @@ export const GET = trackApiRoute('/api/daily-book-history-full', async (request:
         });
 
         const response = NextResponse.json(history);
-        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+        response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
         return response;
     } catch (error: any) {
         console.error('Fetch Daily Book Full History Error:', error);

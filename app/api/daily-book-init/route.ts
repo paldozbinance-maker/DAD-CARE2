@@ -23,9 +23,17 @@ async function getDailyBookInit() {
     `);
     const latestDate = recent.length > 0 ? recent[0].date : null;
 
+    // Get total number of saved days
+    const { rows: countRow } = await pool.query(`
+      SELECT COUNT(*) as total FROM "DailyBook"
+      WHERE deleted_at IS NULL
+    `);
+    const historyCount = parseInt(countRow[0].total, 10) || 0;
+
     return {
       customers,
       latestDate,
+      historyCount,
     };
 }
 
@@ -35,9 +43,8 @@ export const GET = trackApiRoute('/api/daily-book-init', async (request: Request
     try {
         const data = await getDailyBookInit();
         const response = NextResponse.json(data);
-        // Cache at edge for 30s, serve stale for 2min while revalidating.
-        // revalidatePath is called on every customer add/edit/delete to bust this.
-        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        // Force NO CACHING because Vercel edge CDN was holding onto stale historyCounts for 5+ minutes
+        response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
         return response;
     } catch (error: any) {
         console.error('Daily Book Init Error:', error);
