@@ -194,11 +194,14 @@ function DailyBookPageInner() {
     };
 
     // Sync SWR History Data to Local State
+    // IMPORTANT: Do NOT sync while saving — the server data might be stale
+    // and would overwrite the confirmed local entry we just set.
     useEffect(() => {
+        if (saving) return; // Never overwrite during an active save
         if (Array.isArray(historyData)) {
             setSavedEntries(populateHistoryWithCustomers(historyData));
         }
-    }, [historyData, customers]);
+    }, [historyData, customers]); // do NOT add `saving` here — we want it to fire on data change only
 
 
 
@@ -241,50 +244,21 @@ function DailyBookPageInner() {
                 customer: customers.find(c => c.id === customer_id)
             }));
 
-        // OPTIMISTIC UI UPDATE: Instantly reflect the change locally
-        const newEntry: SavedEntry = {
-            date: dateStr,
-            totalKg: items.reduce((sum, item) => sum + item.kg, 0),
-            items: items.map(item => ({
-                ...item,
-                customer: customers.find(c => c.id === item.customer_id)
-            }))
-        };
-
-        const previousEntries = [...savedEntries];
-        setSavedEntries(prev => {
-            const filtered = prev.filter(e => {
-                const existingDate = e.date.substring(0, 10);
-                return existingDate !== dateStr;
-            });
-            return [newEntry, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        });
-        toast.success('Book saved successfully!', { description: 'Updated instantly' });
-        
-        // Reset the UI states immediately for a fast UX
-        setEntries({});
-        setEditingDate(null);
-        setLatestSavedDateStr(dateStr);
-        setViewMode('details');
-        
-        // INSTANTLY show the user what they just saved
-        setFocusedEntry(newEntry);
-
         try {
+            // Handle date change: delete old entry first
             const cleanEditingDate = editingDate ? editingDate.substring(0, 10) : null;
             if (cleanEditingDate && cleanEditingDate !== dateStr) {
-                // Delete the old daily book entry to prevent duplicate keys or outdated records when changing dates
                 try {
                     const delRes = await fetch(`/api/daily-book?date=${cleanEditingDate}`, { method: 'DELETE' });
                     if (!delRes.ok && delRes.status !== 404) {
-                        const errText = await delRes.text();
-                        console.error('Failed to delete old entry:', errText);
+                        console.error('Failed to delete old entry:', await delRes.text());
                     }
                 } catch (delErr) {
                     console.error('Error deleting old entry:', delErr);
                 }
             }
 
+            // WAIT for the real server response
             const res = await fetch('/api/daily-book', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -292,25 +266,46 @@ function DailyBookPageInner() {
             });
 
             if (!res.ok) {
-                // Rollback if the server fails
-                setSavedEntries(previousEntries);
                 const errData = await res.json().catch(() => ({}));
-                toast.error(errData.error || 'Failed to save entry, rolled back');
+                toast.error(errData.error || 'Failed to save entry');
+                setSaving(false);
                 return;
             }
 
-            // Success side effects
+            // Build the real confirmed entry from what was sent
+            const confirmedEntry: SavedEntry = {
+                date: dateStr,
+                totalKg: items.reduce((sum, item) => sum + item.kg, 0),
+                items: items.map(item => ({
+                    ...item,
+                    customer: customers.find(c => c.id === item.customer_id)
+                }))
+            };
+
+            // Update local list with the REAL confirmed data
+            setSavedEntries(prev => {
+                const filtered = prev.filter(e => e.date.substring(0, 10) !== dateStr);
+                return [confirmedEntry, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            });
+
+            // Reset form and show results
+            setEntries({});
+            setEditingDate(null);
+            setLatestSavedDateStr(dateStr);
             setViewMode('details');
+            setFocusedEntry(confirmedEntry);
+
+            toast.success(editingDate ? 'Entry updated!' : 'Entry saved!', { description: `${Math.round(confirmedEntry.totalKg)} KG recorded for ${dateStr}` });
+
         } catch (e: any) {
             console.error('Save error:', e);
-            toast.error(e.message || 'Network error');
+            toast.error(e.message || 'Network error while saving');
         } finally {
             setSaving(false);
-            fetchLatestDate(); // Refresh sequence after save
-            mutateLedger(); // Refresh ledger indicators after save via SWR
-            // Force a fresh fetch of history (bypass SWR cache) so the list always reflects the save
+            // Force fresh data from server
             mutateHistory(undefined, { revalidate: true });
-            loadInit(); // REFRESH customers/latestDate so it doesn't revert to old data!
+            mutateLedger();
+            loadInit();
         }
     };
 
@@ -328,10 +323,12 @@ function DailyBookPageInner() {
     const handleDeleteEntry = async () => {
         if (!deleteConfirmDate) return;
         setIsDeleting(true);
+        const deleteDateStr = deleteConfirmDate.substring(0, 10);
         try {
-            const res = await fetch(`/api/daily-book?date=${deleteConfirmDate}`, { method: 'DELETE' });
+            const res = await fetch(`/api/daily-book?date=${deleteDateStr}`, { method: 'DELETE' });
             if (!res.ok) throw new Error(await res.text());
-            setSavedEntries(prev => prev.filter(e => e.date !== deleteConfirmDate));
+            // Remove from local list using date prefix match (handles timestamps vs plain dates)
+            setSavedEntries(prev => prev.filter(e => e.date.substring(0, 10) !== deleteDateStr));
             toast.success('Moved to Recycle Bin');
             setDeleteConfirmDate(null);
             mutateHistory(undefined, { revalidate: true }); // Force fresh fetch after delete
@@ -799,10 +796,10 @@ return (
                             </div>
                         )}
 
-                        {/* Totals Section */}
-                        <div className="mt-2 pt-2 border-t-[2px] border-double border-primary/20 bg-primary/5 dark:bg-primary/10 rounded-sm p-2 shadow-inner">
-                            <div className="flex flex-col md:flex-row items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 bg-background dark:bg-slate-900 px-2 py-1.5 rounded-sm border border-primary/10 shadow-sm w-full md:w-auto">
+                        {/* Totals Section — hidden on mobile (shown only in sticky bar below) */}
+                        <div className="hidden md:block mt-2 pt-2 border-t-[2px] border-double border-primary/20 bg-primary/5 dark:bg-primary/10 rounded-sm p-2 shadow-inner">
+                            <div className="flex flex-row items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 bg-background dark:bg-slate-900 px-2 py-1.5 rounded-sm border border-primary/10 shadow-sm">
                                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/10"><Package className="h-4 w-4 text-primary" /></div>
                                     <div>
                                         <p className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground leading-none mb-0.5">Summary</p>
@@ -818,11 +815,11 @@ return (
                                         </div>
                                     </div>
                                 </div>
-                                <div className="hidden md:flex gap-2 w-full md:w-auto">
+                                <div className="flex gap-2">
                                     {editingDate && (
-                                        <Button variant="outline" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-8 md:h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50">Cancel</Button>
+                                        <Button variant="outline" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50">Cancel</Button>
                                     )}
-                                    <Button onClick={handleSave} disabled={saving || totalKg === 0} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-tight text-[10px] h-8 md:h-10 flex-1 md:flex-none md:px-8 shadow-md shadow-primary/20 active:translate-y-0.5 transition-all">
+                                    <Button onClick={handleSave} disabled={saving || totalKg === 0} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-tight text-[10px] h-10 px-8 shadow-md shadow-primary/20 active:translate-y-0.5 transition-all">
                                         {saving ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Save className="mr-2 h-3 w-3" />}
                                         {editingDate ? 'Update' : 'Save Entry'}
                                     </Button>
@@ -831,25 +828,32 @@ return (
                         </div>
 
                         {/* Mobile sticky save bar */}
-                        {!saving && totalKg > 0 && viewMode === 'edit' && (
+                        {totalKg > 0 && viewMode === 'edit' && (
                             <div className="fixed bottom-[68px] left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t border-border md:hidden z-40 animate-in slide-in-from-bottom duration-300">
                                 <div className="flex flex-col gap-2">
-                                    {editingDate && (
+                                    {editingDate && !saving && (
                                         <Button variant="outline" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="w-full h-10 rounded-xl border-border text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
                                             Cancel Editing
                                         </Button>
                                     )}
-                                    <Button onClick={handleSave} className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all">
-                                        <div className="flex items-center justify-between w-full px-2">
-                                            <div className="text-left">
-                                                <p className="text-[10px] opacity-70 leading-none mb-1">Total Quantity</p>
-                                                <p className="text-xl leading-none">{Math.round(totalKg)} KG</p>
+                                    <Button onClick={handleSave} disabled={saving} className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70">
+                                        {saving ? (
+                                            <div className="flex items-center justify-center gap-2 w-full">
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span>{editingDate ? 'Updating...' : 'Saving...'}</span>
                                             </div>
-                                            <div className="flex items-center gap-2 bg-black/10 px-4 py-2 rounded-lg">
-                                                <Save className="w-4 h-4" />
-                                                <span>{editingDate ? 'UPDATE' : 'SAVE'}</span>
+                                        ) : (
+                                            <div className="flex items-center justify-between w-full px-2">
+                                                <div className="text-left">
+                                                    <p className="text-[10px] opacity-70 leading-none mb-1">Total Quantity</p>
+                                                    <p className="text-xl leading-none">{Math.round(totalKg)} KG</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 bg-black/10 px-4 py-2 rounded-lg">
+                                                    <Save className="w-4 h-4" />
+                                                    <span>{editingDate ? 'UPDATE' : 'SAVE'}</span>
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </Button>
                                 </div>
                             </div>

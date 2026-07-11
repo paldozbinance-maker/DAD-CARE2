@@ -56,7 +56,7 @@ export const GET = trackApiRoute('/api/daily-book', async (request: Request) => 
 
         // Fetch paginated items without bulky customer joins
         const { rows: items } = await pool.query(
-            `SELECT *
+            `SELECT id, daily_book_id, customer_id, kg, present, note
              FROM "DailyBookItem"
              WHERE daily_book_id = $1 AND deleted_at IS NULL
              LIMIT $2 OFFSET $3`,
@@ -64,7 +64,7 @@ export const GET = trackApiRoute('/api/daily-book', async (request: Request) => 
         );
 
         const res = NextResponse.json({ ...book, items, totalCount, page, pageSize });
-        res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+        res.headers.set('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=15');
         return res;
     } catch (error: any) {
         console.error('Fetch Book Error:', error);
