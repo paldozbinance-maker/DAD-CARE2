@@ -11,84 +11,23 @@ const STATIC_ASSETS = [
   '/icons/icon-512.png'
 ];
 
-// Install: pre-cache critical pages robustly
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      // Use Promise.allSettled so one failed fetch doesn't crash the entire caching process
-      return Promise.allSettled(
-        STATIC_ASSETS.map(url => cache.add(url).catch(err => console.warn('SW cache add failed for:', url, err)))
-      );
-    })
-  );
+self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
-// Activate: clean up old caches immediately
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          return caches.delete(cacheName);
+        })
+      );
+    })
   );
   self.clients.claim();
 });
 
-// Fetch: network-first strategy for API calls, cache-first with stale-while-revalidate for assets
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') return;
-
-  // API calls: always network-first
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          return response;
-        })
-        .catch(() => {
-          return new Response(JSON.stringify({ error: 'Offline' }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        })
-    );
-    return;
-  }
-
-  // Next.js specific build files and chunks (highly cacheable)
-  if (url.pathname.startsWith('/_next/static/')) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // General Pages and assets: stale-while-revalidate
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-
-      return cached || fetchPromise;
-    })
-  );
+self.addEventListener('fetch', (e) => {
+  // Pass all requests straight to the network, no caching.
 });
