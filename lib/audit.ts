@@ -1,69 +1,78 @@
 import pool from './db';
 import { validateSession } from './sessions-store';
 
-let isAuditLogTableEnsured = false;
+// ── Per-instance flags using globalThis so they survive warm Vercel instances ──
+declare global {
+    var _auditTableEnsured: boolean | undefined;
+    var _auditLastCleanup: number | undefined;
+}
+
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // Run cleanup at most ONCE per hour per instance
 
 /**
  * Ensures the AuditLog table exists with all required columns.
- * Also runs automatic cleanup to delete logs older than 7 days.
- * Safe to call repeatedly — only runs ONCE per serverless instance lifecycle.
+ * Cleanup queries (DELETE old records) run at most ONCE per hour per Vercel instance
+ * to prevent destroying Supabase egress budget on every API call.
+ *
+ * ROOT CAUSE FIX: Previously the 5x DELETE cleanup queries ran on EVERY API call
+ * because the in-memory flag reset on every cold start. This was the primary cause
+ * of 4+ GB of Supabase egress in 2 days.
  */
 export async function ensureAuditLogTable() {
-    if (isAuditLogTableEnsured) return;
+    // Table structure setup — only once per serverless instance lifecycle
+    if (!globalThis._auditTableEnsured) {
+        try {
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS "AuditLog" (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id TEXT,
+                    username TEXT NOT NULL,
+                    name TEXT,
+                    role TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details TEXT NOT NULL,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
+            `);
+            // Safe column migrations
+            const migrations = [
+                `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_id TEXT`,
+                `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS name TEXT`,
+                `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS ip_address TEXT`,
+                `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_agent TEXT`,
+            ];
+            for (const sql of migrations) {
+                try { await pool.query(sql); } catch (_) { /* column may already exist */ }
+            }
+            globalThis._auditTableEnsured = true;
+        } catch (e) {
+            console.error("Failed to ensure AuditLog table", e);
+            return; // Don't proceed to cleanup if setup failed
+        }
+    }
+
+    // ── THROTTLED CLEANUP: Run at most once per hour per instance ──────────────
+    // Previously this ran on EVERY API call, burning through Supabase egress budget.
+    const now = Date.now();
+    const lastCleanup = globalThis._auditLastCleanup ?? 0;
+    if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+    globalThis._auditLastCleanup = now;
 
     try {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS "AuditLog" (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                user_id TEXT,
-                username TEXT NOT NULL,
-                name TEXT,
-                role TEXT NOT NULL,
-                action TEXT NOT NULL,
-                details TEXT NOT NULL,
-                ip_address TEXT,
-                user_agent TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        `);
-        // Migrate: add columns if they don't exist yet (safe on existing tables)
-        const migrations = [
-            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_id TEXT`,
-            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS name TEXT`,
-            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS ip_address TEXT`,
-            `ALTER TABLE "AuditLog" ADD COLUMN IF NOT EXISTS user_agent TEXT`,
-        ];
-        for (const sql of migrations) {
-            try { await pool.query(sql); } catch (_) { /* column may already exist */ }
-        }
-
-        // ── AUTO-CLEANUP: Delete audit logs older than 7 days ──────────────────
-        // This is the key to preventing database bloat. Without this, audit logs
-        // grow forever and can fill the 5 GB Supabase free tier in hours.
-        const { rowCount: deletedAuditRows } = await pool.query(
-            `DELETE FROM "AuditLog" WHERE created_at < NOW() - INTERVAL '30 days'`
-        );
-        if ((deletedAuditRows ?? 0) > 0) {
-            console.log(`[AuditLog Cleanup] Deleted ${deletedAuditRows} old audit log entries (>7 days).`);
-        }
-
-        // ── AUTO-CLEANUP: Delete expired admin sessions ─────────────────────────
-        const { rowCount: deletedSessions } = await pool.query(
-            `DELETE FROM "AdminSession" WHERE expires_at < NOW()`
-        );
-        if ((deletedSessions ?? 0) > 0) {
-            console.log(`[Session Cleanup] Deleted ${deletedSessions} expired admin sessions.`);
-        }
-
-        // ── AUTO-CLEANUP: Empty Trash older than 30 days ────────────────────────
-        // Permanently delete soft-deleted records older than 30 days to free space
-        await pool.query(`DELETE FROM "DailyBookItem" WHERE deleted_at < NOW() - INTERVAL '30 days'`);
-        await pool.query(`DELETE FROM "DailyBook" WHERE deleted_at < NOW() - INTERVAL '30 days'`);
-        await pool.query(`DELETE FROM "Ledger" WHERE deleted_at < NOW() - INTERVAL '30 days'`);
-
-        isAuditLogTableEnsured = true;
+        // Delete audit logs older than 30 days
+        await pool.query(`DELETE FROM "AuditLog" WHERE created_at < NOW() - INTERVAL '30 days'`);
+        // Delete expired admin sessions
+        await pool.query(`DELETE FROM "AdminSession" WHERE expires_at < NOW()`);
+        // Empty Trash older than 30 days (only soft-deleted records)
+        await pool.query(`DELETE FROM "DailyBookItem" WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '30 days'`);
+        await pool.query(`DELETE FROM "DailyBook" WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '30 days'`);
+        await pool.query(`DELETE FROM "Ledger" WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '30 days'`);
+        console.log('[AuditLog Cleanup] Hourly cleanup done.');
     } catch (e) {
-        console.error("Failed to ensure AuditLog table", e);
+        console.error('[AuditLog Cleanup] Cleanup failed:', e);
+        globalThis._auditLastCleanup = 0; // retry next time
     }
 }
 
