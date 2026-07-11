@@ -244,6 +244,30 @@ function DailyBookPageInner() {
                 customer: customers.find(c => c.id === customer_id)
             }));
 
+        // OPTIMISTIC UI UPDATE: Instantly show the user what they just saved
+        // The list counter will instantly start its kinetic animation.
+        const optimisticEntry: SavedEntry = {
+            date: dateStr,
+            totalKg: items.reduce((sum, item) => sum + item.kg, 0),
+            items: items.map(item => ({
+                ...item,
+                customer: customers.find(c => c.id === item.customer_id)
+            }))
+        };
+
+        const previousEntries = [...savedEntries];
+        setSavedEntries(prev => {
+            const filtered = prev.filter(e => e.date.substring(0, 10) !== dateStr);
+            return [optimisticEntry, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        });
+
+        // Reset the form UI immediately so it feels snappy
+        setEntries({});
+        setEditingDate(null);
+        setLatestSavedDateStr(dateStr);
+        setViewMode('details');
+        setFocusedEntry(optimisticEntry);
+
         try {
             // Handle date change: delete old entry first
             const cleanEditingDate = editingDate ? editingDate.substring(0, 10) : null;
@@ -266,6 +290,7 @@ function DailyBookPageInner() {
             });
 
             if (!res.ok) {
+                setSavedEntries(previousEntries); // Rollback optimistic update
                 const errData = await res.json().catch(() => ({}));
                 toast.error(errData.error || 'Failed to save entry');
                 setSaving(false);
@@ -819,7 +844,18 @@ return (
                                     {editingDate && (
                                         <Button variant="outline" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50">Cancel</Button>
                                     )}
-                                    <Button onClick={handleSave} disabled={saving || totalKg === 0} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-tight text-[10px] h-10 px-8 shadow-md shadow-primary/20 active:translate-y-0.5 transition-all">
+                                    <Button 
+                                        onClick={handleSave} 
+                                        onPointerDown={(e) => {
+                                            // Fixes mobile requiring double taps when input is focused
+                                            if (document.activeElement instanceof HTMLInputElement) {
+                                                document.activeElement.blur();
+                                            }
+                                        }}
+                                        disabled={saving || totalKg === 0} 
+                                        size="sm" 
+                                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-tight text-[10px] h-10 px-8 shadow-md shadow-primary/20 active:translate-y-0.5 transition-all"
+                                    >
                                         {saving ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Save className="mr-2 h-3 w-3" />}
                                         {editingDate ? 'Update' : 'Save Entry'}
                                     </Button>
@@ -836,7 +872,17 @@ return (
                                             Cancel Editing
                                         </Button>
                                     )}
-                                    <Button onClick={handleSave} disabled={saving} className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70">
+                                    <Button 
+                                        onClick={handleSave} 
+                                        onPointerDown={(e) => {
+                                            // Fixes mobile requiring double taps when input is focused
+                                            if (document.activeElement instanceof HTMLInputElement) {
+                                                document.activeElement.blur();
+                                            }
+                                        }}
+                                        disabled={saving} 
+                                        className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70"
+                                    >
                                         {saving ? (
                                             <div className="flex items-center justify-center gap-2 w-full">
                                                 <Loader2 className="w-5 h-5 animate-spin" />
