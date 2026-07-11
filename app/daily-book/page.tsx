@@ -143,11 +143,14 @@ function DailyBookPageInner() {
     useEffect(() => {
         if (initData && typeof initData === 'object' && initData.customers) {
             setCustomers(initData.customers);
-            if (Array.isArray(initData.history)) {
-                setSavedEntries(initData.history);
-            }
             
             if (!isInitialized) {
+                // Only load history from initData ONCE on initial load.
+                // Subsequent updates will rely on useDailyBookHistory's SWR or optimistic UI.
+                if (Array.isArray(initData.history)) {
+                    setSavedEntries(initData.history);
+                }
+                
                 if (initData.latestDate) {
                     setLatestSavedDateStr(initData.latestDate);
                     if (!editingDate) {
@@ -262,8 +265,10 @@ function DailyBookPageInner() {
         setEntries({});
         setEditingDate(null);
         setLatestSavedDateStr(dateStr);
-        setDate(addDays(date, 1));
         setViewMode('details');
+        
+        // INSTANTLY show the user what they just saved
+        setFocusedEntry(newEntry);
 
         try {
             const cleanEditingDate = editingDate ? editingDate.substring(0, 10) : null;
