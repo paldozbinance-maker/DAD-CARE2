@@ -11,6 +11,7 @@ const PUBLIC_API_ROUTES = [
     '/api/auth/login',
     '/api/auth/verify',
     '/api/ping',          // keep-alive health check — no auth needed
+    '/api/db-ping',       // temporary diagnostic — remove after fix
 ];
 
 export async function middleware(request: NextRequest) {
