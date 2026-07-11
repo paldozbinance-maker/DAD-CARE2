@@ -48,20 +48,20 @@ interface SavedEntry {
     items: DailyBookItem[];
 }
 
-function getVipCount(note: string | undefined): number {
+function getVipCount(note: string | undefined, fallbackKg: number = 0): number {
     if (!note) return 0;
     const lower = note.toLowerCase();
     if (!lower.includes('vip')) return 0;
     
-    const regex = /(\d+)\s*vip/g;
+    const regex = /(\d+(?:\.\d+)?)\s*vip/g;
     let match;
     let totalCount = 0;
     let found = false;
     while ((match = regex.exec(lower)) !== null) {
         found = true;
-        totalCount += parseInt(match[1], 10);
+        totalCount += parseFloat(match[1]);
     }
-    return found ? totalCount : 0;
+    return found ? totalCount : fallbackKg;
 }
 
 function getFormattedNoteBadges(note: string | undefined): { text: string, isVip: boolean }[] {
@@ -244,29 +244,11 @@ function DailyBookPageInner() {
                 customer: customers.find(c => c.id === customer_id)
             }));
 
-        // OPTIMISTIC UI UPDATE: Instantly show the user what they just saved
-        // The list counter will instantly start its kinetic animation.
-        const optimisticEntry: SavedEntry = {
-            date: dateStr,
-            totalKg: items.reduce((sum, item) => sum + item.kg, 0),
-            items: items.map(item => ({
-                ...item,
-                customer: customers.find(c => c.id === item.customer_id)
-            }))
-        };
-
         const previousEntries = [...savedEntries];
-        setSavedEntries(prev => {
-            const filtered = prev.filter(e => e.date.substring(0, 10) !== dateStr);
-            return [optimisticEntry, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        });
+        const isNewEntry = !previousEntries.some(e => e.date.substring(0, 10) === dateStr);
 
-        // Reset the form UI immediately so it feels snappy
-        setEntries({});
-        setEditingDate(null);
-        setLatestSavedDateStr(dateStr);
-        setViewMode('details');
-        setFocusedEntry(optimisticEntry);
+        // We do NOT reset the form UI here. We leave it in 'edit' mode so the sticky bar 
+        // stays visible and shows the "Saving..." / "Updating..." spinner.
 
         try {
             // Handle date change: delete old entry first
@@ -313,7 +295,7 @@ function DailyBookPageInner() {
                 return [confirmedEntry, ...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             });
 
-            // Reset form and show results
+            // NOW reset form and show results (Sticky bar will close gracefully)
             setEntries({});
             setEditingDate(null);
             setLatestSavedDateStr(dateStr);
@@ -327,11 +309,22 @@ function DailyBookPageInner() {
             toast.error(e.message || 'Network error while saving');
         } finally {
             setSaving(false);
-            // Force fresh data from server
-            mutateHistory(undefined, { revalidate: true });
+            // Force fresh REAL data from server — no optimistic cache
+            await mutateHistory(undefined, { revalidate: true });
+            await mutateInit();
             mutateLedger();
-            loadInit();
         }
+    };
+
+    const handleCancelEdit = () => {
+        setEntries({});
+        setEditingDate(null);
+        if (latestSavedDateStr) {
+            setDate(addDays(parseISO(latestSavedDateStr), 1));
+        } else {
+            setDate(new Date());
+        }
+        setViewMode('details');
     };
 
     const handleEditEntry = (entry: SavedEntry) => {
@@ -440,7 +433,7 @@ function DailyBookPageInner() {
 
     const totalKg = Object.values(entries).reduce((sum, data) => sum + (parseFloat(String(data.kg)) || 0), 0);
     // Sum ALL vip quantities across all customers based on note
-    const totalVip = Object.values(entries).reduce((sum, entry) => sum + getVipCount(entry.note), 0);
+    const totalVip = Object.values(entries).reduce((sum, entry) => sum + getVipCount(entry.note, entry.kg), 0);
     const filteredEntries = searchDate
         ? savedEntries.filter(e => e.date && e.date.substring(0, 10) === format(searchDate, 'yyyy-MM-dd'))
         : savedEntries;
@@ -740,7 +733,7 @@ return (
                                 <p className="text-sm mt-1">Add a new customer to start recording entries</p>
                             </div>
                         ) : (
-                            <div className="bg-[#fcf8f1] dark:bg-slate-900 relative overflow-hidden rounded-sm border border-slate-300 dark:border-slate-800 shadow-inner pb-24 md:pb-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent h-[60vh] md:h-[480px]">
+                            <div className="bg-[#fcf8f1] dark:bg-slate-900 relative overflow-hidden rounded-sm border border-slate-300 dark:border-slate-800 shadow-inner pb-48 md:pb-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent h-[60vh] md:h-[480px]">
                                 <div className="absolute left-[50px] md:left-[70px] top-0 bottom-0 w-[1px] bg-red-400 dark:bg-red-900/50 pointer-events-none z-20" />
                                 <div className="sticky top-0 z-30 grid grid-cols-12 px-2 md:px-4 py-2 bg-[#f4ece0] dark:bg-slate-950 border-b-2 border-slate-300 dark:border-slate-700 shadow-sm">
                                     <div className="col-span-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">ID</div>
@@ -777,12 +770,12 @@ return (
                                                 </div>
                                             </div>
                                             <div className="col-span-2 flex items-center justify-center gap-1.5 px-1">
-                                                <button onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })} className={`h-5 w-5 md:h-6 md:w-6 rounded flex items-center justify-center text-[10px] md:text-[11px] font-black transition-colors border ${entries[customer.id]?.present !== false ? 'bg-green-100/50 border-green-200 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400' : 'bg-red-100/50 border-red-200 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400'}`}>
+                                                <button onPointerDown={(e) => e.preventDefault()} onClick={() => setEntries({ ...entries, [customer.id]: { kg: entries[customer.id]?.kg || 0, note: entries[customer.id]?.note || '', present: !(entries[customer.id]?.present ?? true) } })} className={`h-8 w-8 md:h-9 md:w-9 rounded flex items-center justify-center text-xs md:text-sm font-black transition-all border shadow-sm active:scale-95 ${entries[customer.id]?.present !== false ? 'bg-green-100 border-green-300 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:border-green-700/50 dark:text-green-400' : 'bg-red-100 border-red-300 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:border-red-700/50 dark:text-red-400'}`}>
                                                     {entries[customer.id]?.present !== false ? 'P' : 'A'}
                                                 </button>
                                                 <Popover open={openNoteForCustomerId === customer.id} onOpenChange={(o) => setOpenNoteForCustomerId(o ? customer.id : null)}>
                                                     <PopoverTrigger asChild>
-                                                        <Button variant="ghost" size="sm" className={`h-5 w-5 md:h-6 md:w-6 p-0 rounded-md hover:bg-blue-100 dark:hover:bg-slate-800 ${entries[customer.id]?.note ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 dark:text-slate-600'}`}>
+                                                        <Button variant="ghost" size="sm" onPointerDown={(e) => e.preventDefault()} className={`h-5 w-5 md:h-6 md:w-6 p-0 rounded-md hover:bg-blue-100 dark:hover:bg-slate-800 ${entries[customer.id]?.note ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-300 dark:text-slate-600'}`}>
                                                             <MessageSquare className="w-3 h-3 md:w-3.5 md:h-3.5" />
                                                         </Button>
                                                     </PopoverTrigger>
@@ -802,7 +795,7 @@ return (
                                                         const note = entries[customer.id]?.note || '';
                                                         const isVip = note.toLowerCase().includes('vip');
                                                         return isVip ? (
-                                                            <button onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex flex-col items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform gap-0.5">
+                                                            <button onPointerDown={(e) => e.preventDefault()} onClick={() => setOpenNoteForCustomerId(customer.id)} title="Click to edit VIP note" className="inline-flex flex-col items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-yellow-950 shadow-[0_0_12px_rgba(251,191,36,0.6)] border border-yellow-200 whitespace-nowrap animate-pulse cursor-pointer hover:scale-105 active:scale-95 transition-transform gap-0.5">
                                                                 <span>👑 VIP</span>
                                                             </button>
                                                         ) : null;
@@ -810,7 +803,7 @@ return (
                                                     <Input type="number" step="1" placeholder="0" inputMode="decimal" value={entries[customer.id]?.kg || ''} disabled={entries[customer.id]?.present === false} onChange={(e) => setEntries({ ...entries, [customer.id]: { present: entries[customer.id]?.present ?? true, note: entries[customer.id]?.note || '', kg: parseInt(e.target.value, 10) || 0 } })} onKeyDown={(e) => handleKeyPress(e, index)} className={`ledger-input h-7 w-16 md:w-20 text-right font-black text-sm md:text-base border-0 border-b border-transparent rounded-none bg-transparent transition-all px-1 focus-visible:ring-0 shadow-none hover:border-blue-300 ${entries[customer.id]?.kg > 0 ? 'border-primary text-primary bg-primary/5 dark:bg-primary/10' : 'text-slate-400 dark:text-slate-500'} ${entries[customer.id]?.present === false ? 'opacity-50' : ''}`} />
                                                 </div>
                                                 {(entries[customer.id]?.kg > 0 || entries[customer.id]?.present === false || entries[customer.id]?.note) && (
-                                                    <Button variant="ghost" size="sm" onClick={() => { const n = { ...entries }; delete n[customer.id]; setEntries(n); }} className="h-8 w-8 md:h-6 md:w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                    <Button variant="ghost" size="sm" onPointerDown={(e) => e.preventDefault()} onClick={() => { const n = { ...entries }; delete n[customer.id]; setEntries(n); }} className="h-8 w-8 md:h-6 md:w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
                                                         <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
                                                     </Button>
                                                 )}
@@ -842,15 +835,23 @@ return (
                                 </div>
                                 <div className="flex gap-2">
                                     {editingDate && (
-                                        <Button variant="outline" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50">Cancel</Button>
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onPointerDown={(e) => e.preventDefault()}
+                                            onClick={handleCancelEdit} 
+                                            className="h-10 px-4 border border-border text-muted-foreground font-bold uppercase tracking-tight text-[10px] hover:bg-muted/50"
+                                        >
+                                            Cancel
+                                        </Button>
                                     )}
                                     <Button 
                                         onClick={handleSave} 
                                         onPointerDown={(e) => {
-                                            // Fixes mobile requiring double taps when input is focused
-                                            if (document.activeElement instanceof HTMLInputElement) {
-                                                document.activeElement.blur();
-                                            }
+                                            // PREVENT DEFAULT stops the mobile keyboard from closing instantly. 
+                                            // If it closes instantly, the screen resizes, the button moves, 
+                                            // and the browser cancels the click!
+                                            e.preventDefault();
                                         }}
                                         disabled={saving || totalKg === 0} 
                                         size="sm" 
@@ -864,24 +865,30 @@ return (
                         </div>
 
                         {/* Mobile sticky save bar */}
-                        {totalKg > 0 && viewMode === 'edit' && (
-                            <div className="fixed bottom-[68px] left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t border-border md:hidden z-40 animate-in slide-in-from-bottom duration-300">
-                                <div className="flex flex-col gap-2">
+                        {(viewMode === 'edit' || saving) && totalKg > 0 && (
+                            <div className="fixed bottom-[68px] left-0 right-0 p-3 bg-background/95 backdrop-blur-xl border-t border-border md:hidden z-40 animate-in slide-in-from-bottom duration-300">
+                                <div className="flex flex-col gap-2 relative">
                                     {editingDate && !saving && (
-                                        <Button variant="outline" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="w-full h-10 rounded-xl border-border text-muted-foreground font-bold uppercase tracking-widest text-[10px]">
-                                            Cancel Editing
+                                        <Button 
+                                            variant="outline" 
+                                            size="icon"
+                                            onPointerDown={(e) => e.preventDefault()}
+                                            onClick={handleCancelEdit} 
+                                            className="absolute -top-14 right-2 w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground z-50 hover:bg-muted"
+                                        >
+                                            <X className="w-5 h-5" />
                                         </Button>
                                     )}
                                     <Button 
                                         onClick={handleSave} 
                                         onPointerDown={(e) => {
-                                            // Fixes mobile requiring double taps when input is focused
-                                            if (document.activeElement instanceof HTMLInputElement) {
-                                                document.activeElement.blur();
-                                            }
+                                            // PREVENT DEFAULT stops the mobile keyboard from closing instantly. 
+                                            // If it closes instantly, the screen resizes, the button moves, 
+                                            // and the browser cancels the click!
+                                            e.preventDefault();
                                         }}
                                         disabled={saving} 
-                                        className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70"
+                                        className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70"
                                     >
                                         {saving ? (
                                             <div className="flex items-center justify-center gap-2 w-full">
@@ -975,7 +982,7 @@ return (
                                 </div>
                                 {(() => {
                                     // Sum all VIP quantities based on note
-                                    const entryVipCount = entry.items.reduce((sum, i) => sum + getVipCount(i.note), 0);
+                                    const entryVipCount = entry.items.reduce((sum, i) => sum + getVipCount(i.note, i.kg), 0);
                                     if (entryVipCount > 0) {
                                         return (
                                             <>
@@ -1052,7 +1059,7 @@ return (
                                             // Sum the actual count of any customer whose note contains 'vip'
                                             const entryVipCount = entry.items.reduce((sum, i) => {
                                                 if (i.note && i.note.toLowerCase().includes('vip')) {
-                                                    return sum + getVipCount(i.note);
+                                                    return sum + getVipCount(i.note, i.kg);
                                                 }
                                                 return sum;
                                             }, 0);
@@ -1194,7 +1201,7 @@ return (
                                                                     {(() => {
                                                                         // Sum the actual count of any customer whose note contains 'vip'
                                                                         const vipItems = entry.items.filter(i => i.note && i.note.toLowerCase().includes('vip'));
-                                                                        const entryVipCount = vipItems.reduce((sum, i) => sum + getVipCount(i.note), 0);
+                                                                        const entryVipCount = vipItems.reduce((sum, i) => sum + getVipCount(i.note, i.kg), 0);
                                                                         return entryVipCount > 0 ? (
                                                                             <button
                                                                                 type="button"
@@ -1510,8 +1517,8 @@ return (
                     act2 = entry2.items.filter(i => i.present !== false).length;
                     custDiff = act1 - act2;
                     
-                    const vip1 = entry1.items.reduce((s, i) => s + getVipCount(i.note), 0);
-                    const vip2 = entry2.items.reduce((s, i) => s + getVipCount(i.note), 0);
+                    const vip1 = entry1.items.reduce((s, i) => s + getVipCount(i.note, i.kg), 0);
+                    const vip2 = entry2.items.reduce((s, i) => s + getVipCount(i.note, i.kg), 0);
                     vipDiff = vip1 - vip2;
 
                     abs1 = entry1.items.filter(i => i.present === false).length;
