@@ -577,9 +577,9 @@ return (
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 {editingDate && (
-                                    <Button variant="ghost" size="sm" onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-8 px-3 text-[10px] font-bold uppercase text-muted-foreground">Cancel</Button>
+                                    <Button variant="ghost" size="sm" onPointerDown={(e) => e.preventDefault()} onClick={() => { setEntries({}); setEditingDate(null); setDate(new Date()); }} className="h-8 px-3 text-[10px] font-bold uppercase text-muted-foreground">Cancel</Button>
                                 )}
-                                <Button onClick={handleSave} disabled={saving || totalKg === 0} size="sm" className="h-8 px-4 text-[10px] font-black uppercase bg-primary text-primary-foreground shadow-md">
+                                <Button onClick={handleSave} onPointerDown={(e) => e.preventDefault()} disabled={saving || totalKg === 0} size="sm" className="h-8 px-4 text-[10px] font-black uppercase bg-primary text-primary-foreground shadow-md">
                                     {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
                                     {editingDate ? 'Update' : 'Save'}
                                 </Button>
@@ -864,31 +864,27 @@ return (
                             </div>
                         </div>
 
-                        {/* Mobile sticky save bar */}
-                        {(viewMode === 'edit' || saving) && totalKg > 0 && (
-                            <div className="fixed bottom-[68px] left-0 right-0 p-3 bg-background/95 backdrop-blur-xl border-t border-border md:hidden z-40 animate-in slide-in-from-bottom duration-300">
-                                <div className="flex flex-col gap-2 relative">
+                        {/* Mobile sticky save bar — always visible in edit mode or while saving */}
+                        {(viewMode === 'edit' || saving) && (
+                            <div className="fixed bottom-[80px] left-0 right-0 px-3 py-2 bg-background/95 backdrop-blur-xl border-t border-border md:hidden z-[9999] animate-in slide-in-from-bottom duration-200">
+                                <div className="flex items-center gap-2">
+                                    {/* X cancel button — always in-row so it can never be clipped or hidden */}
                                     {editingDate && !saving && (
                                         <Button 
                                             variant="outline" 
                                             size="icon"
                                             onPointerDown={(e) => e.preventDefault()}
                                             onClick={handleCancelEdit} 
-                                            className="absolute -top-14 right-2 w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground z-50 hover:bg-muted"
+                                            className="shrink-0 w-12 h-12 rounded-xl border-border text-muted-foreground hover:bg-muted hover:text-foreground shadow-sm active:scale-95 transition-all"
                                         >
                                             <X className="w-5 h-5" />
                                         </Button>
                                     )}
                                     <Button 
                                         onClick={handleSave} 
-                                        onPointerDown={(e) => {
-                                            // PREVENT DEFAULT stops the mobile keyboard from closing instantly. 
-                                            // If it closes instantly, the screen resizes, the button moves, 
-                                            // and the browser cancels the click!
-                                            e.preventDefault();
-                                        }}
+                                        onPointerDown={(e) => e.preventDefault()}
                                         disabled={saving} 
-                                        className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70"
+                                        className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70"
                                     >
                                         {saving ? (
                                             <div className="flex items-center justify-center gap-2 w-full">
@@ -898,7 +894,7 @@ return (
                                         ) : (
                                             <div className="flex items-center justify-between w-full px-2">
                                                 <div className="text-left">
-                                                    <p className="text-[10px] opacity-70 leading-none mb-1">Total Quantity</p>
+                                                    <p className="text-[10px] opacity-70 leading-none mb-1">Total KG</p>
                                                     <p className="text-xl leading-none">{Math.round(totalKg)} KG</p>
                                                 </div>
                                                 <div className="flex items-center gap-2 bg-black/10 px-4 py-2 rounded-lg">
@@ -1713,197 +1709,133 @@ return (
                 );
             })()}
 
-            {/* Popup styles — light+dark adaptive */}
+            {/* Popup styles — brand blue adaptive */}
             <style>{`
-                /* ── Backdrop ── */
                 .daily-popup-backdrop {
                     position: fixed; inset: 0; z-index: 10000;
                     display: flex; align-items: center; justify-content: center;
-                    background: rgba(0,0,0,0.18);
-                    backdrop-filter: blur(4px);
-                    -webkit-backdrop-filter: blur(4px);
+                    background: rgba(0,0,0,0.22);
+                    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
                 }
-                @media (prefers-color-scheme: dark) {
-                    .daily-popup-backdrop { background: rgba(0,0,0,0.42); }
-                }
+                .dark .daily-popup-backdrop { background: rgba(0,0,0,0.48); }
 
-                /* ── Card ── */
                 .daily-popup-card {
-                    position: relative;
-                    width: 296px; max-height: 440px;
-                    border-radius: 18px;
-                    overflow: hidden;
-                    display: flex; flex-direction: column;
-                    /* light mode */
-                    background: rgba(255,255,255,0.72);
-                    border: 1.5px solid rgba(251,191,36,0.35);
-                    box-shadow: 0 0 0 1px rgba(251,191,36,0.12),
-                                0 8px 32px rgba(0,0,0,0.14),
-                                0 2px 8px rgba(0,0,0,0.08),
-                                inset 0 0 20px rgba(251,191,36,0.04);
-                    backdrop-filter: blur(24px) saturate(1.6);
-                    -webkit-backdrop-filter: blur(24px) saturate(1.6);
-                    animation: goldPopIn 0.22s cubic-bezier(.34,1.56,.64,1) both;
+                    position: relative; width: 296px; max-height: 440px;
+                    border-radius: 18px; overflow: hidden; display: flex; flex-direction: column;
+                    background: rgba(255,255,255,0.95);
+                    border: 1.5px solid rgba(30,64,175,0.25);
+                    box-shadow: 0 0 0 1px rgba(30,64,175,0.1), 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+                    backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6);
+                    animation: popIn 0.22s cubic-bezier(.34,1.56,.64,1) both;
                 }
-                :root.dark .daily-popup-card,
-                [data-theme="dark"] .daily-popup-card,
                 .dark .daily-popup-card {
-                    background: rgba(18,15,8,0.78);
-                    border-color: rgba(251,191,36,0.42);
-                    box-shadow: 0 0 28px rgba(251,191,36,0.18),
-                                0 8px 40px rgba(0,0,0,0.6),
-                                inset 0 0 24px rgba(251,191,36,0.05);
+                    background: rgba(9,9,11,0.92);
+                    border-color: rgba(59,130,246,0.3);
+                    box-shadow: 0 0 24px rgba(59,130,246,0.15), 0 8px 40px rgba(0,0,0,0.6);
                 }
 
-                /* ── Accent strip ── */
-                .daily-popup-strip {
-                    height: 3px; width: 100%;
-                }
+                .daily-popup-strip { height: 3px; width: 100%; }
                 .daily-popup-strip--gold {
-                    background: linear-gradient(90deg, transparent 0%, #f59e0b 40%, #fbbf24 60%, transparent 100%);
-                    box-shadow: 0 0 8px rgba(251,191,36,0.6);
+                    background: linear-gradient(90deg, transparent 0%, #1e40af 40%, #3b82f6 60%, transparent 100%);
+                    box-shadow: 0 0 8px rgba(30,64,175,0.5);
                 }
                 .daily-popup-strip--red {
-                    background: linear-gradient(90deg, transparent 0%, #f59e0b 20%, #ef4444 50%, #f59e0b 80%, transparent 100%);
+                    background: linear-gradient(90deg, transparent 0%, #1e40af 20%, #ef4444 50%, #1e40af 80%, transparent 100%);
                     box-shadow: 0 0 8px rgba(239,68,68,0.4);
                 }
 
-                /* ── Header ── */
                 .daily-popup-header {
                     display: flex; align-items: center; justify-content: space-between;
                     padding: 10px 14px 8px;
-                    border-bottom: 1px solid rgba(251,191,36,0.15);
-                    background: linear-gradient(90deg, rgba(251,191,36,0.08) 0%, transparent 100%);
+                    border-bottom: 1px solid rgba(30,64,175,0.12);
+                    background: linear-gradient(90deg, rgba(30,64,175,0.06) 0%, transparent 100%);
                 }
                 .daily-popup-title {
                     font-size: 11px; font-weight: 900;
-                    text-transform: uppercase; letter-spacing: 0.1em;
-                    color: #b45309;
+                    text-transform: uppercase; letter-spacing: 0.1em; color: #1e40af;
                 }
-                .dark .daily-popup-title, [data-theme="dark"] .daily-popup-title {
-                    color: #fbbf24;
-                }
+                .dark .daily-popup-title { color: #60a5fa; }
                 .daily-popup-sub {
-                    font-size: 9px; font-family: monospace;
-                    color: #92400e; opacity: 0.75;
+                    font-size: 9px; font-family: monospace; color: #1e3a8a; opacity: 0.75;
                     margin-top: 2px; display: flex; align-items: center; gap: 6px;
                 }
-                .dark .daily-popup-sub, [data-theme="dark"] .daily-popup-sub {
-                    color: #d97706;
-                }
+                .dark .daily-popup-sub { color: #93c5fd; }
                 .daily-popup-count {
                     display: inline-flex; align-items: center; justify-content: center;
-                    background: rgba(251,191,36,0.2); border: 1px solid rgba(251,191,36,0.3);
-                    color: #92400e; border-radius: 999px;
-                    padding: 0 5px; font-size: 8px; font-weight: 900; min-width: 18px;
+                    background: rgba(30,64,175,0.12); border: 1px solid rgba(30,64,175,0.25);
+                    color: #1e40af; border-radius: 999px; padding: 0 5px; font-size: 8px; font-weight: 900; min-width: 18px;
                 }
-                .dark .daily-popup-count, [data-theme="dark"] .daily-popup-count { color: #fbbf24; }
+                .dark .daily-popup-count { color: #60a5fa; }
                 .daily-popup-close {
                     width: 24px; height: 24px; border-radius: 8px;
                     display: flex; align-items: center; justify-content: center;
-                    color: #b45309; opacity: 0.6;
-                    border: none; background: transparent; cursor: pointer;
-                    transition: all 0.15s;
+                    color: #1e40af; opacity: 0.6; border: none; background: transparent; cursor: pointer; transition: all 0.15s;
                 }
-                .daily-popup-close:hover { opacity: 1; background: rgba(251,191,36,0.15); }
+                .daily-popup-close:hover { opacity: 1; background: rgba(30,64,175,0.1); }
                 .daily-popup-close:active { transform: scale(0.88); }
-                .dark .daily-popup-close, [data-theme="dark"] .daily-popup-close { color: #fbbf24; }
+                .dark .daily-popup-close { color: #60a5fa; }
 
-                /* ── List ── */
-                .daily-popup-list {
-                    overflow-y: auto; flex: 1;
-                    padding: 8px;
-                    display: flex; flex-direction: column; gap: 5px;
-                }
+                .daily-popup-list { overflow-y: auto; flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
                 .daily-popup-item {
                     display: flex; align-items: center; gap: 10px;
                     padding: 8px 10px; border-radius: 12px;
-                    border: 1px solid rgba(0,0,0,0.06);
-                    background: rgba(255,255,255,0.55);
-                    transition: background 0.12s;
-                    animation: fadeSlideUp 0.2s ease both;
+                    border: 1px solid rgba(30,64,175,0.08);
+                    background: rgba(239,246,255,0.6);
+                    transition: background 0.12s; animation: fadeSlideUp 0.2s ease both;
                 }
-                .daily-popup-item:hover { background: rgba(255,255,255,0.8); }
-                .dark .daily-popup-item, [data-theme="dark"] .daily-popup-item {
-                    border-color: rgba(255,255,255,0.06);
-                    background: rgba(255,255,255,0.04);
-                }
-                .dark .daily-popup-item:hover, [data-theme="dark"] .daily-popup-item:hover {
-                    background: rgba(255,255,255,0.09);
-                }
+                .daily-popup-item:hover { background: rgba(219,234,254,0.8); }
+                .dark .daily-popup-item { border-color: rgba(59,130,246,0.1); background: rgba(30,64,175,0.06); }
+                .dark .daily-popup-item:hover { background: rgba(30,64,175,0.12); }
                 .daily-popup-item--vip { align-items: flex-start; }
 
-                /* ── Avatar ── */
                 .daily-popup-avatar {
                     width: 28px; height: 28px; border-radius: 50%;
                     display: flex; align-items: center; justify-content: center;
                     font-size: 10px; font-weight: 900; flex-shrink: 0;
                 }
                 .daily-popup-avatar--red {
-                    background: rgba(239,68,68,0.12); border: 1.5px solid rgba(239,68,68,0.3);
-                    color: #dc2626;
+                    background: rgba(239,68,68,0.12); border: 1.5px solid rgba(239,68,68,0.3); color: #dc2626;
                 }
-                .dark .daily-popup-avatar--red, [data-theme="dark"] .daily-popup-avatar--red { color: #f87171; }
+                .dark .daily-popup-avatar--red { color: #f87171; }
                 .daily-popup-avatar--gold {
-                    background: rgba(251,191,36,0.12); border: 1.5px solid rgba(251,191,36,0.35);
-                    color: #b45309;
+                    background: rgba(30,64,175,0.12); border: 1.5px solid rgba(30,64,175,0.3); color: #1e40af;
                 }
-                .dark .daily-popup-avatar--gold, [data-theme="dark"] .daily-popup-avatar--gold { color: #fbbf24; }
+                .dark .daily-popup-avatar--gold { color: #60a5fa; }
 
-                /* ── Info ── */
                 .daily-popup-info { flex: 1; min-width: 0; }
                 .daily-popup-name {
                     font-size: 11px; font-weight: 900; text-transform: uppercase;
-                    color: #1e1b10; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                    color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                 }
-                .dark .daily-popup-name, [data-theme="dark"] .daily-popup-name { color: rgba(255,255,255,0.9); }
-                .daily-popup-code {
-                    font-size: 9px; font-family: monospace; color: #78716c; margin-top: 1px;
-                }
-                .dark .daily-popup-code, [data-theme="dark"] .daily-popup-code { color: rgba(255,255,255,0.35); }
+                .dark .daily-popup-name { color: rgba(255,255,255,0.9); }
+                .daily-popup-code { font-size: 9px; font-family: monospace; color: #64748b; margin-top: 1px; }
+                .dark .daily-popup-code { color: rgba(255,255,255,0.35); }
 
-                /* ── Badge ── */
                 .daily-popup-badge { flex-shrink: 0; font-size: 8px; font-weight: 900; text-transform: uppercase; border-radius: 999px; padding: 2px 7px; }
                 .daily-popup-badge--red {
                     color: #dc2626; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
                     animation: pulseBadge 2s ease-in-out infinite;
                 }
-                .dark .daily-popup-badge--red, [data-theme="dark"] .daily-popup-badge--red { color: #f87171; }
+                .dark .daily-popup-badge--red { color: #f87171; }
 
-                /* ── VIP segments ── */
                 .daily-popup-segs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
                 .daily-popup-seg {
                     font-size: 8px; font-weight: 900; text-transform: uppercase;
-                    color: #b45309; background: rgba(251,191,36,0.12);
-                    border: 1px solid rgba(251,191,36,0.25); border-radius: 4px;
-                    padding: 1px 5px;
+                    color: #1e40af; background: rgba(30,64,175,0.1);
+                    border: 1px solid rgba(30,64,175,0.2); border-radius: 4px; padding: 1px 5px;
                 }
-                .dark .daily-popup-seg, [data-theme="dark"] .daily-popup-seg { color: #fbbf24; }
+                .dark .daily-popup-seg { color: #60a5fa; }
 
-                /* ── Shimmer footer ── */
                 .daily-popup-shimmer {
                     height: 2px;
-                    background: linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.7) 50%, transparent 100%);
-                    background-size: 200% 100%;
-                    animation: shimmerSlide 2s linear infinite;
+                    background: linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.7) 50%, transparent 100%);
+                    background-size: 200% 100%; animation: shimmerSlide 2s linear infinite;
                 }
 
-                /* ── Keyframes ── */
-                @keyframes goldPopIn {
-                    from { opacity: 0; transform: scale(0.87) translateY(10px); }
-                    to   { opacity: 1; transform: scale(1) translateY(0); }
-                }
-                @keyframes fadeSlideUp {
-                    from { opacity: 0; transform: translateY(5px); }
-                    to   { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes shimmerSlide {
-                    0%   { background-position: -200% center; }
-                    100% { background-position: 200% center; }
-                }
-                @keyframes pulseBadge {
-                    0%, 100% { opacity: 1; } 50% { opacity: 0.55; }
-                }
+                @keyframes popIn { from { opacity: 0; transform: scale(0.87) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+                @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes shimmerSlide { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+                @keyframes pulseBadge { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
             `}</style>
         </div>
     );

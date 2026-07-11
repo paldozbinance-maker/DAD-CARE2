@@ -433,7 +433,7 @@ export default function SettingsPage() {
         }
     }, []);
 
-    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = false, days = 3) => {
+    const loadAuditLogs = async (userFilter = auditFilterUser, actionFilter = auditFilterAction, silent = false, includeStats = false, days = 1) => {
         if (!silent) setAuditLoading(true);
         try {
             const params = new URLSearchParams({ limit: '20', stats: includeStats ? 'true' : 'false' });
@@ -1802,7 +1802,7 @@ export default function SettingsPage() {
                                                 </div>
                                                 <div>
                                                     <h3 className="text-sm font-bold text-foreground">Admin Activity Overview</h3>
-                                                    <p className="text-[10px] text-muted-foreground">All-time stats per admin</p>
+                                                    <p className="text-[10px] text-muted-foreground">Last 24 hours · per admin</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1910,185 +1910,7 @@ export default function SettingsPage() {
                                     </div>
                                 )}
 
-                                {/* ── Activity Log Feed ── */}
-                                <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
-                                    <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-r from-red-500/5 to-transparent">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-lg bg-red-500/15">
-                                                    <Activity className="w-4 h-4 text-red-500" />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-sm font-bold text-foreground">Activity Log</h3>
-                                                    <p className="text-[10px] text-muted-foreground">Last 72 hours · {auditTotal} total all-time</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => loadAuditLogs()}
-                                                disabled={auditLoading}
-                                                className="p-1.5 rounded-lg hover:bg-muted/50 transition-all active:scale-90 disabled:opacity-50"
-                                            >
-                                                <RefreshCw className={`w-3.5 h-3.5 text-muted-foreground ${auditLoading ? 'animate-spin' : ''}`} />
-                                            </button>
-                                        </div>
 
-                                        {/* Filters */}
-                                        <div className="flex gap-2 mt-3">
-                                            <div className="relative flex-1">
-                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground/50" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Filter by user..."
-                                                    value={auditFilterUser}
-                                                    onChange={(e) => {
-                                                        setAuditFilterUser(e.target.value);
-                                                        loadAuditLogs(e.target.value, auditFilterAction);
-                                                    }}
-                                                    className="w-full pl-7 pr-3 py-1.5 text-[11px] bg-background/50 border border-border/40 rounded-lg outline-none focus:border-primary/50 transition-colors"
-                                                />
-                                            </div>
-                                            <div className="relative">
-                                                <select
-                                                    value={auditFilterAction}
-                                                    onChange={(e) => {
-                                                        setAuditFilterAction(e.target.value);
-                                                        loadAuditLogs(auditFilterUser, e.target.value);
-                                                    }}
-                                                    className="pl-3 pr-6 py-1.5 text-[11px] bg-background/50 border border-border/40 rounded-lg outline-none focus:border-primary/50 transition-colors appearance-none"
-                                                >
-                                                    <option value="">All Actions</option>
-                                                    {auditActions.map((a) => (
-                                                        <option key={a} value={a}>{a}</option>
-                                                    ))}
-                                                </select>
-                                                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground/50 pointer-events-none" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-0">
-                                        {auditLoading ? (
-                                            <div className="flex flex-col items-center justify-center py-12 gap-3">
-                                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading logs...</p>
-                                            </div>
-                                        ) : auditLogs.length === 0 ? (
-                                            <div className="text-center py-12">
-                                                <div className="w-12 h-12 rounded-2xl bg-muted/30 flex items-center justify-center mx-auto mb-3">
-                                                    <Activity className="w-6 h-6 text-muted-foreground/30" />
-                                                </div>
-                                                <p className="text-sm font-bold text-muted-foreground">No activities logged yet</p>
-                                                <p className="text-[10px] text-muted-foreground mt-1">Events will appear here as admins use the system</p>
-                                            </div>
-                                        ) : (
-                                            <>
-                                            <div className="divide-y divide-border/20 max-h-[55vh] overflow-y-auto">
-                                                {auditLogs.map((log: any) => {
-                                                    const action = log.action as string;
-                                                    const isLogin = action === 'LOGIN';
-                                                    const isLogout = action === 'LOGOUT';
-                                                    const isFailed = action === 'LOGIN_FAILED';
-                                                    const isCreate = action.startsWith('CREATE');
-                                                    const isDelete = action.startsWith('DELETE');
-                                                    const isUpdate = action.startsWith('UPDATE') || action.startsWith('EDIT');
-
-                                                    const actionColor = isLogin
-                                                        ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                                                        : isLogout
-                                                            ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
-                                                            : isFailed
-                                                                ? 'text-red-500 bg-red-500/10 border-red-500/20'
-                                                                : isCreate
-                                                                    ? 'text-violet-500 bg-violet-500/10 border-violet-500/20'
-                                                                    : isDelete
-                                                                        ? 'text-orange-500 bg-orange-500/10 border-orange-500/20'
-                                                                        : isUpdate
-                                                                            ? 'text-amber-500 bg-amber-500/10 border-amber-500/20'
-                                                                            : 'text-muted-foreground bg-muted border-border/40';
-
-                                                    const ActionIcon = isLogin ? LogIn
-                                                        : isLogout ? LogOut
-                                                            : isFailed ? AlertTriangle
-                                                                : isCreate ? Zap
-                                                                    : isDelete ? Trash2
-                                                                        : isUpdate ? Pencil
-                                                                            : Activity;
-
-                                                    return (
-                                                        <div key={log.id} className="px-4 py-3 hover:bg-muted/10 transition-colors flex gap-3 items-start">
-                                                            {/* Avatar */}
-                                                            {log.avatar_url ? (
-                                                                <Avatar className="w-8 h-8 shrink-0 mt-0.5 border border-border/50">
-                                                                    <AvatarImage src={log.avatar_url} className="object-cover" />
-                                                                    <AvatarFallback className="text-xs font-black uppercase bg-muted">
-                                                                        {(log.name || log.username || '?').charAt(0)}
-                                                                    </AvatarFallback>
-                                                                </Avatar>
-                                                            ) : (
-                                                                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 border border-primary/10">
-                                                                    <span className="text-xs font-black text-primary uppercase">
-                                                                        {(log.name || log.username || '?').charAt(0)}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-
-                                                            <div className="flex-1 min-w-0">
-                                                                {/* Top row */}
-                                                                <div className="flex items-start justify-between gap-2">
-                                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                                        <span className="text-[11px] font-black text-foreground">
-                                                                            {log.name || log.username}
-                                                                        </span>
-                                                                        {log.role === 'SUPER_ADMIN' && (
-                                                                            <Crown className="w-3 h-3 text-amber-500" />
-                                                                        )}
-                                                                        <span className="text-[9px] text-muted-foreground">@{log.username}</span>
-                                                                    </div>
-                                                                    <span className="text-[9px] text-muted-foreground shrink-0 mt-0.5 whitespace-nowrap">
-                                                                        {new Date(log.created_at).toLocaleDateString('en-GB', {
-                                                                            day: '2-digit', month: 'short', year: 'numeric',
-                                                                            hour: '2-digit', minute: '2-digit'
-                                                                        })}
-                                                                    </span>
-                                                                </div>
-
-                                                                {/* Action badge + details */}
-                                                                <div className="flex items-start gap-2 mt-1.5 flex-wrap">
-                                                                    <span className={`inline-flex items-center gap-1 text-[9px] uppercase font-black px-1.5 py-0.5 rounded-md border shrink-0 ${actionColor}`}>
-                                                                        <ActionIcon className="w-2.5 h-2.5" />
-                                                                        {action.replace(/_/g, ' ')}
-                                                                    </span>
-                                                                    <span className="text-[10px] text-muted-foreground leading-relaxed">{log.details}</span>
-                                                                </div>
-
-                                                                {/* IP info */}
-                                                                {log.ip_address && log.ip_address !== 'unknown' && (
-                                                                    <p className="text-[9px] text-muted-foreground/50 mt-1">📍 {log.ip_address}</p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                            {auditLogs.length < auditTotal && (
-                                                <div className="p-3 border-t border-border/20">
-                                                    <button
-                                                        onClick={() => loadMoreAuditLogs()}
-                                                        disabled={auditLoadingMore}
-                                                        className="w-full py-2 text-[11px] font-bold text-primary hover:bg-primary/5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                                                    >
-                                                        {auditLoadingMore ? (
-                                                            <><Loader2 className="w-3 h-3 animate-spin" /> Loading...</>
-                                                        ) : (
-                                                            <>Load More ({auditTotal - auditLogs.length} remaining)</>
-                                                        )}
-                                                    </button>
-                                                </div>
-                                            )}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
                             </div>
                         </TabsContent>
                     )}
