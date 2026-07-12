@@ -5,15 +5,17 @@ import { ensureAuditLogTable } from '@/lib/audit';
 import { trackApiRoute } from '@/lib/egress-tracker';
 import { unstable_cache } from 'next/cache';
 
-// Cache the expensive per-user stats aggregation for 5 minutes.
-// These are all-time totals that change slowly.
+// Cache the per-user stats for 5 minutes — counts LAST 24 HOURS only, resets naturally.
 const getCachedAuditStats = unstable_cache(
     async () => {
-        const { rows: userStatsRows } = await pool.query(`
+        const cleanupOldLogs = pool.query(`DELETE FROM "AuditLog" WHERE created_at < NOW() - INTERVAL '24 hours'`).catch(console.error);
+
+    const { rows: userStatsRows } = await pool.query(`
             SELECT
                 a.username,
                 COALESCE(MAX(u.name), MAX(a.name)) as name,
                 COALESCE(MAX(u.role)::text, MAX(a.role)) as role,
+                COALESCE(MAX(u.avatar_url), NULL) as avatar_url,
                 COUNT(a.id) as total_actions,
                 MAX(a.created_at) as last_activity,
                 MAX(CASE WHEN a.action = 'LOGIN' THEN a.created_at END) as last_login,
@@ -21,15 +23,16 @@ const getCachedAuditStats = unstable_cache(
                 COUNT(CASE WHEN a.action = 'LOGIN_FAILED' THEN 1 END) as failed_logins
             FROM "AuditLog" a
             LEFT JOIN "User" u ON a.username = u.username
+            WHERE a.created_at >= NOW() - INTERVAL '24 hours'
             GROUP BY a.username
             ORDER BY last_activity DESC NULLS LAST
         `);
         const { rows: actionRows } = await pool.query(
-            `SELECT DISTINCT action FROM "AuditLog" ORDER BY action`
+            `SELECT DISTINCT action FROM "AuditLog" WHERE created_at >= NOW() - INTERVAL '24 hours' ORDER BY action`
         );
         return { userStats: userStatsRows, actions: actionRows.map((r: any) => r.action) };
     },
-    ['audit-stats-cache'],
+    ['audit-stats-24h-cache'],
     { revalidate: 300, tags: ['audit-stats'] }  // 5-min cache
 );
 

@@ -1,19 +1,10 @@
 import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/require-session';
+import { unstable_cache } from 'next/cache';
 
-export async function GET(request: NextRequest) {
-    try {
-        const sessionRes = await requireSession(request);
-        if (sessionRes instanceof NextResponse) return sessionRes;
-
-        // Auto-migration for maqal_id
-        try {
-            await pool.query('ALTER TABLE "Ledger" ADD COLUMN IF NOT EXISTS maqal_id INTEGER;');
-        } catch (e) {
-            console.error('Migration failed:', e);
-        }
-
+const getCachedMaqalPairs = unstable_cache(
+    async () => {
         // Query historical pairs from DailyBook
         // We return ALL consecutive pairs of dates (rolling window) to guarantee no pairs are missed
         const query = `
@@ -103,9 +94,28 @@ export async function GET(request: NextRequest) {
         `;
         
         const result = await pool.query(query);
+        return result.rows;
+    },
+    ['maqal-pairs-data'],
+    { revalidate: 3600, tags: ['customers', 'dashboard'] }
+);
+
+export async function GET(request: NextRequest) {
+    try {
+        const sessionRes = await requireSession(request);
+        if (sessionRes instanceof NextResponse) return sessionRes;
+
+        // Auto-migration for maqal_id
+        try {
+            await pool.query('ALTER TABLE "Ledger" ADD COLUMN IF NOT EXISTS maqal_id INTEGER;');
+        } catch (e) {
+            console.error('Migration failed:', e);
+        }
+
+        const rows = await getCachedMaqalPairs();
         
-        const res = NextResponse.json(result.rows);
-        res.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+        const res = NextResponse.json(rows);
+        res.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=3600');
         return res;
     } catch (error: any) {
         console.error('Error fetching maqal pairs:', error);

@@ -214,9 +214,8 @@ async function getCustomers(options: {
                 ELSE LEAST(100, ROUND((COALESCE(sps.payments_total, 0) / sms.maqal_total) * 100))::int
             END as selected_maqal_pct
         FROM base_customers c
-        LEFT JOIN (
-            SELECT DISTINCT ON (customer_id) 
-                customer_id, 
+        LEFT JOIN LATERAL (
+            SELECT 
                 new_debt, 
                 type,
                 EXISTS (
@@ -230,9 +229,10 @@ async function getCustomers(options: {
                       AND l2.type = 'PAYMENT'
                 ) as last_receipt_has_payment
             FROM "Ledger" l1
-            WHERE l1.deleted_at IS NULL
-            ORDER BY customer_id, created_at DESC, id DESC
-        ) l ON c.id = l.customer_id
+            WHERE l1.customer_id = c.id AND l1.deleted_at IS NULL
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        ) l ON true
         LEFT JOIN (
             SELECT customer_id, SUM(amount) as total_paid
             FROM "Ledger"
@@ -298,13 +298,13 @@ const getCachedCustomersLite = unstable_cache(
                 COALESCE(lb.new_debt, 0)::float as current_balance,
                 CASE WHEN c.deleted_at IS NOT NULL THEN true ELSE false END as is_inactive
             FROM "Customer" c
-            LEFT JOIN (
-                SELECT DISTINCT ON (customer_id)
-                    customer_id, new_debt
+            LEFT JOIN LATERAL (
+                SELECT new_debt
                 FROM "Ledger"
-                WHERE deleted_at IS NULL
-                ORDER BY customer_id, created_at DESC, id DESC
-            ) lb ON lb.customer_id = c.id
+                WHERE customer_id = c.id AND deleted_at IS NULL
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) lb ON true
             WHERE c.deleted_at IS NULL
             ORDER BY
                 CASE WHEN c.customer_code ~ '^[0-9]+$' THEN c.customer_code::int ELSE 9999 END ASC,

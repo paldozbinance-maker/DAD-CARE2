@@ -586,10 +586,9 @@ export default function CustomersPage() {
                                     prefetch={false}
                                     className={`group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors cursor-pointer ${performanceColor}`}
                                 >
-                                    {/* Avatar */}
                                     <Avatar className={`h-8 w-8 border shrink-0 ${avatarBg}`}>
                                         <AvatarFallback className={`text-xs font-black ${accentColor}`}>
-                                            {isMale ? '👨' : isFemale ? '👩' : customer.name.substring(0, 1).toUpperCase()}
+                                            {customer.name.substring(0, 1).toUpperCase()}
                                         </AvatarFallback>
                                     </Avatar>
 

@@ -1543,7 +1543,7 @@ return (
                 }
 
                 return (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 dark:bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setCompareModalOpen(false)}>
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-md dark:bg-black/40 p-4 animate-in fade-in duration-200" onClick={() => setCompareModalOpen(false)}>
                         <div className="bg-card/95 dark:bg-card/80 backdrop-blur-2xl border border-border/50 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-border/50" onClick={e => e.stopPropagation()}>
                             {/* Header */}
                             <div className="flex items-center justify-between p-4 border-b border-border/30 bg-primary/5">

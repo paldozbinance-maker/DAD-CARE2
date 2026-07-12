@@ -2,15 +2,10 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
 import { trackApiRoute } from '@/lib/egress-tracker';
+import { unstable_cache } from 'next/cache';
 
-export const GET = trackApiRoute('/api/reports', async (request: Request) => {
-    const { errorResponse } = await requireSession(request);
-    if (errorResponse) return errorResponse;
-
-    try {
-        // Single aggregated SQL query — computes all stats in the DB.
-        // This avoids fetching ALL ledger rows over the Supabase PostgREST API
-        // (which was the #1 cause of Supabase egress usage).
+const getCachedReportsData = unstable_cache(
+    async () => {
         const { rows } = await pool.query(`
             WITH latest_ledger AS (
                 SELECT DISTINCT ON (customer_id)
@@ -49,7 +44,7 @@ export const GET = trackApiRoute('/api/reports', async (request: Request) => {
             ORDER BY c.name ASC
         `);
 
-        const reportData = rows.map((stats: any) => {
+        return rows.map((stats: any) => {
             const totalProductAmount = parseFloat(stats.totalProductAmount) || 0;
             const totalPaid = parseFloat(stats.totalPaid) || 0;
             const totalKg = parseFloat(stats.totalKg) || 0;
@@ -79,9 +74,19 @@ export const GET = trackApiRoute('/api/reports', async (request: Request) => {
                 performanceScore
             };
         });
+    },
+    ['reports-data'],
+    { revalidate: 3600, tags: ['customers', 'dashboard', 'reports'] }
+);
 
+export const GET = trackApiRoute('/api/reports', async (request: Request) => {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+
+    try {
+        const reportData = await getCachedReportsData();
         const res = NextResponse.json(reportData);
-        res.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        res.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=3600');
         return res;
     } catch (error: any) {
         console.error('Reports API Error:', error);

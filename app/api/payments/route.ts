@@ -3,15 +3,10 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/require-session';
 import { logAudit } from '@/lib/audit';
 import { trackApiRoute } from '@/lib/egress-tracker';
+import { unstable_cache } from 'next/cache';
 
-export const GET = trackApiRoute('/api/payments', async (request: Request) => {
-    const { errorResponse } = await requireSession(request);
-    if (errorResponse) return errorResponse;
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '200');
-    const customerId = searchParams.get('customerId');
-
-    try {
+const getCachedPayments = unstable_cache(
+    async (limit: number, customerId: string | null, today: string) => {
         const params: any[] = [];
         const filters: string[] = [`l.type = 'PAYMENT'`, `l.deleted_at IS NULL`];
 
@@ -21,9 +16,6 @@ export const GET = trackApiRoute('/api/payments', async (request: Request) => {
         }
 
         const whereClause = filters.join(' AND ');
-
-        // Single query: payments + today total + all-time total in one shot
-        const today = new Date().toISOString().split('T')[0];
         params.push(today);
         const todayParam = `$${params.length}`;
 
@@ -45,6 +37,24 @@ export const GET = trackApiRoute('/api/payments', async (request: Request) => {
              LIMIT ${limit}`,
             params
         );
+
+        return rows;
+    },
+    ['payments-data'],
+    { revalidate: 3600, tags: ['customers', 'dashboard'] }
+);
+
+export const GET = trackApiRoute('/api/payments', async (request: Request) => {
+    const { errorResponse } = await requireSession(request);
+    if (errorResponse) return errorResponse;
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '200');
+    const customerId = searchParams.get('customerId');
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const rows = await getCachedPayments(limit, customerId, today);
 
         const totalAllTime = rows[0]?._total_all_time ? parseFloat(rows[0]._total_all_time) : 0;
         const todayTotal   = rows[0]?._today_total   ? parseFloat(rows[0]._today_total)   : 0;

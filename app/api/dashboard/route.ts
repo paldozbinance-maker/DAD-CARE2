@@ -6,52 +6,22 @@ import { unstable_cache } from 'next/cache';
 
 const getDashboardData = unstable_cache(
     async (today: string) => {
-        const [
-            totalCustomersResult,
-            totalDebtResult,
-            totalReestoResult,
-            totalPaidResult,
-            totalKgResult,
-            todayStatsResult
-        ] = await Promise.all([
-            pool.query('SELECT count(*)::int as count FROM "Customer" WHERE deleted_at IS NULL'),
-            
+        // Combined query for customer count and ledger stats to dramatically reduce Supabase compute
+        const [statsResult, todayStatsResult] = await Promise.all([
             pool.query(`
-                SELECT COALESCE(SUM(CASE WHEN new_debt > 0 THEN new_debt ELSE 0 END), 0)::float as total_debt
-                FROM (
+                WITH latest_ledger AS (
                     SELECT DISTINCT ON (customer_id) new_debt
                     FROM "Ledger"
                     WHERE deleted_at IS NULL
                     ORDER BY customer_id, created_at DESC, id DESC
-                ) latest_balances
+                )
+                SELECT 
+                    (SELECT count(*)::int FROM "Customer" WHERE deleted_at IS NULL) as total_customers,
+                    (SELECT COALESCE(SUM(CASE WHEN new_debt > 0 THEN new_debt ELSE 0 END), 0)::float FROM latest_ledger) as total_debt,
+                    (SELECT ABS(COALESCE(SUM(CASE WHEN new_debt < 0 THEN new_debt ELSE 0 END), 0))::float FROM latest_ledger) as total_reesto,
+                    (SELECT COALESCE(SUM(amount), 0)::float FROM "Ledger" WHERE type = 'PAYMENT' AND deleted_at IS NULL) as total_paid,
+                    (SELECT COALESCE(SUM(kg), 0)::float FROM "Ledger" WHERE type = 'PRODUCT' AND deleted_at IS NULL) as total_kg
             `),
-
-            // 2b. Total Reesto — sum of all customers who have overpaid (negative balance)
-            pool.query(`
-                SELECT ABS(COALESCE(SUM(CASE WHEN new_debt < 0 THEN new_debt ELSE 0 END), 0))::float as total_reesto
-                FROM (
-                    SELECT DISTINCT ON (customer_id) new_debt
-                    FROM "Ledger"
-                    WHERE deleted_at IS NULL
-                    ORDER BY customer_id, created_at DESC, id DESC
-                ) latest_balances
-            `),
-
-            // 3. Total Payments
-            pool.query(`
-                SELECT COALESCE(SUM(amount), 0)::float as total_paid
-                FROM "Ledger"
-                WHERE type = 'PAYMENT' AND deleted_at IS NULL
-            `),
-
-            // 4. Total KG all time
-            pool.query(`
-                SELECT COALESCE(SUM(kg), 0)::float as total_kg
-                FROM "Ledger"
-                WHERE type = 'PRODUCT' AND deleted_at IS NULL
-            `),
-
-            // 5. Today's daily book stats (KG and active customer count)
             pool.query(`
                 SELECT 
                     COALESCE(SUM(dbi.kg), 0)::float as today_kg, 
@@ -59,17 +29,16 @@ const getDashboardData = unstable_cache(
                 FROM "DailyBookItem" dbi
                 JOIN "DailyBook" db ON dbi.daily_book_id = db.id
                 WHERE db.date = $1 AND dbi.deleted_at IS NULL AND db.deleted_at IS NULL
-            `, [today]),
-
-            // Removed topDebtors and recentTransactions to save massive egress bandwidth, 
-            // since the dashboard UI no longer renders them (moved to reports).
+            `, [today])
         ]);
 
-        const totalCustomers = totalCustomersResult.rows[0]?.count || 0;
-        const totalDebt = totalDebtResult.rows[0]?.total_debt || 0;
-        const totalReesto = totalReestoResult.rows[0]?.total_reesto || 0;
-        const totalPaid = totalPaidResult.rows[0]?.total_paid || 0;
-        const totalKg = totalKgResult.rows[0]?.total_kg || 0;
+        const stats = statsResult.rows[0];
+        const totalCustomers = stats?.total_customers || 0;
+        const totalDebt = stats?.total_debt || 0;
+        const totalReesto = stats?.total_reesto || 0;
+        const totalPaid = stats?.total_paid || 0;
+        const totalKg = stats?.total_kg || 0;
+
         const todayKg = todayStatsResult.rows[0]?.today_kg || 0;
         const todayCustomerCount = todayStatsResult.rows[0]?.today_customer_count || 0;
         const topDebtors: any[] = [];
